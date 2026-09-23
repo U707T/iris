@@ -27,6 +27,14 @@ jobs:
           channel: stable
           flutter-version: 3.47.1
           cache: true
+      - name: Provide legacy flutter version file
+        shell: bash
+        run: |
+          FT=$(command -v flutter)
+          FLUTTER_ROOT_DIR="$(cd "$(dirname "$FT")/.." && pwd)"
+          echo "FLUTTER_ROOT_DIR=$FLUTTER_ROOT_DIR"
+          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.1" > "$FLUTTER_ROOT_DIR/version"; fi
+          cat "$FLUTTER_ROOT_DIR/version"
       - name: Generate code
         run: flutter pub get && flutter pub run build_runner build --delete-conflicting-outputs
       - name: Build Flutter application for Windows
@@ -78,6 +86,13 @@ jobs:
           channel: stable
           flutter-version: 3.47.1
           cache: true
+      - name: Provide legacy flutter version file
+        run: |
+          FT=$(command -v flutter)
+          FLUTTER_ROOT_DIR="$(cd "$(dirname "$FT")/.." && pwd)"
+          echo "FLUTTER_ROOT_DIR=$FLUTTER_ROOT_DIR"
+          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.1" > "$FLUTTER_ROOT_DIR/version"; fi
+          cat "$FLUTTER_ROOT_DIR/version"
       - name: Generate code
         run: flutter pub get && flutter pub run build_runner build --delete-conflicting-outputs
       - name: Set up Java
