@@ -62,9 +62,14 @@ class AppStore extends PersistentStore<AppState> {
     await save(state);
   }
 
-  Future<void> updateRate(double value) async {
+  Future<void> updateRate(double value, {bool persist = true}) async {
     logger('updateRate: $value');
     set(state.copyWith(rate: value));
+    if (persist) await save(state);
+  }
+
+  Future<void> updateLongPressSpeed(double value) async {
+    set(state.copyWith(longPressSpeed: value));
     await save(state);
   }
 
@@ -131,6 +136,20 @@ class AppStore extends PersistentStore<AppState> {
 
   Future<void> updateOrientation(ScreenOrientation orientation) async {
     set(state.copyWith(orientation: orientation));
+    await save(state);
+  }
+
+  Future<void> toggleRememberWindowSize() async {
+    set(state.copyWith(rememberWindowSize: !state.rememberWindowSize));
+    await save(state);
+  }
+
+  Future<void> updateWindowBounds(List<double>? bounds,
+      {bool? maximized}) async {
+    set(state.copyWith(
+      windowBounds: bounds,
+      windowMaximized: maximized ?? state.windowMaximized,
+    ));
     await save(state);
   }
 

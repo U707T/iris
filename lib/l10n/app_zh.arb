@@ -113,5 +113,18 @@
   "version": "版本",
   "video": "视频",
   "video_zoom": "视频缩放",
-  "volume": "音量"
+  "volume": "音量",
+  "zoom": "缩放",
+  "reset": "重置",
+  "long_press_speed": "长按倍速",
+  "long_press_speed_description": "长按屏幕时使用的播放速度",
+  "remember_window_size": "记住窗口大小",
+  "remember_window_size_description": "下次启动时恢复窗口大小和位置",
+  "search": "搜索",
+  "search_in_folder": "在当前文件夹搜索",
+  "search_hint": "输入关键词",
+  "search_results": "搜索结果",
+  "searching": "搜索中...",
+  "no_search_results": "未找到结果",
+  "search_depth": "搜索深度"
 }

@@ -2,7 +2,7 @@
 title IRIS Updater
 setlocal enabledelayedexpansion
 
-set "api_url=https://api.github.com/repos/nini22P/iris/releases/latest"
+set "api_url=https://api.github.com/repos/U707T/iris/releases/latest"
 set "download_folder=%~dp0temps"
 
 :: Try to delete the download folder if it exists
@@ -35,7 +35,7 @@ goto :end
 
 :version_found
 
-set "download_url=https://github.com/nini22P/iris/releases/latest/download/IRIS-windows.zip"
+set "download_url=https://github.com/U707T/iris/releases/latest/download/IRIS-windows.zip"
 set "zip_file=%download_folder%\IRIS-windows.zip"
 set "extract_folder=%download_folder%"
 

@@ -35,7 +35,7 @@ Future<Release?> getLatestRelease() async {
   PackageInfo packageInfo = await PackageInfo.fromPlatform();
 
   if (packageInfo.version.isNotEmpty) {
-    const api = 'https://api.github.com/repos/nini22P/iris/releases/latest';
+    const api = 'https://api.github.com/repos/U707T/iris/releases/latest';
 
     try {
       final response = await http.get(Uri.parse(api));
@@ -47,7 +47,7 @@ Future<Release?> getLatestRelease() async {
         final String version = data['tag_name'] ?? 'Unknown version';
 
         final String url =
-            data['html_url'] ?? 'https://github.com/nini22P/iris/releases/';
+            data['html_url'] ?? 'https://github.com/U707T/iris/releases/';
 
         final filtteredAssets = assets.where((assets) =>
             assets['name'].toString().toLowerCase().contains(platform));

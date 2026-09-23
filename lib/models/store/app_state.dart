@@ -53,6 +53,10 @@ abstract class AppState with _$AppState {
     @Default(SortOrder.asc) SortOrder sortOrder,
     @Default(true) bool folderFirst,
     @Default(ScreenOrientation.device) ScreenOrientation orientation,
+    @Default(2.0) double longPressSpeed,
+    @Default(true) bool rememberWindowSize,
+    List<double>? windowBounds,
+    @Default(false) bool windowMaximized,
   }) = _AppState;
 
   factory AppState.fromJson(Map<String, dynamic> json) =>

@@ -8,6 +8,7 @@ part 'player_ui_state.g.dart';
 abstract class PlayerUiState with _$PlayerUiState {
   const factory PlayerUiState({
     @Default(0) double aspectRatio,
+    @Default(1.0) double zoom,
     @Default(false) bool isAlwaysOnTop,
     @Default(false) bool isFullScreen,
     @Default(false) bool isSeeking,

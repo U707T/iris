@@ -19,6 +19,7 @@ import 'package:iris/utils/files_sort.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/request_storage_permission.dart';
 import 'package:iris/widgets/chip.dart';
+import 'package:iris/widgets/dialogs/show_search_dialog.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -362,6 +363,11 @@ class Files extends HookWidget {
                 tooltip: t.refresh,
                 icon: const Icon(Icons.refresh),
                 onPressed: refresh,
+              ),
+              IconButton(
+                tooltip: t.search_in_folder,
+                icon: const Icon(Icons.search_rounded),
+                onPressed: () => showSearchDialog(context, storage: storage),
               ),
               PopupMenuButton(
                 tooltip: t.sort,

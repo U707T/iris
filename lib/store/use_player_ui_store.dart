@@ -1,4 +1,5 @@
 import 'package:flutter_zustand/flutter_zustand.dart';
+import 'package:iris/globals.dart' show minZoom, maxZoom;
 import 'package:iris/models/store/player_ui_state.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:window_manager/window_manager.dart';
@@ -9,6 +10,17 @@ class PlayerUiStore extends Store<PlayerUiState> {
   void updateAspectRatio(double ratio) {
     set(state.copyWith(aspectRatio: ratio));
   }
+
+  void updateZoom(double zoom) {
+    final clamped = zoom < minZoom
+        ? minZoom
+        : zoom > maxZoom
+            ? maxZoom
+            : zoom;
+    set(state.copyWith(zoom: clamped));
+  }
+
+  void resetZoom() => updateZoom(1.0);
 
   Future<void> toggleIsAlwaysOnTop() async {
     if (isDesktop) {

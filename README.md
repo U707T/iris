@@ -16,6 +16,10 @@ English | [中文](./README_CN.md)
 - [X] Switchable subtitle and audio track
 - [X] Playback queue support for random and repeat
 - [X] Comprehensive gesture support
+- [X] Long press to speed up playback (configurable)
+- [X] Smooth video zoom
+- [X] File search
+- [X] Remember window size and position
 
 ## Download
 
@@ -72,8 +76,9 @@ English | [中文](./README_CN.md)
 | Swipe left / right                | Adjust playback progress      |
 | Swipe up / down on left side      | Adjust screen brightness      |
 | Swipe up / down on right side     | Adjust device volume          |
-| Long press                        | Display Playback Speed Selector |
-| Long press and swipe left / right | Adjust speed playback speed   |
+| Long press                        | Speed up playback (speed is configurable in settings) |
+| Pinch with two fingers            | Smoothly zoom the video       |
+| `Ctrl` + scroll wheel             | Smoothly zoom the video (desktop) |
 
 ## Contribution
 

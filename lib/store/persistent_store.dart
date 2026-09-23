@@ -6,10 +6,19 @@ abstract class PersistentStore<T> extends Store<T> {
     _init();
   }
 
+  bool _isLoaded = false;
+
+  /// Whether the persisted state has been loaded from storage.
+  bool get isLoaded => _isLoaded;
+
   Future<void> _init() async {
-    final loaded = await load();
-    if (loaded != null) {
-      set(loaded);
+    try {
+      final loaded = await load();
+      if (loaded != null) {
+        set(loaded);
+      }
+    } finally {
+      _isLoaded = true;
     }
   }
 

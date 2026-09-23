@@ -113,5 +113,18 @@
   "version": "Version",
   "video": "Video",
   "video_zoom": "Video zoom",
-  "volume": "Volume"
+  "volume": "Volume",
+  "zoom": "Zoom",
+  "reset": "Reset",
+  "long_press_speed": "Long press speed",
+  "long_press_speed_description": "Playback speed while holding the screen",
+  "remember_window_size": "Remember window size",
+  "remember_window_size_description": "Restore window size and position on next launch",
+  "search": "Search",
+  "search_in_folder": "Search in current folder",
+  "search_hint": "Enter keywords",
+  "search_results": "Search results",
+  "searching": "Searching...",
+  "no_search_results": "No results found",
+  "search_depth": "Search depth"
 }

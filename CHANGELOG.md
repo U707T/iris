@@ -1,3 +1,19 @@
+## v1.5.3
+
+### Changelog
+
+* Long-press the screen to speed up playback, and the long-press speed can be configured in settings
+* Manually and smoothly zoom the video (pinch to zoom, Ctrl + scroll wheel, or the zoom button)
+* Search videos and audio in the current folder
+* Remember window size and position (can be disabled in settings)
+
+### 更新日志
+
+* 长按屏幕加速播放，长按倍速可在设置中调整
+* 可手动无极调节画面缩放（双指捏合、Ctrl + 滚轮、或缩放按钮）
+* 支持在当前文件夹搜索视频和音频
+* 记住窗口大小和位置（可在设置中关闭）
+
 ## v1.5.2
 
 ### Changelog

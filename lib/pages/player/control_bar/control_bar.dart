@@ -11,6 +11,7 @@ import 'package:iris/models/store/app_state.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/widgets/dialogs/show_open_link_dialog.dart';
 import 'package:iris/widgets/dialogs/show_rate_dialog.dart';
+import 'package:iris/widgets/dialogs/show_zoom_dialog.dart';
 import 'package:iris/pages/player/control_bar/control_bar_slider.dart';
 import 'package:iris/widgets/popups/history.dart';
 import 'package:iris/widgets/bottom_sheets/show_open_link_bottom_sheet.dart';
@@ -66,6 +67,8 @@ class ControlBar extends HookWidget {
     final Repeat repeat =
         useAppStore().select(context, (state) => state.repeat);
     final BoxFit fit = useAppStore().select(context, (state) => state.fit);
+
+    final zoom = usePlayerUiStore().select(context, (state) => state.zoom);
 
     final isSeeking =
         usePlayerUiStore().select(context, (state) => state.isSeeking);
@@ -228,6 +231,17 @@ class ControlBar extends HookWidget {
         showControl();
         useAppStore().toggleFit();
       },
+      style: ButtonStyle(overlayColor: overlayColor),
+    );
+
+    final zoomButton = IconButton(
+      tooltip: '${t.zoom}: ${(zoom * 100).round()}% ( Ctrl + 滚轮 )',
+      icon: Icon(
+        Icons.zoom_in_rounded,
+        size: 20,
+        color: zoom == 1.0 ? color?.withAlpha(153) : color,
+      ),
+      onPressed: () => showControlForHover(showZoomDialog(context)),
       style: ButtonStyle(overlayColor: overlayColor),
     );
 
@@ -558,6 +572,7 @@ class ControlBar extends HookWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (file?.type != ContentType.audio) fitButton,
+              if (file?.type != ContentType.audio) zoomButton,
               volumeWidget,
               subtitleButton,
               playQueueButton,
@@ -584,6 +599,7 @@ class ControlBar extends HookWidget {
               shuffleButton,
               repeatButton,
               if (file?.type != ContentType.audio) fitButton,
+              if (file?.type != ContentType.audio) zoomButton,
               rateButton,
               volumeWidget,
               const Spacer(),
@@ -607,6 +623,7 @@ class ControlBar extends HookWidget {
           shuffleButton,
           repeatButton,
           if (file?.type != ContentType.audio) fitButton,
+          if (file?.type != ContentType.audio) zoomButton,
           rateButton,
           volumeWidget,
           Expanded(child: sliderWidget),

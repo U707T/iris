@@ -1,8 +1,9 @@
+import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
-import 'package:iris/globals.dart' show speedStops, speedSelectorItemWidth;
 import 'package:iris/hooks/use_brightness.dart';
 import 'package:iris/hooks/use_volume.dart';
 import 'package:iris/models/player.dart';
@@ -26,12 +27,19 @@ class Gesture {
   final void Function(DragEndDetails) onPanEnd;
   final void Function() onPanCancel;
   final void Function(PointerHoverEvent) onHover;
+  final void Function(PointerDownEvent) onPointerDown;
+  final void Function(PointerMoveEvent) onPointerMove;
+  final void Function(PointerUpEvent) onPointerUp;
+  final void Function(PointerCancelEvent) onPointerCancel;
+  final void Function(PointerSignalEvent) onPointerSignal;
 
   final bool isLongPress;
   final bool isLeftGesture;
   final bool isRightGesture;
+  final bool isZoomIndicatorVisible;
   final double? brightness;
   final double? volume;
+  final double zoom;
 
   Gesture({
     required this.onTapDown,
@@ -46,11 +54,18 @@ class Gesture {
     required this.onPanEnd,
     required this.onPanCancel,
     required this.onHover,
+    required this.onPointerDown,
+    required this.onPointerMove,
+    required this.onPointerUp,
+    required this.onPointerCancel,
+    required this.onPointerSignal,
     required this.isLongPress,
     required this.isLeftGesture,
     required this.isRightGesture,
+    required this.isZoomIndicatorVisible,
     required this.brightness,
     required this.volume,
+    required this.zoom,
   });
 }
 
@@ -58,9 +73,6 @@ Gesture useGesture({
   required void Function() showControl,
   required void Function() hideControl,
   required void Function() showProgress,
-  required void Function(Offset position) showSpeedSelector,
-  required void Function(double finalSpeed) hideSpeedSelector,
-  required void Function(double speed, double visualOffset) updateSelectedSpeed,
 }) {
   final context = useContext();
 
@@ -71,13 +83,45 @@ Gesture useGesture({
     'startPanOffset': Offset.zero,
     'startSeekPosition': Duration.zero,
     'panDirection': null, // null: 未确定, Axis.horizontal, Axis.vertical
+    'rateBeforeLongPress': null,
   });
 
   final isLeftGesture = useState(false);
   final isRightGesture = useState(false);
+  final isLongPressState = useState(false);
 
   final brightness = useBrightness(isLeftGesture.value);
   final volume = useVolume(isRightGesture.value);
+
+  // 缩放 (Pinch to zoom)
+  final activePointers = useRef<Map<int, Offset>>({});
+  final pinchStartDistance = useRef<double?>(null);
+  final pinchStartZoom = useRef<double>(1.0);
+  final isPinching = useRef<bool>(false);
+
+  final isZoomIndicatorVisible = useState(false);
+  final zoomHideTimer = useRef<Timer?>(null);
+
+  useEffect(() {
+    return () {
+      zoomHideTimer.value?.cancel();
+    };
+  }, []);
+
+  void showZoomIndicator() {
+    isZoomIndicatorVisible.value = true;
+    zoomHideTimer.value?.cancel();
+    zoomHideTimer.value = Timer(const Duration(milliseconds: 900), () {
+      isZoomIndicatorVisible.value = false;
+    });
+  }
+
+  void hideZoomIndicator() {
+    zoomHideTimer.value?.cancel();
+    zoomHideTimer.value = Timer(const Duration(milliseconds: 400), () {
+      isZoomIndicatorVisible.value = false;
+    });
+  }
 
   void onTapDown(TapDownDetails details) {
     if (details.kind == PointerDeviceKind.touch) {
@@ -126,60 +170,45 @@ Gesture useGesture({
     }
   }
 
+  /// 长按加速: 按住时切换到设置中指定的倍速, 松开后恢复原速
   void onLongPressStart(LongPressStartDetails details) {
-    if (gestureState.value['isTouch'] as bool &&
-        context.read<MediaPlayer>().isPlaying) {
-      gestureState.value['isLongPress'] = true;
-      gestureState.value['startPanOffset'] = details.globalPosition;
+    if (!(gestureState.value['isTouch'] as bool)) return;
+    if (!context.read<MediaPlayer>().isPlaying) return;
 
-      final currentRate = useAppStore().state.rate;
-      final closestSpeed = speedStops.reduce(
-          (a, b) => (a - currentRate).abs() < (b - currentRate).abs() ? a : b);
-      gestureState.value['initialSpeedIndex'] =
-          speedStops.indexOf(closestSpeed);
+    gestureState.value['isLongPress'] = true;
+    isLongPressState.value = true;
+    gestureState.value['startPanOffset'] = details.globalPosition;
+    gestureState.value['rateBeforeLongPress'] = useAppStore().state.rate;
 
-      showSpeedSelector(details.globalPosition);
-      updateSelectedSpeed(closestSpeed, 0.0);
-    }
+    final longPressSpeed = useAppStore().state.longPressSpeed;
+    logger('Long press speed: $longPressSpeed');
+    useAppStore().updateRate(longPressSpeed, persist: false);
   }
 
   void onLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
+    // 长按期间不支持拖动调节, 松开后恢复原速
+    return;
+  }
+
+  void restoreRateAfterLongPress() {
     if (!(gestureState.value['isLongPress'] as bool)) return;
-
-    final startDx = (gestureState.value['startPanOffset'] as Offset).dx;
-    final currentDx = details.globalPosition.dx;
-    final deltaDx = currentDx - startDx;
-
-    const double sensitivity = speedSelectorItemWidth;
-    final double visualOffset = deltaDx;
-
-    int steps = (-visualOffset / sensitivity).round();
-
-    int initialIndex = gestureState.value['initialSpeedIndex'] as int? ??
-        speedStops.indexOf(1.0);
-    int finalIndex = (initialIndex + steps).clamp(0, speedStops.length - 1);
-
-    double selectedSpeed = speedStops[finalIndex];
-
-    updateSelectedSpeed(selectedSpeed, visualOffset);
-    if (useAppStore().state.rate != selectedSpeed) {
-      useAppStore().updateRate(selectedSpeed);
-    }
+    final restoreRate =
+        gestureState.value['rateBeforeLongPress'] as double? ?? 1.0;
+    useAppStore().updateRate(restoreRate, persist: false);
+    gestureState.value['rateBeforeLongPress'] = null;
   }
 
   void onLongPressEnd(LongPressEndDetails details) {
-    if (gestureState.value['isLongPress'] as bool) {
-      hideSpeedSelector(useAppStore().state.rate);
-    }
+    restoreRateAfterLongPress();
     gestureState.value['isLongPress'] = false;
+    isLongPressState.value = false;
     gestureState.value['isTouch'] = false;
   }
 
   void onLongPressCancel() {
-    if (gestureState.value['isLongPress'] as bool) {
-      hideSpeedSelector(useAppStore().state.rate);
-    }
+    restoreRateAfterLongPress();
     gestureState.value['isLongPress'] = false;
+    isLongPressState.value = false;
     gestureState.value['isTouch'] = false;
   }
 
@@ -188,6 +217,8 @@ Gesture useGesture({
       windowManager.startDragging();
       return;
     }
+
+    if (isPinching.value) return;
 
     if (gestureState.value['isLongPress'] as bool) {
       return;
@@ -215,6 +246,7 @@ Gesture useGesture({
   }
 
   void onPanUpdate(DragUpdateDetails details) {
+    if (isPinching.value) return;
     if (!(gestureState.value['isDragging'] as bool)) return;
 
     final startOffset = gestureState.value['startPanOffset'] as Offset;
@@ -307,6 +339,76 @@ Gesture useGesture({
     }
   }
 
+  /// 双指捏合缩放画面
+  void onPointerDown(PointerDownEvent event) {
+    activePointers.value[event.pointer] = event.position;
+
+    if (activePointers.value.length == 2) {
+      final points = activePointers.value.values.toList();
+      pinchStartDistance.value = (points[0] - points[1]).distance;
+      pinchStartZoom.value = usePlayerUiStore().state.zoom;
+      isPinching.value = true;
+
+      // 取消可能已经开始的其他手势, 避免冲突
+      gestureState.value['isDragging'] = false;
+      gestureState.value['panDirection'] = null;
+      if (usePlayerUiStore().state.isSeeking) {
+        usePlayerUiStore().updateIsSeeking(false);
+      }
+      isLeftGesture.value = false;
+      isRightGesture.value = false;
+      FlutterVolumeController.updateShowSystemUI(true);
+
+      showZoomIndicator();
+    }
+  }
+
+  void onPointerMove(PointerMoveEvent event) {
+    if (!activePointers.value.containsKey(event.pointer)) return;
+    activePointers.value[event.pointer] = event.position;
+
+    if (!isPinching.value || activePointers.value.length < 2) return;
+
+    final points = activePointers.value.values.toList();
+    final distance = (points[0] - points[1]).distance;
+    final startDistance = pinchStartDistance.value;
+
+    if (startDistance == null || startDistance <= 0) return;
+
+    final scale = distance / startDistance;
+    usePlayerUiStore().updateZoom(pinchStartZoom.value * scale);
+    showZoomIndicator();
+  }
+
+  void onPointerUp(PointerUpEvent event) {
+    activePointers.value.remove(event.pointer);
+    if (activePointers.value.length < 2) {
+      isPinching.value = false;
+      pinchStartDistance.value = null;
+      hideZoomIndicator();
+    }
+  }
+
+  void onPointerCancel(PointerCancelEvent event) {
+    activePointers.value.remove(event.pointer);
+    if (activePointers.value.length < 2) {
+      isPinching.value = false;
+      pinchStartDistance.value = null;
+      hideZoomIndicator();
+    }
+  }
+
+  /// 桌面端 Ctrl + 滚轮无级缩放画面
+  void onPointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent &&
+        HardwareKeyboard.instance.isControlPressed) {
+      final delta = -event.scrollDelta.dy / 500.0;
+      if (delta == 0) return;
+      usePlayerUiStore().updateZoom(usePlayerUiStore().state.zoom + delta);
+      showZoomIndicator();
+    }
+  }
+
   return Gesture(
     onTapDown: onTapDown,
     onTap: onTap,
@@ -320,10 +422,17 @@ Gesture useGesture({
     onPanEnd: onPanEnd,
     onPanCancel: onPanCancel,
     onHover: onHover,
-    isLongPress: gestureState.value['isLongPress'] as bool,
+    onPointerDown: onPointerDown,
+    onPointerMove: onPointerMove,
+    onPointerUp: onPointerUp,
+    onPointerCancel: onPointerCancel,
+    onPointerSignal: onPointerSignal,
+    isLongPress: isLongPressState.value,
     isLeftGesture: isLeftGesture.value,
     isRightGesture: isRightGesture.value,
+    isZoomIndicatorVisible: isZoomIndicatorVisible.value,
     brightness: brightness.value,
     volume: volume.value,
+    zoom: usePlayerUiStore().state.zoom,
   );
 }

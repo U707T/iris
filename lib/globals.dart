@@ -9,7 +9,19 @@ String? initUri;
 PermissionStatus? storagePermissionStatus;
 final moreMenuKey = GlobalKey<PopupMenuButtonState>();
 final rateMenuKey = GlobalKey<PopupMenuButtonState>();
-const double speedSelectorItemWidth = 64.0;
+const double minZoom = 0.25;
+const double maxZoom = 5.0;
+const double zoomStep = 0.05;
+const List<double> longPressSpeedStops = [
+  1.25,
+  1.5,
+  1.75,
+  2.0,
+  2.5,
+  3.0,
+  4.0,
+  5.0,
+];
 const List<double> speedStops = [
   0.25,
   0.5,

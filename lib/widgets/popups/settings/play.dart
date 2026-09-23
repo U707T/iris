@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/store/app_state.dart';
+import 'package:iris/widgets/dialogs/show_long_press_speed_dialog.dart';
 import 'package:iris/widgets/dialogs/show_orientation_dialog.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/utils/get_localizations.dart';
@@ -24,6 +25,10 @@ class Play extends HookWidget {
         useAppStore().select(context, (state) => state.playerBackend);
     final orientation =
         useAppStore().select(context, (state) => state.orientation);
+    final longPressSpeed =
+        useAppStore().select(context, (state) => state.longPressSpeed);
+    final rememberWindowSize =
+        useAppStore().select(context, (state) => state.rememberWindowSize);
 
     final orientationMap = {
       ScreenOrientation.device: t.device,
@@ -51,6 +56,12 @@ class Play extends HookWidget {
                       value: PlayerBackend.fvp, child: Text('FVP')),
                 ],
               )),
+          ListTile(
+            leading: const Icon(Icons.touch_app_rounded),
+            title: Text(t.long_press_speed),
+            subtitle: Text('${longPressSpeed}X'),
+            onTap: () => showLongPressSpeedDialog(context),
+          ),
           Visibility(
             visible: isDesktop,
             child: ListTile(
@@ -60,6 +71,19 @@ class Play extends HookWidget {
               trailing: Checkbox(
                 value: autoResize,
                 onChanged: (_) => useAppStore().toggleAutoResize(),
+              ),
+            ),
+          ),
+          Visibility(
+            visible: isDesktop,
+            child: ListTile(
+              leading: const Icon(Icons.photo_size_select_large_rounded),
+              title: Text(t.remember_window_size),
+              subtitle: Text(t.remember_window_size_description),
+              onTap: () => useAppStore().toggleRememberWindowSize(),
+              trailing: Checkbox(
+                value: rememberWindowSize,
+                onChanged: (_) => useAppStore().toggleRememberWindowSize(),
               ),
             ),
           ),
