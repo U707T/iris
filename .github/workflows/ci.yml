@@ -25,7 +25,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.47.1
+          flutter-version: 3.35.7
           cache: true
       - name: Provide legacy flutter version file
         shell: bash
@@ -33,7 +33,7 @@ jobs:
           FT=$(command -v flutter)
           FLUTTER_ROOT_DIR="$(cd "$(dirname "$FT")/.." && pwd)"
           echo "FLUTTER_ROOT_DIR=$FLUTTER_ROOT_DIR"
-          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.1" > "$FLUTTER_ROOT_DIR/version"; fi
+          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.35.7" > "$FLUTTER_ROOT_DIR/version"; fi
           cat "$FLUTTER_ROOT_DIR/version"
       - name: Generate code
         run: flutter pub get && flutter pub run build_runner build --delete-conflicting-outputs
@@ -84,14 +84,14 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.47.1
+          flutter-version: 3.35.7
           cache: true
       - name: Provide legacy flutter version file
         run: |
           FT=$(command -v flutter)
           FLUTTER_ROOT_DIR="$(cd "$(dirname "$FT")/.." && pwd)"
           echo "FLUTTER_ROOT_DIR=$FLUTTER_ROOT_DIR"
-          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.1" > "$FLUTTER_ROOT_DIR/version"; fi
+          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.35.7" > "$FLUTTER_ROOT_DIR/version"; fi
           cat "$FLUTTER_ROOT_DIR/version"
       - name: Generate code
         run: flutter pub get && flutter pub run build_runner build --delete-conflicting-outputs
