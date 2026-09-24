@@ -23,6 +23,7 @@ import 'package:iris/widgets/popups/track/subtitle_and_audio_track.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/utils/short_video.dart';
 import 'package:iris/utils/take_screenshot.dart';
 import 'package:iris/widgets/popups/play_queue.dart';
 import 'package:iris/utils/platform.dart';
@@ -88,6 +89,22 @@ class ControlBar extends HookWidget {
           playQueue.indexWhere((element) => element.index == currentIndex);
       return playQueue.isEmpty || index < 0 ? null : playQueue[index].file;
     }, [playQueue, currentIndex]);
+
+    final bool hasVideos = useMemoized(
+        () => playQueue.any((e) => e.file.type == ContentType.video),
+        [playQueue]);
+
+    void enterShortVideo() {
+      final player = context.read<MediaPlayer>();
+      final queue = usePlayQueueStore().state.playQueue;
+      final current = queue.indexWhere(
+          (e) => e.index == usePlayQueueStore().state.currentIndex);
+      final isVideoCurrent =
+          current >= 0 && queue[current].file.type == ContentType.video;
+
+      enterShortVideoMode();
+      if (isVideoCurrent) player.play();
+    }
 
     useEffect(() {
       if (!isSeeking) {
@@ -381,6 +398,17 @@ class ControlBar extends HookWidget {
       style: ButtonStyle(overlayColor: overlayColor),
     );
 
+    final shortVideoButton = IconButton(
+      tooltip: t.short_video_mode,
+      icon: Icon(
+        Icons.swipe_vertical_rounded,
+        size: 20,
+        color: color,
+      ),
+      onPressed: enterShortVideo,
+      style: ButtonStyle(overlayColor: overlayColor),
+    );
+
     final fullscreenButton = IconButton(
       tooltip: isFullScreen
           ? '${t.exit_fullscreen} ( Escape, F11, Enter )'
@@ -508,6 +536,16 @@ class ControlBar extends HookWidget {
               ),
             ),
             onTap: () => showControlForHover(showRotateDialog(context)),
+          ),
+        // 短视频模式
+        if (hasVideos)
+          PopupMenuItem(
+            onTap: enterShortVideo,
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: const Icon(Icons.swipe_vertical_rounded, size: 20),
+              title: Text(t.short_video_mode),
+            ),
           ),
         // 播放统计
         PopupMenuItem(
@@ -647,6 +685,7 @@ class ControlBar extends HookWidget {
               subtitleButton,
               playQueueButton,
               storageButton,
+              if (hasVideos) shortVideoButton,
               if (isDesktop) fullscreenButton,
               moreMenuButton,
             ],
@@ -676,6 +715,7 @@ class ControlBar extends HookWidget {
               subtitleButton,
               playQueueButton,
               storageButton,
+              if (hasVideos) shortVideoButton,
               if (isDesktop) fullscreenButton,
               moreMenuButton,
             ],
@@ -700,6 +740,7 @@ class ControlBar extends HookWidget {
           subtitleButton,
           playQueueButton,
           storageButton,
+          if (hasVideos) shortVideoButton,
           if (isDesktop) fullscreenButton,
           moreMenuButton,
         ],

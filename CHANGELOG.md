@@ -1,3 +1,21 @@
+## v1.7.0
+
+### Changelog
+
+* Short video mode (Douyin style): one video per screen with vertical swipe navigation — enter it from the new button on the control bar or the ⋮ menu
+* The feed plays the videos of the current play queue (audio files are skipped); each video loops, so it plays like a short-video app
+* Feed gestures: swipe up / down to switch videos (mouse wheel or ↑ / ↓ keys on desktop), tap to play / pause, double-tap to seek, long-press to speed up, drag horizontally to scrub
+* Leave the mode with the back button, Esc, or the Android back gesture, and return to the normal player
+* Videos in short video mode always play from the beginning (no resume); works with both the Media Kit and FVP playback backends
+
+### 更新日志
+
+* 新增短视频模式（抖音式竖向信息流）：一屏一条视频、上下滑动切换，入口在控制栏新按钮和 ⋮ 菜单中
+* 信息流播放当前播放列表里的视频（自动跳过音频），单条循环播放
+* 模式内手势：上下滑动切换（桌面端可用滚轮或 ↑ / ↓ 键）、单击播放/暂停、双击快进快退、长按倍速、左右拖动调节进度
+* 返回键 / Esc / Android 返回手势退出模式，回到普通播放器界面
+* 短视频模式内视频始终从头播放（不续播），Media Kit / FVP 两种播放后端均可用
+
 ## v1.6.1
 
 ### Changelog

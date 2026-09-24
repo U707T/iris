@@ -165,5 +165,7 @@
   "step_backward": "帧退",
   "always_on_top": "切换窗口置顶",
   "shift_for_large_step": "按住 Shift 步长更大",
-  "seek_step_large": "快进/快退时长（按住 Shift）"
+  "seek_step_large": "快进/快退时长（按住 Shift）",
+  "short_video_mode": "短视频模式",
+  "exit_short_video_mode": "退出短视频模式"
 }

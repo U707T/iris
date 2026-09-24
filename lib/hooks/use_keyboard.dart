@@ -13,6 +13,7 @@ import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/short_video.dart';
 import 'package:iris/utils/take_screenshot.dart';
 import 'package:iris/widgets/dialogs/show_shortcuts_dialog.dart';
 import 'package:iris/widgets/bottom_sheets/show_open_link_bottom_sheet.dart';
@@ -71,12 +72,20 @@ KeyboardEvent useKeyboard({
           // 上一个
           case LogicalKeyboardKey.arrowLeft:
             showControl();
-            usePlayQueueStore().previous();
+            if (usePlayerUiStore().state.isShortVideoMode) {
+              moveShortVideoBy(-1);
+            } else {
+              usePlayQueueStore().previous();
+            }
             break;
           // 下一个
           case LogicalKeyboardKey.arrowRight:
             showControl();
-            usePlayQueueStore().next();
+            if (usePlayerUiStore().state.isShortVideoMode) {
+              moveShortVideoBy(1);
+            } else {
+              usePlayQueueStore().next();
+            }
             break;
           // 设置
           case LogicalKeyboardKey.keyP:
@@ -154,7 +163,14 @@ KeyboardEvent useKeyboard({
         case LogicalKeyboardKey.space:
         case LogicalKeyboardKey.mediaPlayPause:
           showControl();
-          if (player.isPlaying) {
+          if (usePlayerUiStore().state.isShortVideoMode) {
+            // 短视频模式内不影响自动播放 (划到下一条仍自动播放)
+            if (player.isPlaying) {
+              player.pause();
+            } else {
+              player.play();
+            }
+          } else if (player.isPlaying) {
             useAppStore().updateAutoPlay(false);
             player.pause();
           } else {
@@ -164,13 +180,21 @@ KeyboardEvent useKeyboard({
           break;
         // 上一个
         case LogicalKeyboardKey.mediaTrackPrevious:
-          usePlayQueueStore().previous();
+          if (usePlayerUiStore().state.isShortVideoMode) {
+            moveShortVideoBy(-1);
+          } else {
+            usePlayQueueStore().previous();
+          }
           showControl();
           break;
         // 下一个
         case LogicalKeyboardKey.mediaTrackNext:
+          if (usePlayerUiStore().state.isShortVideoMode) {
+            moveShortVideoBy(1);
+          } else {
+            usePlayQueueStore().next();
+          }
           showControl();
-          usePlayQueueStore().next();
           break;
         // 存储
         case LogicalKeyboardKey.keyF:
@@ -205,9 +229,11 @@ KeyboardEvent useKeyboard({
             ),
           );
           break;
-        // 退出全屏
+        // 退出全屏 / 退出短视频模式
         case LogicalKeyboardKey.escape:
-          if (isDesktop && playerUiState.isFullScreen) {
+          if (usePlayerUiStore().state.isShortVideoMode) {
+            exitShortVideoMode();
+          } else if (isDesktop && playerUiState.isFullScreen) {
             usePlayerUiStore().updateFullScreen(false);
           }
           break;
@@ -277,15 +303,23 @@ KeyboardEvent useKeyboard({
                 : appState.seekStepSeconds,
           );
           break;
-        // 提升音量
+        // 提升音量 / 短视频模式: 上一条
         case LogicalKeyboardKey.arrowUp:
-          showControl();
-          await useAppStore().updateVolume(useAppStore().state.volume + 1);
+          if (usePlayerUiStore().state.isShortVideoMode) {
+            if (event.runtimeType == KeyDownEvent) moveShortVideoBy(-1);
+          } else {
+            showControl();
+            await useAppStore().updateVolume(useAppStore().state.volume + 1);
+          }
           break;
-        // 降低音量
+        // 降低音量 / 短视频模式: 下一条
         case LogicalKeyboardKey.arrowDown:
-          showControl();
-          await useAppStore().updateVolume(useAppStore().state.volume - 1);
+          if (usePlayerUiStore().state.isShortVideoMode) {
+            if (event.runtimeType == KeyDownEvent) moveShortVideoBy(1);
+          } else {
+            showControl();
+            await useAppStore().updateVolume(useAppStore().state.volume - 1);
+          }
           break;
         default:
           break;

@@ -17,12 +17,14 @@ import 'package:iris/pages/player/overlays/controls_overlay.dart';
 import 'package:iris/pages/player/overlays/gesture_overlay.dart';
 import 'package:iris/pages/player/overlays/minimal_progress_overlay.dart';
 import 'package:iris/pages/player/overlays/stats_overlay.dart';
+import 'package:iris/pages/player/short_video/short_video_view.dart';
 import 'package:iris/pages/player/video_view.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/check_content_type.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/short_video.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:provider/provider.dart';
@@ -45,6 +47,8 @@ class Player extends HookWidget {
     final progressHideTimer = useRef<Timer?>(null);
 
     final fit = useAppStore().select(context, (state) => state.fit);
+    final isShortVideoMode =
+        usePlayerUiStore().select(context, (state) => state.isShortVideoMode);
 
     final playQueue =
         usePlayQueueStore().select(context, (state) => state.playQueue);
@@ -139,10 +143,11 @@ class Player extends HookWidget {
     }
 
     // Android 返回手势 / 返回键:
-    // 1. 有弹层/对话框时, 交给它们自己处理 (由 Navigator 自动分发)
-    // 2. 控制栏显示中 -> 先收起控制栏
-    // 3. 全屏中 -> 先退出全屏
-    // 4. 否则 -> 二次确认退出应用
+    // 1. 短视频模式中 -> 先退出短视频模式
+    // 2. 有弹层/对话框时, 交给它们自己处理 (由 Navigator 自动分发)
+    // 3. 控制栏显示中 -> 先收起控制栏
+    // 4. 全屏中 -> 先退出全屏
+    // 5. 否则 -> 二次确认退出应用
     final exitConfirmTimer = useRef<Timer?>(null);
     final isExitConfirm = useState(false);
 
@@ -152,6 +157,11 @@ class Player extends HookWidget {
 
     Future<void> handleSystemBack() async {
       final uiState = usePlayerUiStore().state;
+
+      if (uiState.isShortVideoMode) {
+        exitShortVideoMode();
+        return;
+      }
 
       if (uiState.isShowControl || uiState.isShowProgress) {
         hideControl();
@@ -268,35 +278,42 @@ class Player extends HookWidget {
           onKeyEvent: onKeyEvent,
           child: Stack(
             children: [
-              // Video
-              Positioned(
-                left: videoViewOffset.dx,
-                top: videoViewOffset.dy,
-                width: videoViewSize.width,
-                height: videoViewSize.height,
-                child: VideoView(
-                  key: ValueKey(file?.uri),
-                  fit: fit,
+              if (isShortVideoMode)
+                // 短视频模式 (类抖音竖向信息流)
+                const Positioned.fill(
+                  child: ShortVideoView(),
+                )
+              else ...[
+                // Video
+                Positioned(
+                  left: videoViewOffset.dx,
+                  top: videoViewOffset.dy,
+                  width: videoViewSize.width,
+                  height: videoViewSize.height,
+                  child: VideoView(
+                    key: ValueKey(file?.uri),
+                    fit: fit,
+                  ),
                 ),
-              ),
-              Positioned.fill(
-                child: MinimalProgressOverlay(
-                  title: title,
-                  file: file,
-                ),
-              ),
-              // Audio
-              if (file?.type == ContentType.audio)
                 Positioned.fill(
-                  child: Audio(cover: cover),
+                  child: MinimalProgressOverlay(
+                    title: title,
+                    file: file,
+                  ),
                 ),
-              Positioned.fill(
-                child: GestureOverlay(
-                  showControl: showControl,
-                  hideControl: hideControl,
-                  showProgress: showProgress,
+                // Audio
+                if (file?.type == ContentType.audio)
+                  Positioned.fill(
+                    child: Audio(cover: cover),
+                  ),
+                Positioned.fill(
+                  child: GestureOverlay(
+                    showControl: showControl,
+                    hideControl: hideControl,
+                    showProgress: showProgress,
+                  ),
                 ),
-              ),
+              ],
               // 播放统计 OSD
               if (usePlayerUiStore()
                   .select(context, (state) => state.isShowStats))
@@ -327,16 +344,17 @@ class Player extends HookWidget {
                     ),
                   ),
                 ),
-              Positioned.fill(
-                child: ControlsOverlay(
-                  file: file,
-                  title: title,
-                  showControl: showControl,
-                  showControlForHover: showControlForHover,
-                  hideControl: hideControl,
-                  showProgress: showProgress,
+              if (!isShortVideoMode)
+                Positioned.fill(
+                  child: ControlsOverlay(
+                    file: file,
+                    title: title,
+                    showControl: showControl,
+                    showControlForHover: showControlForHover,
+                    hideControl: hideControl,
+                    showProgress: showProgress,
+                  ),
                 ),
-              ),
             ],
           ),
         ),

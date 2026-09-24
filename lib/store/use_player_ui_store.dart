@@ -95,6 +95,10 @@ class PlayerUiStore extends Store<PlayerUiState> {
   void updateIsShowProgress(bool bool) {
     set(state.copyWith(isShowProgress: bool));
   }
+
+  void updateShortVideoMode(bool bool) {
+    set(state.copyWith(isShortVideoMode: bool));
+  }
 }
 
 PlayerUiStore usePlayerUiStore() => create(() => PlayerUiStore());

@@ -165,5 +165,7 @@
   "step_backward": "Step backward",
   "always_on_top": "Toggle always on top",
   "shift_for_large_step": "Shift for larger step",
-  "seek_step_large": "Skip duration (Shift)"
+  "seek_step_large": "Skip duration (Shift)",
+  "short_video_mode": "Short video mode",
+  "exit_short_video_mode": "Exit short video mode"
 }

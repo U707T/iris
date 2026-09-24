@@ -30,6 +30,9 @@ FvpPlayer useFvpPlayer(BuildContext context) {
   final volume = useAppStore().select(context, (state) => state.volume);
   final isMuted = useAppStore().select(context, (state) => state.isMuted);
   final repeat = useAppStore().select(context, (state) => state.repeat);
+  // 短视频模式内固定单条循环 (类抖音)
+  final bool isShortVideoMode =
+      usePlayerUiStore().select(context, (state) => state.isShortVideoMode);
   final playQueue =
       usePlayQueueStore().select(context, (state) => state.playQueue);
   final currentIndex =
@@ -39,8 +42,9 @@ FvpPlayer useFvpPlayer(BuildContext context) {
 
   final history = useHistoryStore().select(context, (state) => state.history);
 
-  final looping =
-      useMemoized(() => repeat == Repeat.one ? true : false, [repeat]);
+  final looping = useMemoized(
+      () => repeat == Repeat.one || isShortVideoMode,
+      [repeat, isShortVideoMode]);
 
   final int currentPlayIndex = useMemoized(
       () => playQueue.indexWhere((element) => element.index == currentIndex),
@@ -184,7 +188,7 @@ FvpPlayer useFvpPlayer(BuildContext context) {
         }
       }
       await controller.value.initialize();
-      await controller.value.setLooping(repeat == Repeat.one ? true : false);
+      await controller.value.setLooping(looping);
       await controller.value.setPlaybackSpeed(rate);
       await controller.value.setVolume(isMuted ? 0 : volume / 100);
     } catch (e) {
@@ -246,7 +250,7 @@ FvpPlayer useFvpPlayer(BuildContext context) {
           controller.value.value.position != Duration.zero &&
           controller.value.value.duration != Duration.zero) {
         logger('Completed: ${file.name}');
-        if (repeat == Repeat.one) return;
+        if (looping) return;
         if (currentPlayIndex == playQueue.length - 1) {
           if (repeat == Repeat.all) {
             await usePlayQueueStore().updateCurrentIndex(playQueue[0].index);
@@ -277,14 +281,15 @@ FvpPlayer useFvpPlayer(BuildContext context) {
   useEffect(() {
     if (controller.value.value.isInitialized) {
       logger('Set looping: $looping');
-      controller.value.setLooping(repeat == Repeat.one ? true : false);
+      controller.value.setLooping(looping);
     }
     return;
   }, [looping]);
 
   useEffect(() {
     () async {
-      if (controller.value.value.duration != Duration.zero &&
+      if (!isShortVideoMode &&
+          controller.value.value.duration != Duration.zero &&
           file != null &&
           file.type == ContentType.video) {
         Progress? progress = history[file.getID()];
