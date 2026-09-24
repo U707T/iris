@@ -1,13 +1,17 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-/// 将截图保存到应用图片目录 (Android 为 Pictures/IRIS, 桌面为应用文档目录)。
+/// 将截图保存到图片目录。
+///
+/// - Android: 有"所有文件访问"权限时保存到公共图片目录 Pictures/IRIS,
+///   否则回退到应用专属外部目录 (无需权限), 避免直接失败。
+/// - 桌面: 保存到文档目录下的 Screenshots 文件夹。
 ///
 /// 返回保存后的文件路径, 失败返回 null。
 Future<String?> saveScreenshot({
@@ -19,12 +23,17 @@ Future<String?> saveScreenshot({
     final Directory dir;
 
     if (isAndroid) {
-      // Android: 保存到外部存储的 Pictures/IRIS 目录
       final external = await getExternalStorageDirectory();
-      if (external != null) {
+      final canWritePublicDir =
+          external != null && await Permission.manageExternalStorage.isGranted;
+
+      if (canWritePublicDir) {
         // /storage/emulated/0/Android/data/<pkg>/files -> 上级目录中的 Pictures
         final root = external.path.split('/Android/').first;
         dir = Directory(p.join(root, 'Pictures', 'IRIS'));
+      } else if (external != null) {
+        // 无权限时回退到应用专属外部目录, 保证截图总能保存成功
+        dir = Directory(p.join(external.path, 'Screenshots'));
       } else {
         dir = await getApplicationDocumentsDirectory();
       }
@@ -51,17 +60,4 @@ Future<String?> saveScreenshot({
     logger('Error saving screenshot: $e');
     return null;
   }
-}
-
-/// 显示截图结果提示
-void showScreenshotToast(BuildContext context, String? path) {
-  final messenger = ScaffoldMessenger.maybeOf(context);
-  if (messenger == null) return;
-
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text(path != null ? '已保存: $path' : '截图失败'),
-      duration: const Duration(seconds: 3),
-    ),
-  );
 }
