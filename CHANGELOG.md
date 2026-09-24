@@ -1,3 +1,15 @@
+## v1.8.2-rc.2
+
+### Changelog
+
+* Short video mode: the loop / speed / volume settings are now applied before the video is opened, so the first video can no longer briefly play at the default volume right after entering the mode (a code-review follow-up on rc.1)
+* The amount of player commands per switch is reduced, so the first video also starts a bit faster
+
+### 更新日志
+
+* 短视频模式：在打开视频前先应用循环 / 倍速 / 音量设置，修复进入模式后首个视频可能短暂以默认音量播放的问题（对 rc.1 的代码复查跟进）
+* 减少每次切条的播放器命令往返，首个视频起播也更快
+
 ## v1.8.2-rc.1
 
 ### Changelog

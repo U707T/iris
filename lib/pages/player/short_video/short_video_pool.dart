@@ -253,19 +253,19 @@ class ShortVideoPool extends ChangeNotifier {
 
     final token = ++slot.token;
     try {
+      // 先应用循环 / 倍速 / 音量等设置, 避免 open 即播时短暂使用默认音量
+      final appState = useAppStore().state;
+      await slot.player.setPlaylistMode(PlaylistMode.loop);
+      await slot.player.setRate(appState.rate);
+      await slot.player.setVolume(
+          appState.isMuted ? 0 : appState.volume.toDouble());
+      if (disposed || token != slot.token) return;
+
       // 当前视频直接随 open 开始播放, 减少一次命令往返
       final playNow = !userPaused && slotFor(currentFeedIndex) == slot;
       await slot.player.open(buildMedia(file), play: playNow);
       if (disposed || token != slot.token) return;
 
-      await slot.player.setPlaylistMode(PlaylistMode.loop);
-
-      final appState = useAppStore().state;
-      await slot.player.setRate(appState.rate);
-      await slot.player.setVolume(
-          appState.isMuted ? 0 : appState.volume.toDouble());
-
-      if (disposed || token != slot.token) return;
       slot.initializing = false;
       notifyListeners();
 
