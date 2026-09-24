@@ -1,3 +1,17 @@
+## v1.8.1
+
+### Changelog
+
+* Much smoother progress bar scrubbing in short video mode: playback pauses while you drag, the bar / thumb / time bubble follow your finger in real time, preview seeks are throttled, and playback resumes exactly where you release
+* Fixed the mismatched bright band near the progress bar in landscape: the footer gradient now also covers the progress bar area, blending the darkening into the video evenly
+* Added fade transitions for the loading indicator, the long-press speed hint and entering short video mode
+
+### 更新日志
+
+* 短视频模式进度条拖动大幅优化：拖动时自动暂停播放，进度条 / 圆点 / 时间气泡实时跟手，预览跳转做了节流，松手后精确跳转并恢复播放
+* 修复横屏下进度条区域与视频亮度不一致的"亮条"问题：底部渐变现在覆盖进度条区域，暗部与视频衔接自然
+* 加载指示、长按倍速提示、进入短视频模式增加淡入淡出过渡
+
 ## v1.8.0
 
 ### Changelog

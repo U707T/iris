@@ -7,7 +7,6 @@ import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/short_video/short_video_pool.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
-import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/format_duration_to_minutes.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/short_video.dart';
@@ -136,6 +135,44 @@ class ShortVideoView extends HookWidget {
       isLongPress.value = false;
     }
 
+    // 进度拖动: 本地预览位置让进度条实时跟手, 预览 seek 做节流,
+    // 拖动时暂停播放, 松手后精确 seek 并恢复播放。
+    final scrubPreview = useMemoized(() => ValueNotifier<Duration?>(null), []);
+    useEffect(() {
+      return () => scrubPreview.dispose();
+    }, [scrubPreview]);
+    final scrubResume = useRef(false);
+    final lastScrubSeekAt = useRef<DateTime?>(null);
+
+    void scrubSeek(Duration target, {bool force = false}) {
+      scrubPreview.value = target;
+      final now = DateTime.now();
+      final last = lastScrubSeekAt.value;
+      if (force ||
+          last == null ||
+          now.difference(last) >= const Duration(milliseconds: 140)) {
+        lastScrubSeekAt.value = now;
+        player.seek(target);
+      }
+    }
+
+    void scrubStart(Duration target) {
+      scrubResume.value = player.isPlaying;
+      if (scrubResume.value) player.pause();
+      lastScrubSeekAt.value = null;
+      scrubSeek(target, force: true);
+    }
+
+    void scrubEnd() {
+      final target = scrubPreview.value;
+      scrubPreview.value = null;
+      lastScrubSeekAt.value = null;
+      final resume = scrubResume.value;
+      scrubResume.value = false;
+      if (target != null) player.seek(target);
+      if (resume) player.play();
+    }
+
     // 水平拖动调节进度 (相对拖动, 任意位置可用)
     final scrubState =
         useRef((active: false, start: Duration.zero, startDx: 0.0));
@@ -155,7 +192,7 @@ class ShortVideoView extends HookWidget {
         start: player.position,
         startDx: details.globalPosition.dx,
       );
-      usePlayerUiStore().updateIsSeeking(true);
+      scrubStart(player.position);
     }
 
     void onHorizontalDragUpdate(DragUpdateDetails details) {
@@ -164,13 +201,13 @@ class ShortVideoView extends HookWidget {
       const double sensitivity = 3.0; // 每滑动 3 像素代表 1 秒
       final target = scrubState.value.start +
           Duration(milliseconds: (totalDx / sensitivity * 1000).round());
-      player.seek(target);
+      scrubSeek(target);
     }
 
     void onHorizontalDragEnd() {
       if (!scrubState.value.active) return;
       scrubState.value = (active: false, start: Duration.zero, startDx: 0.0);
-      usePlayerUiStore().updateIsSeeking(false);
+      scrubEnd();
     }
 
     // 鼠标滚轮切换上 / 下一条 (接管 PageView 默认的滚轮行为)
@@ -215,125 +252,154 @@ class ShortVideoView extends HookWidget {
       return const SizedBox.shrink();
     }
 
-    return Listener(
-      onPointerDown: (_) => isDragging.value = true,
-      onPointerUp: (_) => isDragging.value = false,
-      onPointerCancel: (_) => isDragging.value = false,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => _togglePlay(context),
-        onDoubleTapDown: onDoubleTapDown,
-        onLongPressStart: onLongPressStart,
-        onLongPressEnd: (_) => onLongPressEnd(),
-        onLongPressCancel: onLongPressEnd,
-        onHorizontalDragStart: onHorizontalDragStart,
-        onHorizontalDragUpdate: onHorizontalDragUpdate,
-        onHorizontalDragEnd: (_) => onHorizontalDragEnd(),
-        onHorizontalDragCancel: onHorizontalDragEnd,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                // 吸附 / 回弹结束后提交页面切换
-                if (notification is ScrollEndNotification) {
-                  final page = pageController.page?.round();
-                  if (page != null) commitPage(page);
-                }
-                return false;
-              },
-              child: ScrollConfiguration(
-                behavior: ScrollConfiguration.of(context).copyWith(
-                  scrollbars: false,
-                  overscroll: false,
-                  dragDevices: const {
-                    PointerDeviceKind.touch,
-                    PointerDeviceKind.mouse,
-                    PointerDeviceKind.stylus,
-                    PointerDeviceKind.trackpad,
-                  },
-                ),
-                child: PageView.builder(
-                  controller: pageController,
-                  scrollDirection: Axis.vertical,
-                  onPageChanged: (page) {
-                    // 仅在非拖动阶段提交, 避免拖动途中切换播放
-                    if (!isDragging.value) commitPage(page);
-                  },
-                  itemCount: items.length,
-                  itemBuilder: buildPage,
-                ),
-              ),
-            ),
-            // 加载指示
-            if (isInitializing)
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-              ),
-            // 长按倍速指示
-            if (isLongPress.value)
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 18, 12),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.fast_forward_rounded,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '${useAppStore().state.longPressSpeed}x',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                              decoration: TextDecoration.none,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+      builder: (context, opacity, child) =>
+          Opacity(opacity: opacity, child: child),
+      child: Listener(
+        onPointerDown: (_) => isDragging.value = true,
+        onPointerUp: (_) => isDragging.value = false,
+        onPointerCancel: (_) => isDragging.value = false,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _togglePlay(context),
+          onDoubleTapDown: onDoubleTapDown,
+          onLongPressStart: onLongPressStart,
+          onLongPressEnd: (_) => onLongPressEnd(),
+          onLongPressCancel: onLongPressEnd,
+          onHorizontalDragStart: onHorizontalDragStart,
+          onHorizontalDragUpdate: onHorizontalDragUpdate,
+          onHorizontalDragEnd: (_) => onHorizontalDragEnd(),
+          onHorizontalDragCancel: onHorizontalDragEnd,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  // 吸附 / 回弹结束后提交页面切换
+                  if (notification is ScrollEndNotification) {
+                    final page = pageController.page?.round();
+                    if (page != null) commitPage(page);
+                  }
+                  return false;
+                },
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    scrollbars: false,
+                    overscroll: false,
+                    dragDevices: const {
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.mouse,
+                      PointerDeviceKind.stylus,
+                      PointerDeviceKind.trackpad,
+                    },
+                  ),
+                  child: PageView.builder(
+                    controller: pageController,
+                    scrollDirection: Axis.vertical,
+                    onPageChanged: (page) {
+                      // 仅在非拖动阶段提交, 避免拖动途中切换播放
+                      if (!isDragging.value) commitPage(page);
+                    },
+                    itemCount: items.length,
+                    itemBuilder: buildPage,
                   ),
                 ),
               ),
-            // 底部信息与进度条
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _FeedFooter(
-                items: items,
-                currentFeedIndex: currentFeedIndex,
+              // 加载指示
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: isInitializing
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              key: ValueKey('loading'),
+                            ),
+                          )
+                        : const SizedBox.shrink(key: ValueKey('loaded')),
+                  ),
+                ),
               ),
-            ),
-            // 退出按钮
-            Positioned(
-              left: 8,
-              top: 8,
-              child: _FeedIconButton(
-                icon: Icons.arrow_back_rounded,
-                tooltip: t.exit_short_video_mode,
-                onPressed: exitShortVideoMode,
+              // 长按倍速指示
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 150),
+                    child: isLongPress.value
+                        ? Center(
+                            child: Container(
+                              key: const ValueKey('speed-hint'),
+                              padding:
+                                  const EdgeInsets.fromLTRB(12, 12, 18, 12),
+                              decoration: BoxDecoration(
+                                color: Colors.black54,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.fast_forward_rounded,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    '${useAppStore().state.longPressSpeed}x',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                      decoration: TextDecoration.none,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(key: ValueKey('no-speed-hint')),
+                  ),
+                ),
               ),
-            ),
-            // 右侧操作
-            const Positioned(
-              right: 10,
-              bottom: 110,
-              child: _FeedActions(),
-            ),
-          ],
+              // 底部信息与进度条
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: _FeedFooter(
+                  items: items,
+                  currentFeedIndex: currentFeedIndex,
+                  scrubPreview: scrubPreview,
+                  progressBar: _FeedProgressBar(
+                    scrubPreview: scrubPreview,
+                    onScrubStart: scrubStart,
+                    onScrubSeek: scrubSeek,
+                    onScrubEnd: scrubEnd,
+                    onTapSeek: (target) => player.seek(target),
+                  ),
+                ),
+              ),
+              // 退出按钮
+              Positioned(
+                left: 8,
+                top: 8,
+                child: _FeedIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  tooltip: t.exit_short_video_mode,
+                  onPressed: exitShortVideoMode,
+                ),
+              ),
+              // 右侧操作
+              const Positioned(
+                right: 10,
+                bottom: 110,
+                child: _FeedActions(),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -414,15 +480,20 @@ class _FeedActions extends HookWidget {
   }
 }
 
-/// 底部标题 / 序号 / 时间与可拖拽进度条
+/// 底部标题 / 序号 / 时间与可拖拽进度条。
+/// 渐变背景覆盖整个底部区域 (含进度条), 与视频明暗衔接自然。
 class _FeedFooter extends HookWidget {
   const _FeedFooter({
     required this.items,
     required this.currentFeedIndex,
+    required this.scrubPreview,
+    required this.progressBar,
   });
 
   final List<PlayQueueItem> items;
   final int currentFeedIndex;
+  final ValueNotifier<Duration?> scrubPreview;
+  final Widget progressBar;
 
   @override
   Widget build(BuildContext context) {
@@ -430,76 +501,99 @@ class _FeedFooter extends HookWidget {
         context.select<MediaPlayer, Duration>((player) => player.position);
     final duration =
         context.select<MediaPlayer, Duration>((player) => player.duration);
-    final isSeeking =
-        usePlayerUiStore().select(context, (state) => state.isSeeking);
 
-    final TextStyle metaStyle = TextStyle(
-      color: Colors.white.withValues(alpha: isSeeking ? 1.0 : 0.7),
-      fontSize: 12,
-      decoration: TextDecoration.none,
-      shadows: const [Shadow(color: Colors.black54, blurRadius: 2)],
-    );
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IgnorePointer(
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 40, 16, 10),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0),
-                  Colors.black.withValues(alpha: 0.55),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.black.withValues(alpha: 0),
+            Colors.black.withValues(alpha: 0.35),
+            Colors.black.withValues(alpha: 0.65),
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IgnorePointer(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 40, 16, 10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    items[currentFeedIndex].file.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      decoration: TextDecoration.none,
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 2)],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ValueListenableBuilder<Duration?>(
+                    valueListenable: scrubPreview,
+                    builder: (context, preview, _) {
+                      final display = preview ?? position;
+                      final TextStyle metaStyle = TextStyle(
+                        color: Colors.white
+                            .withValues(alpha: preview != null ? 1.0 : 0.7),
+                        fontSize: 12,
+                        decoration: TextDecoration.none,
+                        shadows: const [
+                          Shadow(color: Colors.black54, blurRadius: 2),
+                        ],
+                      );
+                      return Row(
+                        children: [
+                          Text(
+                            '${currentFeedIndex + 1}/${items.length}',
+                            style: metaStyle,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            '${formatDurationToMinutes(display)} / ${formatDurationToMinutes(duration)}',
+                            style: metaStyle,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  items[currentFeedIndex].file.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    decoration: TextDecoration.none,
-                    shadows: [Shadow(color: Colors.black54, blurRadius: 2)],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Text(
-                      '${currentFeedIndex + 1}/${items.length}',
-                      style: metaStyle,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      '${formatDurationToMinutes(position)} / ${formatDurationToMinutes(duration)}',
-                      style: metaStyle,
-                    ),
-                  ],
-                ),
-              ],
-            ),
           ),
-        ),
-        const _FeedProgressBar(),
-      ],
+          progressBar,
+        ],
+      ),
     );
   }
 }
 
-/// 可拖拽 / 点击跳转的细进度条
+/// 可拖拽 / 点击跳转的细进度条。
+/// 拖动期间圆点与时间气泡由本地预览位置实时驱动, 不等待播放器回调。
 class _FeedProgressBar extends HookWidget {
-  const _FeedProgressBar();
+  const _FeedProgressBar({
+    required this.scrubPreview,
+    required this.onScrubStart,
+    required this.onScrubSeek,
+    required this.onScrubEnd,
+    required this.onTapSeek,
+  });
+
+  final ValueNotifier<Duration?> scrubPreview;
+  final void Function(Duration target) onScrubStart;
+  final void Function(Duration target) onScrubSeek;
+  final void Function() onScrubEnd;
+  final void Function(Duration target) onTapSeek;
 
   @override
   Widget build(BuildContext context) {
@@ -507,14 +601,6 @@ class _FeedProgressBar extends HookWidget {
         context.select<MediaPlayer, Duration>((player) => player.position);
     final duration =
         context.select<MediaPlayer, Duration>((player) => player.duration);
-    final isSeeking =
-        usePlayerUiStore().select(context, (state) => state.isSeeking);
-
-    final double progress = duration > Duration.zero
-        ? (position.inMilliseconds / duration.inMilliseconds)
-            .clamp(0.0, 1.0)
-            .toDouble()
-        : 0.0;
 
     return SizedBox(
       height: 32,
@@ -522,100 +608,121 @@ class _FeedProgressBar extends HookWidget {
         builder: (context, constraints) {
           final width = constraints.maxWidth;
 
-          void seekTo(double localX) {
-            if (duration <= Duration.zero) return;
+          Duration? targetOf(double localX) {
+            if (duration <= Duration.zero) return null;
             final fraction = (localX / width).clamp(0.0, 1.0);
-            context.read<MediaPlayer>().seek(duration * fraction);
+            return duration * fraction;
           }
 
-          final double barHeight = isSeeking ? 4.0 : 2.5;
+          return ValueListenableBuilder<Duration?>(
+            valueListenable: scrubPreview,
+            builder: (context, preview, _) {
+              final display = preview ?? position;
+              final isSeeking = preview != null;
+              final double progress = duration > Duration.zero
+                  ? (display.inMilliseconds / duration.inMilliseconds)
+                      .clamp(0.0, 1.0)
+                      .toDouble()
+                  : 0.0;
+              const double barHeight = 3.0;
 
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // 拖动 / 点击热区 (translucent: 竖直滑动手势仍可穿透给翻页)
-              GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTapUp: (details) => seekTo(details.localPosition.dx),
-                onHorizontalDragStart: (details) {
-                  usePlayerUiStore().updateIsSeeking(true);
-                  seekTo(details.localPosition.dx);
-                },
-                onHorizontalDragUpdate: (details) =>
-                    seekTo(details.localPosition.dx),
-                onHorizontalDragEnd: (_) =>
-                    usePlayerUiStore().updateIsSeeking(false),
-                onHorizontalDragCancel: () =>
-                    usePlayerUiStore().updateIsSeeking(false),
-                child: const SizedBox.expand(),
-              ),
-              // 轨道
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 10,
-                height: barHeight,
-                child: const IgnorePointer(
-                  child: ColoredBox(color: Colors.white24),
-                ),
-              ),
-              // 已播放部分
-              Positioned(
-                left: 0,
-                bottom: 10,
-                height: barHeight,
-                width: width * progress,
-                child: const IgnorePointer(
-                  child: ColoredBox(color: Colors.white),
-                ),
-              ),
-              // 拖动圆点
-              if (isSeeking)
-                Positioned(
-                  left: (width * progress - 5).clamp(0.0, width - 10),
-                  bottom: 10 + barHeight / 2 - 5,
-                  child: IgnorePointer(
-                    child: Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: Colors.black38, blurRadius: 4),
-                        ],
-                      ),
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // 拖动 / 点击热区 (translucent: 竖直滑动手势仍可穿透给翻页)
+                  GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTapUp: (details) {
+                      final target = targetOf(details.localPosition.dx);
+                      if (target != null) onTapSeek(target);
+                    },
+                    onHorizontalDragStart: (details) {
+                      final target = targetOf(details.localPosition.dx);
+                      if (target != null) onScrubStart(target);
+                    },
+                    onHorizontalDragUpdate: (details) {
+                      final target = targetOf(details.localPosition.dx);
+                      if (target != null) onScrubSeek(target);
+                    },
+                    onHorizontalDragEnd: (_) => onScrubEnd(),
+                    onHorizontalDragCancel: onScrubEnd,
+                    child: const SizedBox.expand(),
+                  ),
+                  // 轨道
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 10,
+                    height: barHeight,
+                    child: const IgnorePointer(
+                      child: ColoredBox(color: Colors.white24),
                     ),
                   ),
-                ),
-              // 拖动进度预览
-              if (isSeeking)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 34,
-                  child: IgnorePointer(
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '${formatDurationToMinutes(position)} / ${formatDurationToMinutes(duration)}',
-                          style: const TextStyle(
+                  // 已播放部分
+                  Positioned(
+                    left: 0,
+                    bottom: 10,
+                    height: barHeight,
+                    width: width * progress,
+                    child: const IgnorePointer(
+                      child: ColoredBox(color: Colors.white),
+                    ),
+                  ),
+                  // 拖动圆点
+                  Positioned(
+                    left: (width * progress - 5).clamp(0.0, width - 10),
+                    bottom: 10 + barHeight / 2 - 5,
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: isSeeking ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 150),
+                        child: Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
                             color: Colors.white,
-                            fontSize: 13,
-                            decoration: TextDecoration.none,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(color: Colors.black38, blurRadius: 4),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-            ],
+                  // 拖动进度预览
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 34,
+                    child: IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: isSeeking ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 150),
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${formatDurationToMinutes(display)} / ${formatDurationToMinutes(duration)}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           );
         },
       ),
