@@ -144,6 +144,8 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   // 播放统计 (由定时器异步刷新, 供 UI 同步读取)
   final mediaKitStats = useRef<Map<String, String>?>(null);
   final statsTimer = useRef<Timer?>(null);
+  final isShowStats =
+      usePlayerUiStore().select(context, (state) => state.isShowStats);
 
   useEffect(() {
     Future<void> refreshStats() async {
@@ -177,8 +179,8 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
     void start() {
       statsTimer.value?.cancel();
-      // 每 2 秒刷新一次, 仅在需要时启用
-      if (usePlayerUiStore().state.isShowStats) {
+      // 仅在需要时启用, 每秒刷新一次
+      if (isShowStats) {
         statsTimer.value = Timer.periodic(
           const Duration(seconds: 1),
           (_) => refreshStats(),
@@ -191,7 +193,7 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
     return () {
       statsTimer.value?.cancel();
     };
-  }, [usePlayerUiStore().state.isShowStats]);
+  }, [isShowStats]);
 
   MediaStream mediaStream = useMemoized(() => MediaStream(), []);
 

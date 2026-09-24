@@ -298,7 +298,9 @@ class Player extends HookWidget {
                 ),
               ),
               // 播放统计 OSD
-              if (usePlayerUiStore().state.isShowStats) const StatsOverlay(),
+              if (usePlayerUiStore()
+                  .select(context, (state) => state.isShowStats))
+                const StatsOverlay(),
               // 退出确认提示 (Android 返回键二次确认)
               if (isExitConfirm.value)
                 Positioned(

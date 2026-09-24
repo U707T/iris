@@ -67,6 +67,8 @@ FvpPlayer useFvpPlayer(BuildContext context) {
   // 播放统计 (异步刷新, 供 UI 同步读取)
   final fvpStats = useRef<Map<String, String>?>(null);
   final statsTimer = useRef<Timer?>(null);
+  final isShowStats =
+      usePlayerUiStore().select(context, (state) => state.isShowStats);
 
   useEffect(() {
     void refreshStats() {
@@ -101,7 +103,7 @@ FvpPlayer useFvpPlayer(BuildContext context) {
 
     void start() {
       statsTimer.value?.cancel();
-      if (usePlayerUiStore().state.isShowStats) {
+      if (isShowStats) {
         statsTimer.value = Timer.periodic(
           const Duration(seconds: 1),
           (_) => refreshStats(),
@@ -114,7 +116,7 @@ FvpPlayer useFvpPlayer(BuildContext context) {
     return () {
       statsTimer.value?.cancel();
     };
-  }, [usePlayerUiStore().state.isShowStats]);
+  }, [isShowStats]);
 
 
   final isPlaying = useListenableSelector(
@@ -439,7 +441,7 @@ FvpPlayer useFvpPlayer(BuildContext context) {
           // FVP snapshot 返回 RGBA 原始数据, 需要编码为图片
           final raw = await controller.value.snapshot();
           if (raw == null) return null;
-          return encodeRgbaToPng(
+          return await encodeRgbaToPng(
             raw,
             width: controller.value.value.size.width.toInt(),
             height: controller.value.value.size.height.toInt(),

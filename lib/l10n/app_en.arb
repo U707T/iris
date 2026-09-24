@@ -138,6 +138,8 @@
   "flip_horizontal": "Flip horizontally",
   "flip_vertical": "Flip vertically",
   "playback_stats": "Playback stats",
+  "resolution": "Resolution",
+  "scroll_wheel": "Mouse wheel",
   "seek_step": "Skip duration",
   "seek_step_seconds": "{seconds} s",
   "@seek_step_seconds": {

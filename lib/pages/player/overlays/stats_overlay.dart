@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:iris/models/player.dart';
+import 'package:iris/utils/get_localizations.dart';
 import 'package:provider/provider.dart';
 
 /// 播放统计 OSD (帧率 / 丢帧 / 解码器 / 码率 等)
@@ -11,6 +12,7 @@ class StatsOverlay extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = getLocalizations(context);
     final player = context.watch<MediaPlayer>();
 
     // 每秒刷新一次统计
@@ -28,7 +30,7 @@ class StatsOverlay extends HookWidget {
 
     // 分辨率与基础信息始终显示
     if (player.width > 0 && player.height > 0) {
-      rows.add(MapEntry('分辨率',
+      rows.add(MapEntry(t.resolution,
           '${player.width.toInt()} x ${player.height.toInt()}'));
     }
 
@@ -41,7 +43,7 @@ class StatsOverlay extends HookWidget {
     if (player.duration.inMilliseconds > 0) {
       final secs = player.position.inSeconds;
       final total = player.duration.inSeconds;
-      rows.add(MapEntry('播放', '$secs s / $total s'));
+      rows.add(MapEntry(t.playback, '$secs s / $total s'));
     }
 
     if (rows.isEmpty) return const SizedBox.shrink();

@@ -139,6 +139,7 @@ Gesture useGesture({
 
   void onDoubleTapDown(TapDownDetails details) {
     final player = context.read<MediaPlayer>();
+    final seekStep = useAppStore().state.seekStepSeconds;
 
     if (details.kind == PointerDeviceKind.touch) {
       final screenWidth = MediaQuery.sizeOf(context).width;
@@ -147,11 +148,11 @@ Gesture useGesture({
       if (tapDx > screenWidth * 0.75) {
         // 右侧 25%
         showProgress();
-        player.forward(10);
+        player.forward(seekStep);
       } else if (tapDx < screenWidth * 0.25) {
         // 左侧 25%
         showProgress();
-        player.backward(10);
+        player.backward(seekStep);
       } else {
         // 中间 50%
         if (player.isPlaying) {

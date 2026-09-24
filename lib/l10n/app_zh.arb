@@ -138,6 +138,8 @@
   "flip_horizontal": "水平镜像",
   "flip_vertical": "垂直镜像",
   "playback_stats": "播放统计",
+  "resolution": "分辨率",
+  "scroll_wheel": "滚轮",
   "seek_step": "快进/快退时长",
   "seek_step_seconds": "{seconds} 秒",
   "@seek_step_seconds": {
