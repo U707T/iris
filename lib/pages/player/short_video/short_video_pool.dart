@@ -19,6 +19,13 @@ import 'package:media_stream/media_stream.dart';
 /// 播放器池大小: 上一条 / 当前 / 下一条
 const int _shortVideoPoolSize = 3;
 
+/// 时长取值: 优先非零值 (流事件可能缺失, 此时以同步状态兜底)
+Duration _preferNonZero(Duration? preferred, Duration fallback) {
+  if (preferred != null && preferred > Duration.zero) return preferred;
+  if (fallback > Duration.zero) return fallback;
+  return preferred ?? fallback;
+}
+
 /// 单个播放器槽位
 class ShortVideoSlot {
   ShortVideoSlot({required this.player, required this.controller});
@@ -246,7 +253,9 @@ class ShortVideoPool extends ChangeNotifier {
 
     final token = ++slot.token;
     try {
-      await slot.player.open(buildMedia(file), play: false);
+      // 当前视频直接随 open 开始播放, 减少一次命令往返
+      final playNow = !userPaused && slotFor(currentFeedIndex) == slot;
+      await slot.player.open(buildMedia(file), play: playNow);
       if (disposed || token != slot.token) return;
 
       await slot.player.setPlaylistMode(PlaylistMode.loop);
@@ -260,16 +269,37 @@ class ShortVideoPool extends ChangeNotifier {
       slot.initializing = false;
       notifyListeners();
 
-      // 已成为当前视频则立即开始播放 (用户主动暂停过则跳过)
+      // 已成为当前视频则确保处于播放状态 (用户主动暂停过则跳过)
       if (!userPaused && slotFor(currentFeedIndex) == slot) {
         unawaited(slot.player.play());
         slot.played = true;
+      }
+
+      // 个别情况下 mpv 不上报 duration, 兜底轮询并主动刷新界面
+      if (slot.player.state.duration == Duration.zero) {
+        unawaited(_ensureSlotDuration(slot, token));
       }
     } catch (e) {
       logger('Short video pool open error: $e');
       if (!disposed && token == slot.token) {
         slot.initializing = false;
         notifyListeners();
+      }
+    }
+  }
+
+  /// duration 兜底: 短时间内轮询同步状态, 拿到值后通知界面刷新
+  Future<void> _ensureSlotDuration(ShortVideoSlot slot, int token) async {
+    for (var attempt = 0; attempt < 4; attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (disposed || token != slot.token) return;
+      if (slot.player.state.duration != Duration.zero) {
+        notifyListeners();
+        return;
+      }
+      if (attempt == 1) {
+        // 温和触发一次属性刷新 (跳到当前位置)
+        unawaited(slot.player.seek(slot.player.state.position));
       }
     }
   }
@@ -408,11 +438,10 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
         preserveState: false,
       ).data ??
       activePlayer.state.position;
-  final duration = useStream(
-        activePlayer.stream.duration,
-        preserveState: false,
-      ).data ??
-      activePlayer.state.duration;
+  final duration = _preferNonZero(
+    useStream(activePlayer.stream.duration, preserveState: false).data,
+    activePlayer.state.duration,
+  );
   final videoParams = useStream(
         activePlayer.stream.videoParams,
         preserveState: false,
@@ -437,10 +466,11 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
   Future<void> seek(Duration newPosition) async {
     final slot = pool.slotFor(pool.currentFeedIndex);
     if (slot == null) return;
+    final liveDuration = _preferNonZero(duration, slot.player.state.duration);
     newPosition.inMilliseconds < 0
         ? await slot.player.seek(Duration.zero)
-        : newPosition.inMilliseconds > duration.inMilliseconds
-            ? await slot.player.seek(duration)
+        : liveDuration > Duration.zero && newPosition > liveDuration
+            ? await slot.player.seek(liveDuration)
             : await slot.player.seek(newPosition);
   }
 

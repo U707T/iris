@@ -138,13 +138,21 @@ class ShortVideoView extends HookWidget {
     // 进度拖动: 本地预览位置让进度条实时跟手, 预览 seek 做节流,
     // 拖动时暂停播放, 松手后精确 seek 并恢复播放。
     final scrubPreview = useMemoized(() => ValueNotifier<Duration?>(null), []);
+    final scrubAlive = useRef(true);
     useEffect(() {
-      return () => scrubPreview.dispose();
+      scrubAlive.value = true;
+      return () {
+        scrubAlive.value = false;
+        scrubPreview.dispose();
+      };
     }, [scrubPreview]);
+    final scrubSession = useRef(0);
+    final scrubActive = useRef(false);
     final scrubResume = useRef(false);
     final lastScrubSeekAt = useRef<DateTime?>(null);
 
     void scrubSeek(Duration target, {bool force = false}) {
+      if (!force && !scrubActive.value) return;
       scrubPreview.value = target;
       final now = DateTime.now();
       final last = lastScrubSeekAt.value;
@@ -157,6 +165,8 @@ class ShortVideoView extends HookWidget {
     }
 
     void scrubStart(Duration target) {
+      scrubSession.value++;
+      scrubActive.value = true;
       scrubResume.value = player.isPlaying;
       if (scrubResume.value) player.pause();
       lastScrubSeekAt.value = null;
@@ -164,13 +174,21 @@ class ShortVideoView extends HookWidget {
     }
 
     void scrubEnd() {
+      if (!scrubActive.value) return;
       final target = scrubPreview.value;
-      scrubPreview.value = null;
+      scrubActive.value = false;
       lastScrubSeekAt.value = null;
       final resume = scrubResume.value;
       scrubResume.value = false;
+      final session = ++scrubSession.value;
       if (target != null) player.seek(target);
       if (resume) player.play();
+      // 保持预览位置一小段时间, 避免松手瞬间进度先回跳再跳
+      Future<void>.delayed(const Duration(milliseconds: 320), () {
+        if (scrubAlive.value && scrubSession.value == session) {
+          scrubPreview.value = null;
+        }
+      });
     }
 
     // 水平拖动调节进度 (相对拖动, 任意位置可用)

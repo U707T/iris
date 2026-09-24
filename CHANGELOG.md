@@ -1,3 +1,19 @@
+## v1.8.2-rc.1
+
+### Changelog
+
+* Fixed the rare case where the first video in short video mode could not be scrubbed (its duration could stay unknown): the progress bar now recovers automatically, and duration is re-synced with a fallback even if the player misses the event
+* Seeking no longer jumps to the start while the duration is not yet known, and the first video starts playing sooner when entering the mode
+* After releasing the progress bar, it no longer snaps back before the seek lands
+* This is a release candidate (RC) build for testing before the next stable release
+
+### 更新日志
+
+* 修复短视频模式中首个视频偶发无法拖动进度条的问题（时长信息可能一直未就绪）：进度条现在会自动恢复，即使播放器漏报事件也会兜底同步时长
+* 时长未知时跳转不再误跳到开头；进入模式时首个视频开始播放更快
+* 松手后进度条不再先回跳再跳转（等到实际跳转生效后再收起预览）
+* 本版本为候选发布版（RC），用于正式版发布前的测试验证
+
 ## v1.8.1
 
 ### Changelog

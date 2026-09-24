@@ -157,6 +157,10 @@ jobs:
           VERSION="${{ steps.yq.outputs.result }}"
           TAG_NAME="v${VERSION%%+*}"
           echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          case "$TAG_NAME" in
+            *-*) echo "PRERELEASE=true" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "PRERELEASE=false" >> "$GITHUB_OUTPUT" ;;
+          esac
       - name: Check tag
         uses: mukunku/tag-exists-action@v1.6.0
         id: check-tag
@@ -180,7 +184,7 @@ jobs:
           tag_name: ${{ steps.tag_name.outputs.TAG_NAME }}
           body_path: CHANGELOG_${{ steps.tag_name.outputs.TAG_NAME }}.md
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.tag_name.outputs.PRERELEASE == 'true' }}
           files: |
             artifacts/IRIS-windows.zip
             artifacts/IRIS-windows-installer.exe
