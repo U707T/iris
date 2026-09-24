@@ -16,6 +16,7 @@ import 'package:iris/pages/player/audio.dart';
 import 'package:iris/pages/player/overlays/controls_overlay.dart';
 import 'package:iris/pages/player/overlays/gesture_overlay.dart';
 import 'package:iris/pages/player/overlays/minimal_progress_overlay.dart';
+import 'package:iris/pages/player/overlays/stats_overlay.dart';
 import 'package:iris/pages/player/video_view.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/check_content_type.dart';
@@ -296,6 +297,8 @@ class Player extends HookWidget {
                   showProgress: showProgress,
                 ),
               ),
+              // 播放统计 OSD
+              if (usePlayerUiStore().state.isShowStats) const StatsOverlay(),
               // 退出确认提示 (Android 返回键二次确认)
               if (isExitConfirm.value)
                 Positioned(

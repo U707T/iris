@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -139,6 +140,58 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       [file?.subtitles, subtitles]);
 
   final isInitializing = useState(false);
+
+  // 播放统计 (由定时器异步刷新, 供 UI 同步读取)
+  final mediaKitStats = useRef<Map<String, String>?>(null);
+  final statsTimer = useRef<Timer?>(null);
+
+  useEffect(() {
+    Future<void> refreshStats() async {
+      try {
+        final nativePlayer = player.platform;
+        if (nativePlayer is! NativePlayer) return;
+
+        final results = <String, String>{};
+
+        Future<void> read(String key, String property) async {
+          try {
+            final value =
+                await nativePlayer.getProperty(property, waitForInitialization: false);
+            if (value.isNotEmpty && value != 'no') {
+              results[key] = value;
+            }
+          } catch (_) {}
+        }
+
+        await read('fps', 'estimated-vf-fps');
+        await read('drops', 'frame-drop-count');
+        await read('decoder', 'hwdec-current');
+        await read('pixfmt', 'video-format');
+        await read('cache', 'cache-speed');
+
+        if (results.isNotEmpty) {
+          mediaKitStats.value = results;
+        }
+      } catch (_) {}
+    }
+
+    void start() {
+      statsTimer.value?.cancel();
+      // 每 2 秒刷新一次, 仅在需要时启用
+      if (usePlayerUiStore().state.isShowStats) {
+        statsTimer.value = Timer.periodic(
+          const Duration(seconds: 1),
+          (_) => refreshStats(),
+        );
+        refreshStats();
+      }
+    }
+
+    start();
+    return () {
+      statsTimer.value?.cancel();
+    };
+  }, [usePlayerUiStore().state.isShowStats]);
 
   MediaStream mediaStream = useMemoized(() => MediaStream(), []);
 
@@ -378,6 +431,19 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       stepBackward: stepBackward,
       stepForward: stepForward,
       seek: seek,
+      screenshot: ({bool includeSubtitles = false}) async {
+        try {
+          return await player.screenshot(
+            format: 'image/jpeg',
+            includeLibassSubtitles: includeSubtitles,
+          );
+        } catch (e) {
+          logger('Error taking screenshot: $e');
+          return null;
+        }
+      },
+      // 同步读取缓存值, 由定时器异步刷新
+      getStats: () => mediaKitStats.value ?? const {},
     ),
     [
       player,

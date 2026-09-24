@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -15,6 +16,7 @@ import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/check_data_source_type.dart';
+import 'package:iris/utils/image_encode.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:media_stream/media_stream.dart';
@@ -61,6 +63,59 @@ FvpPlayer useFvpPlayer(BuildContext context) {
   final streamUrl = useMemoized(() => mediaStream.url);
 
   final controller = useState(VideoPlayerController.networkUrl(Uri.parse('')));
+
+  // 播放统计 (异步刷新, 供 UI 同步读取)
+  final fvpStats = useRef<Map<String, String>?>(null);
+  final statsTimer = useRef<Timer?>(null);
+
+  useEffect(() {
+    void refreshStats() {
+      try {
+        final info = controller.value.getMediaInfo();
+        if (info == null) return;
+
+        final results = <String, String>{};
+        final videos = info.video ?? [];
+        if (videos.isNotEmpty) {
+          final v = videos.first.codec;
+          if (v.codec.isNotEmpty) results['codec'] = v.codec;
+          if (v.frameRate > 0) {
+            results['fps'] = v.frameRate.toStringAsFixed(2);
+          }
+          if (v.bitRate > 0) {
+            results['bitrate'] =
+                '${(v.bitRate / 1000000).toStringAsFixed(2)} Mbps';
+          }
+          if (v.formatName != null) results['pixfmt'] = v.formatName!;
+        }
+        final audios = info.audio ?? [];
+        if (audios.isNotEmpty) {
+          final a = audios.first.codec;
+          if (a.codec.isNotEmpty) results['audio'] = a.codec;
+          if (a.sampleRate > 0) results['sampleRate'] = '${a.sampleRate} Hz';
+        }
+
+        fvpStats.value = results;
+      } catch (_) {}
+    }
+
+    void start() {
+      statsTimer.value?.cancel();
+      if (usePlayerUiStore().state.isShowStats) {
+        statsTimer.value = Timer.periodic(
+          const Duration(seconds: 1),
+          (_) => refreshStats(),
+        );
+        refreshStats();
+      }
+    }
+
+    start();
+    return () {
+      statsTimer.value?.cancel();
+    };
+  }, [usePlayerUiStore().state.isShowStats]);
+
 
   final isPlaying = useListenableSelector(
       controller.value, () => controller.value.value.isPlaying);
@@ -379,6 +434,22 @@ FvpPlayer useFvpPlayer(BuildContext context) {
       stepForward: stepForward,
       seek: seek,
       saveProgress: saveProgress,
+      screenshot: ({bool includeSubtitles = false}) async {
+        try {
+          // FVP snapshot 返回 RGBA 原始数据, 需要编码为图片
+          final raw = await controller.value.snapshot();
+          if (raw == null) return null;
+          return encodeRgbaToPng(
+            raw,
+            width: controller.value.value.size.width.toInt(),
+            height: controller.value.value.size.height.toInt(),
+          );
+        } catch (e) {
+          logger('Error taking screenshot: $e');
+          return null;
+        }
+      },
+      getStats: () => fvpStats.value ?? const {},
     ),
     [
       controller.value,

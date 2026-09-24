@@ -36,11 +36,24 @@ CustomTheme getTheme({
   required BuildContext context,
   required ColorScheme? lightDynamic,
   required ColorScheme? darkDynamic,
+  bool pureBlack = false,
 }) {
   ColorScheme colorScheme =
       lightDynamic != null ? lightDynamic.harmonized() : customColorScheme;
   ColorScheme darkColorScheme =
       darkDynamic != null ? darkDynamic.harmonized() : customDarkColorScheme;
+
+  // OLED 纯黑主题: 暗色模式下使用纯黑背景, 更适合 OLED 屏幕
+  if (pureBlack) {
+    darkColorScheme = darkColorScheme.copyWith(
+      surface: Colors.black,
+      surfaceContainerLowest: Colors.black,
+      surfaceContainerLow: Colors.black,
+      surfaceContainer: const Color(0xFF0A0A0A),
+      surfaceContainerHigh: const Color(0xFF121212),
+      surfaceContainerHighest: const Color(0xFF1A1A1A),
+    );
+  }
 
   final base = baseTheme(context);
 
@@ -55,6 +68,7 @@ CustomTheme getTheme({
 
   final darkTheme = ThemeData.dark(useMaterial3: true).copyWith(
     colorScheme: darkColorScheme,
+    scaffoldBackgroundColor: pureBlack ? Colors.black : null,
     textTheme: GoogleFonts.notoSansScTextTheme(
       ThemeData.dark(useMaterial3: true)
           .copyWith(colorScheme: darkColorScheme)

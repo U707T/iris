@@ -13,6 +13,8 @@ import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/take_screenshot.dart';
+import 'package:iris/widgets/dialogs/show_shortcuts_dialog.dart';
 import 'package:iris/widgets/bottom_sheets/show_open_link_bottom_sheet.dart';
 import 'package:iris/widgets/dialogs/show_open_link_dialog.dart';
 import 'package:iris/widgets/popup.dart';
@@ -51,6 +53,21 @@ KeyboardEvent useKeyboard({
       if (HardwareKeyboard.instance.isControlPressed) {
         final appState = useAppStore().state;
         switch (event.logicalKey) {
+          // 截图
+          case LogicalKeyboardKey.keyS:
+            showControl();
+            await takeScreenshot(context, player);
+            break;
+          // 旋转画面
+          case LogicalKeyboardKey.keyT:
+            showControl();
+            usePlayerUiStore().cycleRotation();
+            break;
+          // 播放统计
+          case LogicalKeyboardKey.keyI:
+            showControl();
+            usePlayerUiStore().toggleIsShowStats();
+            break;
           // 上一个
           case LogicalKeyboardKey.arrowLeft:
             showControl();
@@ -91,8 +108,7 @@ KeyboardEvent useKeyboard({
           case LogicalKeyboardKey.keyR:
             showControl();
             useAppStore().toggleRepeat();
-            break;
-          // 视频缩放
+            break;          // 视频缩放
           case LogicalKeyboardKey.keyV:
             showControl();
             useAppStore().toggleFit();
@@ -205,6 +221,13 @@ KeyboardEvent useKeyboard({
         case LogicalKeyboardKey.tab:
           showControl();
           break;
+        // 快捷键参考面板
+        case LogicalKeyboardKey.slash:
+          if (HardwareKeyboard.instance.isShiftPressed) {
+            showControl();
+            showControlForHover(showShortcutsDialog(context));
+          }
+          break;
         case LogicalKeyboardKey.f10:
           showControl();
           await usePlayerUiStore().toggleIsAlwaysOnTop();
@@ -226,6 +249,7 @@ KeyboardEvent useKeyboard({
 
     if (event.runtimeType == KeyDownEvent ||
         event.runtimeType == KeyRepeatEvent) {
+      final appState = useAppStore().state;
       switch (event.logicalKey) {
         // 快退
         case LogicalKeyboardKey.arrowLeft:
@@ -234,7 +258,11 @@ KeyboardEvent useKeyboard({
           } else {
             showProgress();
           }
-          player.backward(5);
+          player.backward(
+            HardwareKeyboard.instance.isShiftPressed
+                ? appState.seekStepLargeSeconds
+                : appState.seekStepSeconds,
+          );
           break;
         // 快进
         case LogicalKeyboardKey.arrowRight:
@@ -243,7 +271,11 @@ KeyboardEvent useKeyboard({
           } else {
             showProgress();
           }
-          player.forward(5);
+          player.forward(
+            HardwareKeyboard.instance.isShiftPressed
+                ? appState.seekStepLargeSeconds
+                : appState.seekStepSeconds,
+          );
           break;
         // 提升音量
         case LogicalKeyboardKey.arrowUp:

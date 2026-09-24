@@ -18,8 +18,12 @@ English | [中文](./README_CN.md)
 - [X] Comprehensive gesture support
 - [X] Long press to speed up playback (configurable)
 - [X] Smooth video zoom
+- [X] Screenshot, rotate / flip the video
+- [X] Playback stats (frame rate, dropped frames, decoder)
 - [X] File search
 - [X] Remember window size and position
+- [X] Configurable skip duration
+- [X] Pure black (OLED) theme
 
 ## Download
 
@@ -57,6 +61,10 @@ English | [中文](./README_CN.md)
 | `Ctrl + C`           | Close currently media file                         |
 | `Ctrl + H`           | Play history                                       |
 | `Ctrl + P`           | Settings                                           |
+| `Ctrl + S`           | Screenshot                                         |
+| `Ctrl + T`           | Rotate / flip the video                            |
+| `Ctrl + I`           | Playback stats                                     |
+| `Shift + ?`          | Keyboard shortcuts                                 |
 | `+`                  | Step forward                                       |
 | `-`                  | Step backward                                      |
 | `Enter`              | Enter full screen / Exit full screen / Select file |

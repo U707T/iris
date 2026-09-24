@@ -22,6 +22,50 @@ class PlayerUiStore extends Store<PlayerUiState> {
 
   void resetZoom() => updateZoom(1.0);
 
+  void updateRotateMode(RotateMode mode) {
+    set(state.copyWith(rotateMode: mode));
+  }
+
+  /// 顺时针循环切换旋转角度: 0 -> 90 -> 180 -> 270 -> 0
+  void cycleRotation() {
+    switch (state.rotateMode) {
+      case RotateMode.none:
+      case RotateMode.flipH:
+      case RotateMode.flipV:
+        set(state.copyWith(rotateMode: RotateMode.rotate90));
+        break;
+      case RotateMode.rotate90:
+        set(state.copyWith(rotateMode: RotateMode.rotate180));
+        break;
+      case RotateMode.rotate180:
+        set(state.copyWith(rotateMode: RotateMode.rotate270));
+        break;
+      case RotateMode.rotate270:
+        set(state.copyWith(rotateMode: RotateMode.none));
+        break;
+    }
+  }
+
+  void toggleFlipH() {
+    set(state.copyWith(
+      rotateMode:
+          state.rotateMode == RotateMode.flipH ? RotateMode.none : RotateMode.flipH,
+    ));
+  }
+
+  void toggleFlipV() {
+    set(state.copyWith(
+      rotateMode:
+          state.rotateMode == RotateMode.flipV ? RotateMode.none : RotateMode.flipV,
+    ));
+  }
+
+  void resetRotate() => updateRotateMode(RotateMode.none);
+
+  void toggleIsShowStats() {
+    set(state.copyWith(isShowStats: !state.isShowStats));
+  }
+
   Future<void> toggleIsAlwaysOnTop() async {
     if (isDesktop) {
       windowManager.setAlwaysOnTop(!state.isAlwaysOnTop);

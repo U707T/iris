@@ -16,6 +16,8 @@ class General extends HookWidget {
 
     final language = useAppStore().select(context, (state) => state.language);
     final themeMode = useAppStore().select(context, (state) => state.themeMode);
+    final pureBlackTheme =
+        useAppStore().select(context, (state) => state.pureBlackTheme);
 
     return SingleChildScrollView(
       child: Column(
@@ -47,6 +49,17 @@ class General extends HookWidget {
             }()),
             onTap: () => showThemeModeDialog(context),
           ),
+          if (themeMode != ThemeMode.light)
+            ListTile(
+              leading: const Icon(Icons.contrast_rounded),
+              title: Text(t.pure_black_theme),
+              subtitle: Text(t.pure_black_theme_description),
+              onTap: () => useAppStore().togglePureBlackTheme(),
+              trailing: Checkbox(
+                value: pureBlackTheme,
+                onChanged: (_) => useAppStore().togglePureBlackTheme(),
+              ),
+            ),
         ],
       ),
     );

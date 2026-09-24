@@ -32,6 +32,14 @@ enum ScreenOrientation {
   portrait,
 }
 
+/// 画面旋转角度
+enum VideoRotation {
+  none,
+  rotate90,
+  rotate180,
+  rotate270,
+}
+
 @freezed
 abstract class AppState with _$AppState {
   const factory AppState({
@@ -54,9 +62,13 @@ abstract class AppState with _$AppState {
     @Default(true) bool folderFirst,
     @Default(ScreenOrientation.device) ScreenOrientation orientation,
     @Default(2.0) double longPressSpeed,
+    @Default(1.0) double zoom,
     @Default(true) bool rememberWindowSize,
     List<double>? windowBounds,
     @Default(false) bool windowMaximized,
+    @Default(5) int seekStepSeconds,
+    @Default(10) int seekStepLargeSeconds,
+    @Default(true) bool pureBlackTheme,
   }) = _AppState;
 
   factory AppState.fromJson(Map<String, dynamic> json) =>

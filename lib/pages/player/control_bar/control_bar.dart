@@ -11,6 +11,8 @@ import 'package:iris/models/store/app_state.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/widgets/dialogs/show_open_link_dialog.dart';
 import 'package:iris/widgets/dialogs/show_rate_dialog.dart';
+import 'package:iris/widgets/dialogs/show_rotate_dialog.dart';
+import 'package:iris/widgets/dialogs/show_shortcuts_dialog.dart';
 import 'package:iris/widgets/dialogs/show_zoom_dialog.dart';
 import 'package:iris/pages/player/control_bar/control_bar_slider.dart';
 import 'package:iris/widgets/popups/history.dart';
@@ -21,6 +23,7 @@ import 'package:iris/widgets/popups/track/subtitle_and_audio_track.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/utils/take_screenshot.dart';
 import 'package:iris/widgets/popups/play_queue.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/widgets/popup.dart';
@@ -467,6 +470,73 @@ class ControlBar extends HookWidget {
               title: Text('${t.playback_speed}: ${rate}X'),
             ),
             onTap: () => showControlForHover(showRateDialog(context)),
+          ),
+        // 截图
+        if (file?.type == ContentType.video)
+          PopupMenuItem(
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: const Icon(Icons.photo_camera_rounded, size: 20),
+              title: Text(t.screenshot),
+              trailing: Text(
+                'Ctrl + S',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).dividerColor,
+                ),
+              ),
+            ),
+            onTap: () async {
+              showControl();
+              await takeScreenshot(context, context.read<MediaPlayer>());
+              showControl();
+            },
+          ),
+        // 画面旋转
+        if (file?.type == ContentType.video)
+          PopupMenuItem(
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: const Icon(Icons.screen_rotation_alt_rounded, size: 20),
+              title: Text(t.rotate),
+              trailing: Text(
+                'Ctrl + T',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).dividerColor,
+                ),
+              ),
+            ),
+            onTap: () => showControlForHover(showRotateDialog(context)),
+          ),
+        // 播放统计
+        PopupMenuItem(
+          child: ListTile(
+            mouseCursor: SystemMouseCursors.click,
+            leading: const Icon(Icons.monitor_heart_rounded, size: 20),
+            title: Text(t.playback_stats),
+            trailing: Text(
+              'Ctrl + I',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).dividerColor,
+              ),
+            ),
+          ),
+          onTap: () {
+            usePlayerUiStore().toggleIsShowStats();
+            showControl();
+          },
+        ),
+        // 快捷键
+        if (isDesktop)
+          PopupMenuItem(
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: const Icon(Icons.keyboard_rounded, size: 20),
+              title: Text(t.shortcuts),
+            ),
+            onTap: () => showControlForHover(showShortcutsDialog(context)),
           ),
         PopupMenuItem(
           child: ListTile(

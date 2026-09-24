@@ -51,7 +51,16 @@ class History extends HookWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            child: ScrollablePositionedList.builder(
+            child: historyList.isEmpty
+                ? Center(
+                    child: Text(
+                      t.history_empty,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : ScrollablePositionedList.builder(
               itemCount: historyList.length,
               itemBuilder: (context, index) => ListTile(
                 contentPadding: const EdgeInsets.fromLTRB(12, 0, 8, 0),
@@ -173,6 +182,33 @@ class History extends HookWidget {
                 style: const TextStyle(fontWeight: FontWeight.w500),
               ),
               const Spacer(),
+              if (historyList.isNotEmpty)
+                IconButton(
+                  tooltip: t.clear_history,
+                  icon: const Icon(Icons.delete_sweep_rounded),
+                  onPressed: () async {
+                    final confirmed = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text(t.clear_history),
+                        content: Text(t.clear_history_confirm),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: Text(t.cancel),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: Text(t.ok),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmed == true) {
+                      await useHistoryStore().clear();
+                    }
+                  },
+                ),
               IconButton(
                 tooltip: '${t.close} ( Escape )',
                 icon: const Icon(Icons.close_rounded),

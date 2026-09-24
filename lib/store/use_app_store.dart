@@ -139,6 +139,21 @@ class AppStore extends PersistentStore<AppState> {
     await save(state);
   }
 
+  Future<void> updateSeekStep(int seconds) async {
+    set(state.copyWith(seekStepSeconds: seconds));
+    await save(state);
+  }
+
+  Future<void> updateSeekStepLarge(int seconds) async {
+    set(state.copyWith(seekStepLargeSeconds: seconds));
+    await save(state);
+  }
+
+  Future<void> togglePureBlackTheme() async {
+    set(state.copyWith(pureBlackTheme: !state.pureBlackTheme));
+    await save(state);
+  }
+
   Future<void> toggleRememberWindowSize() async {
     set(state.copyWith(rememberWindowSize: !state.rememberWindowSize));
     await save(state);

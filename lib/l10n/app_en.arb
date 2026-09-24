@@ -126,5 +126,42 @@
   "search_results": "Search results",
   "searching": "Searching...",
   "no_search_results": "No results found",
-  "search_depth": "Search depth"
+  "search_depth": "Search depth",
+  "screenshot": "Screenshot",
+  "screenshot_saved": "Screenshot saved",
+  "screenshot_failed": "Screenshot failed",
+  "rotate": "Rotate / Flip",
+  "rotate_none": "No rotation",
+  "rotate_90": "Rotate 90° left",
+  "rotate_180": "Rotate 180°",
+  "rotate_270": "Rotate 90° right",
+  "flip_horizontal": "Flip horizontally",
+  "flip_vertical": "Flip vertically",
+  "playback_stats": "Playback stats",
+  "seek_step": "Skip duration",
+  "seek_step_seconds": "{seconds} s",
+  "@seek_step_seconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "clear_history": "Clear history",
+  "clear_history_confirm": "Clear all playback history?",
+  "history_empty": "No history yet",
+  "shortcuts": "Keyboard shortcuts",
+  "pure_black_theme": "Pure black (OLED)",
+  "pure_black_theme_description": "Use pure black background in dark mode to save power on OLED screens",
+  "playback": "Playback",
+  "interface": "Interface",
+  "troubleshooting": "Troubleshooting",
+  "play_pause": "Play / Pause",
+  "backward": "Backward",
+  "forward": "Forward",
+  "step_forward": "Step forward",
+  "step_backward": "Step backward",
+  "always_on_top": "Toggle always on top",
+  "shift_for_large_step": "Shift for larger step",
+  "seek_step_large": "Skip duration (Shift)"
 }

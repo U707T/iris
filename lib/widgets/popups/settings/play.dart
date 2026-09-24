@@ -29,6 +29,10 @@ class Play extends HookWidget {
         useAppStore().select(context, (state) => state.longPressSpeed);
     final rememberWindowSize =
         useAppStore().select(context, (state) => state.rememberWindowSize);
+    final seekStepSeconds =
+        useAppStore().select(context, (state) => state.seekStepSeconds);
+    final seekStepLargeSeconds =
+        useAppStore().select(context, (state) => state.seekStepLargeSeconds);
 
     final orientationMap = {
       ScreenOrientation.device: t.device,
@@ -61,6 +65,44 @@ class Play extends HookWidget {
             title: Text(t.long_press_speed),
             subtitle: Text('${longPressSpeed}X'),
             onTap: () => showLongPressSpeedDialog(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.fast_forward_rounded),
+            title: Text(t.seek_step),
+            subtitle: Text(t.seek_step_seconds(seekStepSeconds)),
+            trailing: DropdownButton<int>(
+              borderRadius: BorderRadius.circular(12),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              value: seekStepSeconds,
+              onChanged: (value) {
+                if (value != null) useAppStore().updateSeekStep(value);
+              },
+              items: const [1, 3, 5, 10, 15, 30, 60]
+                  .map((e) => DropdownMenuItem<int>(
+                        value: e,
+                        child: Text('${e}s'),
+                      ))
+                  .toList(),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.fast_rewind_rounded),
+            title: Text(t.seek_step_large),
+            subtitle: Text(t.seek_step_seconds(seekStepLargeSeconds)),
+            trailing: DropdownButton<int>(
+              borderRadius: BorderRadius.circular(12),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              value: seekStepLargeSeconds,
+              onChanged: (value) {
+                if (value != null) useAppStore().updateSeekStepLarge(value);
+              },
+              items: const [10, 15, 30, 60, 120, 300]
+                  .map((e) => DropdownMenuItem<int>(
+                        value: e,
+                        child: Text('${e}s'),
+                      ))
+                  .toList(),
+            ),
           ),
           Visibility(
             visible: isDesktop,

@@ -1,3 +1,29 @@
+## v1.6.0
+
+### Changelog
+
+* Screenshot: capture the current frame (Ctrl + S) and save it to your pictures folder
+* Rotate / flip the video: rotate 90°/180°/270°, or mirror horizontally / vertically (Ctrl + T)
+* Playback stats overlay: resolution, frame rate, dropped frames, decoder, bitrate (Ctrl + I)
+* Configurable skip duration for keyboard and gesture seeking, with a separate step for Shift
+* History popup: clear all history, and a proper empty state
+* Keyboard shortcuts reference panel (? on desktop)
+* Pure black (OLED) theme option that saves power on OLED screens
+* Refreshed dependencies for better performance and stability
+* Reduced runtime overhead: verbose player logging is now disabled in release builds
+
+### 更新日志
+
+* 截图：一键截取当前画面（Ctrl + S）并保存到图片目录
+* 画面旋转/翻转：90°/180°/270° 旋转，以及水平/垂直镜像（Ctrl + T）
+* 播放统计浮层：分辨率、帧率、丢帧、解码器、码率（Ctrl + I）
+* 快进/快退时长可自定义，按住 Shift 使用另一档步长
+* 播放历史支持一键清空，并新增空状态提示
+* 新增快捷键参考面板（桌面端按 `?`）
+* 新增纯黑（OLED）主题，OLED 屏幕更省电
+* 升级依赖，提升性能与稳定性
+* 降低运行开销：release 版本默认关闭播放器详细日志
+
 ## v1.5.3
 
 ### Changelog

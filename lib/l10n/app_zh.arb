@@ -126,5 +126,42 @@
   "search_results": "搜索结果",
   "searching": "搜索中...",
   "no_search_results": "未找到结果",
-  "search_depth": "搜索深度"
+  "search_depth": "搜索深度",
+  "screenshot": "截图",
+  "screenshot_saved": "截图已保存",
+  "screenshot_failed": "截图失败",
+  "rotate": "旋转 / 翻转",
+  "rotate_none": "不旋转",
+  "rotate_90": "向左旋转 90°",
+  "rotate_180": "旋转 180°",
+  "rotate_270": "向右旋转 90°",
+  "flip_horizontal": "水平镜像",
+  "flip_vertical": "垂直镜像",
+  "playback_stats": "播放统计",
+  "seek_step": "快进/快退时长",
+  "seek_step_seconds": "{seconds} 秒",
+  "@seek_step_seconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "clear_history": "清空历史",
+  "clear_history_confirm": "确定清空全部播放历史？",
+  "history_empty": "暂无播放历史",
+  "shortcuts": "快捷键",
+  "pure_black_theme": "纯黑主题（OLED）",
+  "pure_black_theme_description": "暗色模式下使用纯黑背景，OLED 屏幕更省电",
+  "playback": "播放",
+  "interface": "界面",
+  "troubleshooting": "高级",
+  "play_pause": "播放 / 暂停",
+  "backward": "快退",
+  "forward": "快进",
+  "step_forward": "帧进",
+  "step_backward": "帧退",
+  "always_on_top": "切换窗口置顶",
+  "shift_for_large_step": "按住 Shift 步长更大",
+  "seek_step_large": "快进/快退时长（按住 Shift）"
 }

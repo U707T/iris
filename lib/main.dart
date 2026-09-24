@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
 import 'package:fvp/fvp.dart' as fvp;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
@@ -42,9 +43,8 @@ void main(List<String> arguments) async {
     },
     if (Platform.isAndroid)
       'subtitleFontFile': 'assets/fonts/NotoSansCJKsc-Medium.otf',
-    'global': {
-      'log': 'debug',
-    }
+    // 仅在调试构建中开启详细日志, 减少 release 版性能开销
+    'global': {'log': kDebugMode ? 'debug' : 'off'},
   });
 
   final appLinks = AppLinks();
@@ -100,6 +100,8 @@ class MyApp extends HookWidget {
     ThemeMode themeMode =
         useAppStore().select(context, (state) => state.themeMode);
     String language = useAppStore().select(context, (state) => state.language);
+    bool pureBlackTheme =
+        useAppStore().select(context, (state) => state.pureBlackTheme);
 
     final appLinks = useMemoized(() => AppLinks());
     final String? uri = useStream(appLinks.stringLinkStream).data;
@@ -140,6 +142,7 @@ class MyApp extends HookWidget {
         context: context,
         lightDynamic: lightDynamic,
         darkDynamic: darkDynamic,
+        pureBlack: pureBlackTheme,
       );
 
       return MaterialApp(

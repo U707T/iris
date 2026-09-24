@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:iris/models/file.dart';
 import 'package:media_kit/media_kit.dart' as media_kit;
@@ -22,6 +23,12 @@ class MediaPlayer {
   final Future<void> Function() stepForward;
   final Future<void> Function(Duration) seek;
 
+  /// 截取当前画面, 返回编码后的图片数据, 失败返回 null
+  final Future<Uint8List?> Function({bool includeSubtitles})? screenshot;
+
+  /// 获取播放统计信息, 返回空 Map 表示暂不可用
+  final Map<String, String> Function()? getStats;
+
   MediaPlayer({
     required this.isInitializing,
     required this.isPlaying,
@@ -39,6 +46,8 @@ class MediaPlayer {
     required this.stepBackward,
     required this.stepForward,
     required this.seek,
+    this.screenshot,
+    this.getStats,
   });
 }
 
@@ -73,6 +82,8 @@ class MediaKitPlayer extends MediaPlayer {
     required super.stepBackward,
     required super.stepForward,
     required super.seek,
+    super.screenshot,
+    super.getStats,
   });
 }
 
@@ -99,5 +110,7 @@ class FvpPlayer extends MediaPlayer {
     required super.stepBackward,
     required super.stepForward,
     required super.seek,
+    super.screenshot,
+    super.getStats,
   });
 }
