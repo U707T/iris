@@ -19,6 +19,7 @@ import 'package:iris/pages/player/overlays/minimal_progress_overlay.dart';
 import 'package:iris/pages/player/video_view.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/check_content_type.dart';
+import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/store/use_app_store.dart';
@@ -136,6 +137,51 @@ class Player extends HookWidget {
       resetBottomProgressTimer();
     }
 
+    // Android 返回手势 / 返回键:
+    // 1. 有弹层/对话框时, 交给它们自己处理 (由 Navigator 自动分发)
+    // 2. 控制栏显示中 -> 先收起控制栏
+    // 3. 全屏中 -> 先退出全屏
+    // 4. 否则 -> 二次确认退出应用
+    final exitConfirmTimer = useRef<Timer?>(null);
+    final isExitConfirm = useState(false);
+
+    useEffect(() {
+      return () => exitConfirmTimer.value?.cancel();
+    }, []);
+
+    Future<void> handleSystemBack() async {
+      final uiState = usePlayerUiStore().state;
+
+      if (uiState.isShowControl || uiState.isShowProgress) {
+        hideControl();
+        usePlayerUiStore().updateIsShowProgress(false);
+        return;
+      }
+
+      if (isDesktop && uiState.isFullScreen) {
+        await usePlayerUiStore().updateFullScreen(false);
+        return;
+      }
+
+      // 二次确认退出
+      if (isExitConfirm.value) {
+        await context.read<MediaPlayer>().saveProgress();
+        if (isDesktop) {
+          windowManager.close();
+        } else {
+          SystemNavigator.pop();
+          exit(0);
+        }
+        return;
+      }
+
+      isExitConfirm.value = true;
+      exitConfirmTimer.value?.cancel();
+      exitConfirmTimer.value = Timer(const Duration(seconds: 2), () {
+        isExitConfirm.value = false;
+      });
+    }
+
     final onKeyEvent = useKeyboard(
       showControl: showControl,
       showControlForHover: showControlForHover,
@@ -213,15 +259,8 @@ class Player extends HookWidget {
       child: PopScope(
         canPop: false,
         onPopInvokedWithResult: (bool didPop, Object? result) async {
-          if (!didPop) {
-            await context.read<MediaPlayer>().saveProgress();
-            if (isDesktop) {
-              windowManager.close();
-            } else {
-              SystemNavigator.pop();
-              exit(0);
-            }
-          }
+          if (didPop) return;
+          await handleSystemBack();
         },
         child: KeyboardListener(
           focusNode: focusNode,
@@ -257,6 +296,32 @@ class Player extends HookWidget {
                   showProgress: showProgress,
                 ),
               ),
+              // 退出确认提示 (Android 返回键二次确认)
+              if (isExitConfirm.value)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 48,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          getLocalizations(context).exit_app_back_again,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               Positioned.fill(
                 child: ControlsOverlay(
                   file: file,

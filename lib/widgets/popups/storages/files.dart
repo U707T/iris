@@ -121,9 +121,16 @@ class Files extends HookWidget {
       }
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+    return PopScope(
+      // Android 返回手势: 在子目录时先返回上一级, 在存储根目录时返回存储列表
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) return;
+        back();
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
         Expanded(
           child: Platform.isAndroid &&
                   globals.storagePermissionStatus != PermissionStatus.granted &&
@@ -486,7 +493,8 @@ class Files extends HookWidget {
             ],
           ),
         ),
-      ],
+        ],
+      ),
     );
   }
 }
