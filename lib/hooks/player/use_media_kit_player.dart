@@ -81,10 +81,6 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   final bool autoPlay =
       useAppStore().select(context, (state) => state.autoPlay);
   final Repeat repeat = useAppStore().select(context, (state) => state.repeat);
-  // 短视频模式内固定单条循环 (类抖音)
-  final bool isShortVideoMode =
-      usePlayerUiStore().select(context, (state) => state.isShortVideoMode);
-  final Repeat effectiveRepeat = isShortVideoMode ? Repeat.one : repeat;
   final bool alwaysPlayFromBeginning =
       useAppStore().select(context, (state) => state.alwaysPlayFromBeginning);
 
@@ -258,8 +254,8 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
         await player.setSubtitleTrack(SubtitleTrack.no());
         return;
       }
-      // 查询播放进度 (短视频模式内始终从头播放)
-      if (!isShortVideoMode && file != null && file.type == ContentType.video) {
+      // 查询播放进度
+      if (file != null && file.type == ContentType.video) {
         Progress? progress = history[file.getID()];
         if (progress != null) {
           if (!alwaysPlayFromBeginning &&
@@ -299,9 +295,9 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   useEffect(() {
     () async {
       if (completed) {
-        if (effectiveRepeat == Repeat.one) return;
+        if (repeat == Repeat.one) return;
         if (currentPlayIndex == playQueue.length - 1) {
-          if (effectiveRepeat == Repeat.all) {
+          if (repeat == Repeat.all) {
             await usePlayQueueStore().updateCurrentIndex(playQueue[0].index);
           }
         } else {
@@ -311,7 +307,7 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       }
     }();
     return null;
-  }, [completed, effectiveRepeat]);
+  }, [completed, repeat]);
 
   useEffect(() {
     player.setRate(rate);
@@ -324,14 +320,14 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   }, [volume, isMuted]);
 
   useEffect(() {
-    logger('$effectiveRepeat');
-    if (effectiveRepeat == Repeat.one) {
+    logger('$repeat');
+    if (repeat == Repeat.one) {
       player.setPlaylistMode(PlaylistMode.loop);
     } else {
       player.setPlaylistMode(PlaylistMode.none);
     }
     return;
-  }, [effectiveRepeat]);
+  }, [repeat]);
 
   useEffect(() {
     if (file?.type != ContentType.video) {

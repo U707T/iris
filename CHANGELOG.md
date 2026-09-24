@@ -1,3 +1,19 @@
+## v1.8.0
+
+### Changelog
+
+* Short video mode now uses a preload player pool (previous / current / next): swiping is seamless and the adjacent videos are visible while dragging — no more loading gap between videos (Media Kit backend; FVP keeps the lightweight behavior)
+* The progress bar is draggable: drag it to scrub (with a thumb and a time bubble) or tap it to jump to a position
+* Long-press speed-up now shows a speed indicator overlay
+* The playback progress of recycled videos is saved automatically, and the mode switches the player cleanly when entering / leaving
+
+### 更新日志
+
+* 短视频模式升级为预载播放器池（上一条 / 当前 / 下一条）：滑动切换无缝衔接，滑动过程中即可看到下一条画面，不再出现切条加载空白（Media Kit 后端；FVP 后端保持轻量模式）
+* 进度条支持直接拖拽调进度（带拖动圆点和时间气泡），点击进度条可直接跳转
+* 长按倍速播放新增速度指示浮层
+* 槽位被复用的视频会自动保存播放进度；进入 / 退出短视频模式时播放器切换更干净
+
 ## v1.7.0
 
 ### Changelog
