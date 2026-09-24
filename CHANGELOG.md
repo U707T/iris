@@ -1,3 +1,21 @@
+## v1.6.1
+
+### Changelog
+
+* Playback stats overlay (Ctrl + I) now shows and hides instantly
+* Double-tap fast-forward / rewind now follows the configurable skip duration
+* Screenshots now respect rotation / flip, and save more reliably on Android (falls back to the app folder without the "all files access" permission)
+* Shortcuts panel corrections: F opens storages; the panel can be opened with Shift + ?
+* Screenshot image encoding moved off the UI thread to reduce jank
+
+### 更新日志
+
+* 播放统计浮层（Ctrl + I）现在即开即用，立即显示/隐藏
+* 双击快进/快退遵循"快进/快退时长"设置
+* 截图会跟随画面旋转/镜像；Android 上保存更稳（无"所有文件访问"权限时自动回退到应用目录）
+* 修正快捷键面板（存储为 F；面板本身可用 Shift + ? 打开）
+* 截图编码移到后台线程，减少卡顿
+
 ## v1.6.0
 
 ### Changelog
