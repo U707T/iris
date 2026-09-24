@@ -562,10 +562,10 @@ packages:
     dependency: "direct main"
     description:
       name: google_fonts
-      sha256: ebc94ed30fd13cefd397cb1658b593f21571f014b7d1197eeb41fb95f05d899a
+      sha256: e3cb3ee6b47fd2472c23de6da5744796a4da195137759ddb3fbcc9467b7b3c7d
       url: "https://pub.dev"
     source: hosted
-    version: "6.3.1"
+    version: "8.2.1"
   graphs:
     dependency: transitive
     description:
@@ -1066,10 +1066,9 @@ packages:
   pure_ftp:
     dependency: "direct main"
     description:
-      name: pure_ftp
-      sha256: be26500e86e49e2e39d16e62888eb4865f0491fc55a6c61bd5359cb888200e65
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/pure_ftp"
+      relative: true
+    source: path
     version: "0.7.5"
   saf_util:
     dependency: "direct main"

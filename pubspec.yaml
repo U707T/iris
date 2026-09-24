@@ -4,7 +4,7 @@ publish_to: none
 version: 1.6.0+5
 
 environment:
-  sdk: ^3.5.4
+  sdk: ^3.10.0
 
 dependencies:
   flutter:
@@ -29,7 +29,7 @@ dependencies:
   window_manager: ^0.5.2
   url_launcher: ^6.3.2
   scrollable_positioned_list: ^0.3.8
-  google_fonts: ^6.3.1
+  google_fonts: ^8.2.1
   dynamic_color: ^1.8.1
   window_size: ^0.1.0
   uuid: ^4.6.0
@@ -61,6 +61,12 @@ dependencies:
     git:
       url: https://github.com/nini22P/media_stream
       ref: main
+
+dependency_overrides:
+  # pure_ftp 0.7.5 已不再维护且无法在 Dart >= 3.10 下编译,
+  # 使用 third_party/pure_ftp 里打过补丁的内嵌版本 (见该目录 PATCHES.md)。
+  pure_ftp:
+    path: third_party/pure_ftp
 
 dev_dependencies:
   flutter_test:
