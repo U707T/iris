@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:iris/hooks/use_material_tab_controller.dart';
 import 'package:iris/widgets/popups/settings/about.dart';
 import 'package:iris/widgets/popups/settings/general.dart';
 import 'package:iris/widgets/popups/settings/dependencies.dart';
@@ -32,7 +33,7 @@ class Settings extends HookWidget {
       ITab(title: t.dependencies, child: const Dependencies()),
     ];
 
-    final tabController = useTabController(initialLength: tabs.length);
+    final tabController = useMaterialTabController(initialLength: tabs.length);
 
     return Column(
       children: [

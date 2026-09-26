@@ -59,10 +59,7 @@ class StorageStore extends PersistentStore<StorageState> {
   Future<StorageState?> load() async {
     logger('Loading StorageState');
     try {
-      AndroidOptions getAndroidOptions() => const AndroidOptions(
-            encryptedSharedPreferences: true,
-          );
-      final storage = FlutterSecureStorage(aOptions: getAndroidOptions());
+            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
 
       String? storageState = await storage.read(key: 'storage_state');
       if (storageState != null) {
@@ -77,10 +74,7 @@ class StorageStore extends PersistentStore<StorageState> {
   @override
   Future<void> save(StorageState state) async {
     try {
-      AndroidOptions getAndroidOptions() => const AndroidOptions(
-            encryptedSharedPreferences: true,
-          );
-      final storage = FlutterSecureStorage(aOptions: getAndroidOptions());
+            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
 
       await storage.write(
           key: 'storage_state', value: json.encode(state.toJson()));

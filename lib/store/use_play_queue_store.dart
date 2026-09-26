@@ -188,10 +188,7 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
         }
       }
 
-      AndroidOptions getAndroidOptions() => const AndroidOptions(
-            encryptedSharedPreferences: true,
-          );
-      final storage = FlutterSecureStorage(aOptions: getAndroidOptions());
+            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
 
       String? appState = await storage.read(key: 'playQueue_state');
       if (appState != null) {
@@ -206,10 +203,7 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
   @override
   Future<void> save(PlayQueueState state) async {
     try {
-      AndroidOptions getAndroidOptions() => const AndroidOptions(
-            encryptedSharedPreferences: true,
-          );
-      final storage = FlutterSecureStorage(aOptions: getAndroidOptions());
+            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
 
       await storage.write(
           key: 'playQueue_state', value: json.encode(state.toJson()));

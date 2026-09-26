@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/material.dart' hide Card;
+import 'package:material_ui/material_ui.dart' hide Card;
 import 'package:flutter/services.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/widgets/card.dart';

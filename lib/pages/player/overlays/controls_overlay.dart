@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:iris/pages/player/control_bar/control_bar.dart';
 import 'package:iris/store/use_player_ui_store.dart';

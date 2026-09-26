@@ -3,7 +3,7 @@ import 'package:android_x_storage/android_x_storage.dart';
 import 'package:disks_desktop/disks_desktop.dart';
 import 'package:drives_windows/drives_windows.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:iris/models/storages/storage.dart';
 import 'package:iris/models/store/play_queue_state.dart';
 import 'package:iris/store/use_app_store.dart';
@@ -53,11 +53,11 @@ Future<List<LocalStorage>> getLocalStorages(
       }
 
       for (var shortcut in networkShortcuts) {
-        if (shortcut.path == null) continue;
+        if (shortcut.target == null) continue;
         final storage = LocalStorage(
           type: StorageType.network,
           name: shortcut.name,
-          basePath: [shortcut.path!],
+          basePath: [shortcut.target!],
         );
 
         storages.add(storage);
@@ -176,12 +176,12 @@ Future<PlayQueueState?> getLocalPlayQueue(String filePath) async {
 }
 
 Future<void> pickLocalFile() async {
-  FilePickerResult? result = await FilePicker.platform.pickFiles(
+  final files = await FilePicker.pickFiles(
     type: FileType.custom,
     allowedExtensions: [...Formats.video, ...Formats.audio],
   );
 
-  final filePath = result?.files.first.path;
+  final filePath = files.isEmpty ? null : files.first.path;
 
   if (filePath != null) {
     final playQueue = await getLocalPlayQueue(filePath);

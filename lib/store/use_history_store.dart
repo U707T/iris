@@ -36,10 +36,7 @@ class HistoryStore extends PersistentStore<HistoryState> {
   Future<HistoryState?> load() async {
     logger('Loading HistoryState');
     try {
-      AndroidOptions getAndroidOptions() => const AndroidOptions(
-            encryptedSharedPreferences: true,
-          );
-      final storage = FlutterSecureStorage(aOptions: getAndroidOptions());
+            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
 
       String? historyState = await storage.read(key: 'history_state');
       if (historyState != null) {
@@ -54,10 +51,7 @@ class HistoryStore extends PersistentStore<HistoryState> {
   @override
   Future<void> save(HistoryState state) async {
     try {
-      AndroidOptions getAndroidOptions() => const AndroidOptions(
-            encryptedSharedPreferences: true,
-          );
-      final storage = FlutterSecureStorage(aOptions: getAndroidOptions());
+            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
 
       await storage.write(
           key: 'history_state', value: json.encode(state.toJson()));

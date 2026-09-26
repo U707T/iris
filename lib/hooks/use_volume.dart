@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:iris/utils/logger.dart';

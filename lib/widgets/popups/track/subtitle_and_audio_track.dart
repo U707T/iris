@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:iris/hooks/use_material_tab_controller.dart';
 import 'package:iris/widgets/popups/track/audio_track_list.dart';
 import 'package:iris/widgets/popups/track/subtitle_list.dart';
 import 'package:iris/utils/get_localizations.dart';
@@ -26,7 +27,7 @@ class SubtitleAndAudioTrack extends HookWidget {
       ITab(title: t.audio_track, child: AudioTrackList()),
     ];
 
-    final tabController = useTabController(initialLength: tabs.length);
+    final tabController = useMaterialTabController(initialLength: tabs.length);
 
     return Column(
       mainAxisSize: MainAxisSize.min,

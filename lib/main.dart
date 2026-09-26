@@ -3,7 +3,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/info.dart';
@@ -151,10 +151,18 @@ class MyApp extends HookWidget {
         darkTheme: theme.dark,
         themeMode: themeMode,
         home: const Home(),
+        builder: (context, child) {
+          // 兼容尚未迁移到 material_ui 的第三方包 (popover / flutter_markdown 等)
+          // ignore: deprecated_member_use
+          return MaterialUiCompatibilityBridge(child: child!);
+        },
         locale: language == 'system' || language == 'auto'
             ? null
             : Locale(language),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: [
+          AppLocalizations.delegate,
+          ...GlobalMaterialLocalizations.delegates,
+        ],
         localeResolutionCallback: (locale, supportedLocales) => supportedLocales
                 .map((e) => e.languageCode)
                 .toList()

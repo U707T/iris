@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/platform.dart';

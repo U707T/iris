@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/store/app_state.dart';
@@ -172,10 +172,7 @@ class AppStore extends PersistentStore<AppState> {
   Future<AppState?> load() async {
     logger('Loading AppState');
     try {
-      AndroidOptions getAndroidOptions() => const AndroidOptions(
-            encryptedSharedPreferences: true,
-          );
-      final storage = FlutterSecureStorage(aOptions: getAndroidOptions());
+            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
 
       String? appState = await storage.read(key: 'app_state');
 
@@ -193,10 +190,7 @@ class AppStore extends PersistentStore<AppState> {
   @override
   Future<void> save(AppState state) async {
     try {
-      AndroidOptions getAndroidOptions() => const AndroidOptions(
-            encryptedSharedPreferences: true,
-          );
-      final storage = FlutterSecureStorage(aOptions: getAndroidOptions());
+            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
 
       await storage.write(key: 'app_state', value: json.encode(state.toJson()));
     } catch (e) {

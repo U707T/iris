@@ -1,6 +1,46 @@
 import 'package:dynamic_color/dynamic_color.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' as legacy; // google_fonts 尚未迁移, 仅用于 TextTheme 转换
 import 'package:google_fonts/google_fonts.dart';
+import 'package:material_ui/material_ui.dart';
+
+/// google_fonts 仍基于 SDK 旧版 Material (`package:flutter/material.dart`),
+/// 与 material_ui 的 TextTheme 是不同类型 (TextStyle 本身共用)。
+/// 以下两个函数在两边之间搬运文本样式。
+legacy.TextTheme _toLegacyTextTheme(TextTheme t) => legacy.TextTheme(
+      displayLarge: t.displayLarge,
+      displayMedium: t.displayMedium,
+      displaySmall: t.displaySmall,
+      headlineLarge: t.headlineLarge,
+      headlineMedium: t.headlineMedium,
+      headlineSmall: t.headlineSmall,
+      titleLarge: t.titleLarge,
+      titleMedium: t.titleMedium,
+      titleSmall: t.titleSmall,
+      bodyLarge: t.bodyLarge,
+      bodyMedium: t.bodyMedium,
+      bodySmall: t.bodySmall,
+      labelLarge: t.labelLarge,
+      labelMedium: t.labelMedium,
+      labelSmall: t.labelSmall,
+    );
+
+TextTheme _fromLegacyTextTheme(legacy.TextTheme t) => TextTheme(
+      displayLarge: t.displayLarge,
+      displayMedium: t.displayMedium,
+      displaySmall: t.displaySmall,
+      headlineLarge: t.headlineLarge,
+      headlineMedium: t.headlineMedium,
+      headlineSmall: t.headlineSmall,
+      titleLarge: t.titleLarge,
+      titleMedium: t.titleMedium,
+      titleSmall: t.titleSmall,
+      bodyLarge: t.bodyLarge,
+      bodyMedium: t.bodyMedium,
+      bodySmall: t.bodySmall,
+      labelLarge: t.labelLarge,
+      labelMedium: t.labelMedium,
+      labelSmall: t.labelSmall,
+    );
 
 ThemeData baseTheme(BuildContext context) {
   return ThemeData(
@@ -60,7 +100,7 @@ CustomTheme getTheme({
   final lightTheme = ThemeData(
     colorScheme: colorScheme,
     useMaterial3: true,
-    textTheme: GoogleFonts.notoSansScTextTheme(),
+    textTheme: _fromLegacyTextTheme(GoogleFonts.notoSansScTextTheme()),
     popupMenuTheme: base.popupMenuTheme,
     dropdownMenuTheme: base.dropdownMenuTheme,
     listTileTheme: base.listTileTheme,
@@ -69,10 +109,14 @@ CustomTheme getTheme({
   final darkTheme = ThemeData.dark(useMaterial3: true).copyWith(
     colorScheme: darkColorScheme,
     scaffoldBackgroundColor: pureBlack ? Colors.black : null,
-    textTheme: GoogleFonts.notoSansScTextTheme(
-      ThemeData.dark(useMaterial3: true)
-          .copyWith(colorScheme: darkColorScheme)
-          .textTheme,
+    textTheme: _fromLegacyTextTheme(
+      GoogleFonts.notoSansScTextTheme(
+        _toLegacyTextTheme(
+          ThemeData.dark(useMaterial3: true)
+              .copyWith(colorScheme: darkColorScheme)
+              .textTheme,
+        ),
+      ),
     ),
     popupMenuTheme: base.popupMenuTheme,
     dropdownMenuTheme: base.dropdownMenuTheme,

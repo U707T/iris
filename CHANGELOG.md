@@ -1,3 +1,17 @@
+## v1.8.2-rc.4
+
+### Changelog
+
+* Full dependency modernization: the media stack (media_kit_video 2.0 / fvp 0.38 / video_player 2.14), secure storage (flutter_secure_storage 11), file picker (file_picker 13), permissions (permission_handler 13), network drives (saf_util 3, win32 6), links (app_links 7) and all other dependencies are now up to date
+* The UI migrated to Flutter's new standalone `material_ui` package (the Material library is moving out of the Flutter SDK); the look & feel is expected to stay the same — please report any visual differences you spot
+* Note: because of the secure storage upgrade, local playback history / settings will reset once on the first launch after this update
+
+### 更新日志
+
+* 依赖全面现代化：播放栈（media_kit_video 2.0 / fvp 0.38 / video_player 2.14）、安全存储（flutter_secure_storage 11）、文件选择（file_picker 13）、权限（permission_handler 13）、网络盘（saf_util 3、win32 6）、链接（app_links 7）等全部依赖升级到最新
+* 界面迁移到 Flutter 新的独立 `material_ui` 包（Material 库正从 SDK 拆出）；预期观感不变，如有样式差异请反馈
+* 注意：由于安全存储组件大版本升级，本次更新后首次启动会重置一次本地播放历史 / 设置（一次性）
+
 ## v1.8.2-rc.3
 
 ### Changelog

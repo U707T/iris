@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:iris/utils/get_localizations.dart';
 
 Future<void> showShortcutsDialog(BuildContext context) async =>

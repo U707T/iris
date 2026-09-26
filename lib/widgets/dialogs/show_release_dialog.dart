@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:iris/utils/file_size_convert.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:path/path.dart' as p;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:iris/utils/get_latest_release.dart';
