@@ -1,3 +1,13 @@
+## v1.8.2-rc.3
+
+### Changelog
+
+* Short video mode on PC: the mouse wheel now switches videos wherever the pointer is in the mode — including over the bottom info bar, the progress bar area and the side buttons, which previously ignored scrolling (a code-review follow-up on rc.2)
+
+### 更新日志
+
+* 短视频模式 PC 端：鼠标滚轮现在在界面任意位置都能切换视频——包括此前无响应的底部信息栏、进度条区域和侧边按钮（对 rc.2 的代码复查跟进）
+
 ## v1.8.2-rc.2
 
 ### Changelog

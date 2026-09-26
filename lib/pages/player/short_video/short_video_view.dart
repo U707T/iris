@@ -228,7 +228,12 @@ class ShortVideoView extends HookWidget {
       scrubEnd();
     }
 
-    // 鼠标滚轮切换上 / 下一条 (接管 PageView 默认的滚轮行为)
+    // 鼠标滚轮切换上 / 下一条 (接管 PageView 默认的滚轮行为)。
+    // 注册点在两处, 缺一不可:
+    // - buildPage 内的页面级 Listener: 位于 PageView 内部, 会先于 Scrollable
+    //   拿到事件, 屏蔽其默认的滚轮翻页;
+    // - 根部 Listener: 底部信息栏 / 按钮等覆盖层会吸收命中测试,
+    //   指针在这些区域滚动时只有根部 Listener 能收到事件。
     final wheelCooldown = useRef<DateTime?>(null);
 
     void registerWheel(PointerSignalEvent event) {
@@ -236,9 +241,11 @@ class ShortVideoView extends HookWidget {
       GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
         final scrollEvent = resolved as PointerScrollEvent;
         final dy = scrollEvent.scrollDelta.dy;
+        // 忽略高精度滚轮 / 触控板的微小增量
         if (dy.abs() < 4) return;
         final now = DateTime.now();
         final last = wheelCooldown.value;
+        // 冷却期内的事件直接丢弃, 避免快速滚动一次跳过太多视频
         if (last != null &&
             now.difference(last) < const Duration(milliseconds: 420)) {
           return;
@@ -259,6 +266,7 @@ class ShortVideoView extends HookWidget {
       } else {
         content = const ColoredBox(color: Colors.black);
       }
+      // 页面级滚轮注册: 先于 PageView 的 Scrollable 抢到事件 (详见 registerWheel)
       return Listener(
         behavior: HitTestBehavior.opaque,
         onPointerSignal: registerWheel,
@@ -280,6 +288,8 @@ class ShortVideoView extends HookWidget {
         onPointerDown: (_) => isDragging.value = true,
         onPointerUp: (_) => isDragging.value = false,
         onPointerCancel: (_) => isDragging.value = false,
+        // 覆盖层 (底部信息 / 按钮) 挡住页面级滚轮时, 由此处兜底
+        onPointerSignal: registerWheel,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => _togglePlay(context),
