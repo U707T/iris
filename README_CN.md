@@ -88,6 +88,13 @@
 | 双指捏合         | 无级调节画面缩放   |
 | `Ctrl` + 滚轮    | 无级调节画面缩放（桌面端） |
 
+## 故障排查
+
+- **Windows：应用启动后立即（或最初几次操作时）闪退**（`flutter_windows.dll` 报 `0xC0000005`）。这是 Flutter 引擎在 Windows 上的已知 bug（[flutter/flutter#175041](https://github.com/flutter/flutter/issues/175041)）：当 UI 自动化客户端（远程桌面工具如 Chrome Remote Desktop / RDP、读屏软件、自动化工具等）在应用启动期间枚举窗口元素时触发。在 Flutter 发布引擎修复前，可开启兼容开关（二选一）：
+  - 设置环境变量 `IRIS_DISABLE_WINDOWS_A11Y=1`（例如执行一次 `setx IRIS_DISABLE_WINDOWS_A11Y 1` 后重新启动 IRIS），或
+  - 以命令行参数 `--disable-windows-a11y` 启动 IRIS。
+  该开关会关闭应用的 Windows 无障碍集成（屏幕阅读器将无法读取 IRIS），仅面向遇到此崩溃的机器。
+
 ## 贡献
 
 欢迎任何形式的贡献！如果您有建议、bug 报告或想要添加新功能，请提交 [issue](https://github.com/nini22P/iris/issues) 或者直接提交 Pull Request。

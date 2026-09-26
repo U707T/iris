@@ -88,6 +88,13 @@ English | [中文](./README_CN.md)
 | Pinch with two fingers            | Smoothly zoom the video       |
 | `Ctrl` + scroll wheel             | Smoothly zoom the video (desktop) |
 
+## Troubleshooting
+
+- **Windows: the app crashes right after launch or during the first interactions** (`0xC0000005` in `flutter_windows.dll`). This is a known Flutter engine bug on Windows ([flutter/flutter#175041](https://github.com/flutter/flutter/issues/175041)): it is triggered when a UI Automation client — remote-desktop tools such as Chrome Remote Desktop / RDP, screen readers, automation utilities — enumerates the window while the app is still starting. Until Flutter ships the engine fix, enable the compatibility switch (either one works):
+  - set the environment variable `IRIS_DISABLE_WINDOWS_A11Y=1` (e.g. run `setx IRIS_DISABLE_WINDOWS_A11Y 1` once, then start IRIS), or
+  - start IRIS with the command-line argument `--disable-windows-a11y`.
+  The switch turns the app's Windows accessibility integration off (screen readers cannot see IRIS) and is meant only for machines that hit this crash.
+
 ## Contribution
 
 Contributions of any kind are welcome! If you have suggestions, bug reports, or want to add new features, please submit an [issue](https://github.com/nini22P/iris/issues) or directly submit a Pull Request.

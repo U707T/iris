@@ -1,3 +1,19 @@
+## v2.0.1
+
+### Changelog
+
+* Workaround for a Windows crash (0xC0000005) that could happen right after launch or during the first interactions: Flutter's Windows engine has a known accessibility-bridge crash (flutter/flutter#175041, see also #192689) that is triggered when a UI Automation client — remote-desktop tools such as Chrome Remote Desktop, screen readers, automation utilities — enumerates the window while the app is still starting. This cannot be fixed from inside the app, so this release adds an opt-in compatibility switch that turns the app's Windows accessibility integration off, which avoids the crash (the same approach was verified by other affected apps; see the upstream issue).
+  * Turn it on with the environment variable `IRIS_DISABLE_WINDOWS_A11Y=1` or the command-line argument `--disable-windows-a11y` (default: off).
+  * Trade-off: while enabled, screen readers cannot see IRIS. It is meant for the machines that hit this crash; machines that never crash keep full accessibility. The switch will be removed once Flutter ships the engine fix (flutter/flutter#190903).
+* Nothing else changed in this release.
+
+### 更新日志
+
+* 修复 Windows 端启动阶段 / 首次操作时的闪退（0xC0000005）：这是 Flutter Windows 引擎的已知无障碍桥崩溃（flutter/flutter#175041，另见 #192689）——当 UI 自动化客户端（远程桌面工具如 Chrome Remote Desktop、读屏软件、自动化工具等）在应用启动期间枚举窗口元素时触发。该问题无法在应用内直接修复，因此本版新增一个**可选**兼容开关：开启后关闭应用的 Windows 无障碍集成，从而规避崩溃（已有其他受影响产品验证此方案有效，详见上游 issue）。
+  * 开启方式（二选一）：环境变量 `IRIS_DISABLE_WINDOWS_A11Y=1`，或命令行参数 `--disable-windows-a11y`（默认关闭）。
+  * 代价：开启后屏幕阅读器无法读取本应用。该开关面向遇到此崩溃的机器；不受影响的机器保持完整无障碍支持。上游引擎修复（flutter/flutter#190903）发布后，本开关将被移除。
+* 除上述兼容开关外，本版无其他变化。
+
 ## v2.0.0
 
 ### Changelog

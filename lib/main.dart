@@ -16,6 +16,7 @@ import 'package:iris/theme.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/request_storage_permission.dart';
+import 'package:iris/utils/windows_a11y_compat.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_stream/media_stream.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -26,7 +27,20 @@ import 'globals.dart' as globals;
 
 void main(List<String> arguments) async {
   logger('arguments: $arguments');
-  globals.arguments = arguments;
+  // 兼容开关自身不能当作文档路径传给播放队列 (use_play_queue_store 会取 arguments[0])
+  globals.arguments = List<String>.from(arguments)
+    ..removeWhere((argument) => argument == kDisableWindowsA11yArgument);
+  globals.disableWindowsA11y = shouldDisableWindowsA11y(
+    isWindows: Platform.isWindows,
+    environment: Platform.environment,
+    arguments: arguments,
+  );
+  if (globals.disableWindowsA11y) {
+    logger(
+      'Windows accessibility disabled by compat flag '
+      '(engine crash workaround, flutter/flutter#175041)',
+    );
+  }
 
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -154,7 +168,14 @@ class MyApp extends HookWidget {
         builder: (context, child) {
           // 兼容尚未迁移到 material_ui 的第三方包 (popover / flutter_markdown 等)
           // ignore: deprecated_member_use
-          return MaterialUiCompatibilityBridge(child: child!);
+          final Widget content = MaterialUiCompatibilityBridge(child: child!);
+          // 临时规避 Windows 引擎无障碍桥崩溃 (flutter/flutter#175041):
+          // 开启后关闭本应用的 Windows 无障碍集成, 引擎便不再构建语义树。
+          // 代价: 屏幕阅读器无法读取本应用。详见 windows_a11y_compat.dart。
+          return maybeExcludeSemantics(
+            child: content,
+            disabled: globals.disableWindowsA11y,
+          );
         },
         locale: language == 'system' || language == 'auto'
             ? null

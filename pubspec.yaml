@@ -1,7 +1,7 @@
 name: iris
 description: A lightweight video player
 publish_to: none
-version: 2.0.0+14
+version: 2.0.1+15
 
 environment:
   sdk: ^3.10.0
@@ -96,7 +96,7 @@ msix_config:
   identity_name: 22P.IRISplayer
   publisher_display_name: 22P
   publisher: CN=9740B6B2-E777-4F52-8ECD-C4A577A73010
-  msix_version: 2.0.0.0
+  msix_version: 2.0.1.0
   logo_path: assets/images/logo.png
   trim_logo: false
   languages: en-us, zh-cn

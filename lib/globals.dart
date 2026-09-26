@@ -7,6 +7,10 @@ import 'package:permission_handler/permission_handler.dart';
 List<String> arguments = [];
 String? initUri;
 PermissionStatus? storagePermissionStatus;
+
+/// Windows 无障碍兼容开关 (规避引擎崩溃 flutter/flutter#175041)。
+/// 见 lib/utils/windows_a11y_compat.dart; main() 启动时按环境变量 / 命令行参数设置。
+bool disableWindowsA11y = false;
 final moreMenuKey = GlobalKey<PopupMenuButtonState>();
 final rateMenuKey = GlobalKey<PopupMenuButtonState>();
 const double minZoom = 0.25;
