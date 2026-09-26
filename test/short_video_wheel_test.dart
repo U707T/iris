@@ -214,4 +214,95 @@ void main() {
 
     await _teardown(tester);
   });
+
+  testWidgets('细粒度滚轮增量: 累积到阈值后切换 (高精度滚轮 / 远程桌面回归)', (tester) async {
+    await _setQueue(tester, 0);
+    await _pumpView(tester);
+    expect(usePlayQueueStore().state.currentIndex, 0);
+
+    // 每次仅 10px (细粒度设备), 累积到 30px 阈值后只切换一次
+    for (var i = 0; i < 4; i++) {
+      await tester.sendEventToBinding(PointerScrollEvent(
+        position: const Offset(400, 300),
+        scrollDelta: const Offset(0, 10),
+      ));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(usePlayQueueStore().state.currentIndex, 1);
+
+    await _teardown(tester);
+  });
+
+  testWidgets('微小滚轮噪声 (1px) 不触发切换', (tester) async {
+    await _setQueue(tester, 0);
+    await _pumpView(tester);
+
+    for (var i = 0; i < 10; i++) {
+      await tester.sendEventToBinding(PointerScrollEvent(
+        position: const Offset(400, 300),
+        scrollDelta: const Offset(0, 1),
+      ));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(usePlayQueueStore().state.currentIndex, 0);
+
+    await _teardown(tester);
+  });
+
+  testWidgets('反向滚动重置累积: 先下后上只向上切换一次', (tester) async {
+    await _setQueue(tester, 1);
+    await _pumpView(tester);
+
+    // 向下 20px 不足阈值; 随后反向 3 × 20px → 应只向「上一条」切换一次
+    await tester.sendEventToBinding(PointerScrollEvent(
+      position: const Offset(400, 300),
+      scrollDelta: const Offset(0, 20),
+    ));
+    await tester.pump();
+    for (var i = 0; i < 3; i++) {
+      await tester.sendEventToBinding(PointerScrollEvent(
+        position: const Offset(400, 300),
+        scrollDelta: const Offset(0, -20),
+      ));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(usePlayQueueStore().state.currentIndex, 0);
+
+    await _teardown(tester);
+  });
+
+  testWidgets('滚轮动作间隔过久: 累积重新计数', (tester) async {
+    await _setQueue(tester, 0);
+    await _pumpView(tester);
+
+    await tester.sendEventToBinding(PointerScrollEvent(
+      position: const Offset(400, 300),
+      scrollDelta: const Offset(0, 20),
+    ));
+    await tester.pumpAndSettle();
+
+    // 超过手势间隔 (400ms) 后重新计数: 若未重置, 20 + 20 就会达到阈值
+    await tester.runAsync(() => Future<void>.delayed(
+          const Duration(milliseconds: 500),
+        ));
+    await tester.sendEventToBinding(PointerScrollEvent(
+      position: const Offset(400, 300),
+      scrollDelta: const Offset(0, 20),
+    ));
+    await tester.pump();
+    expect(usePlayQueueStore().state.currentIndex, 0);
+
+    // 新一轮累积 20 + 20 → 达到阈值, 切换
+    await tester.sendEventToBinding(PointerScrollEvent(
+      position: const Offset(400, 300),
+      scrollDelta: const Offset(0, 20),
+    ));
+    await tester.pumpAndSettle();
+    expect(usePlayQueueStore().state.currentIndex, 1);
+
+    await _teardown(tester);
+  });
 }

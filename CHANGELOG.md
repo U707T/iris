@@ -1,3 +1,15 @@
+## v2.0.2
+
+### Changelog
+
+* Short video mode: mouse-wheel switching is now robust on high-resolution wheels and remote-desktop sessions — small/partial wheel deltas (which these devices and tools send instead of full notches) are accumulated and switch once a threshold is reached, instead of being ignored; standard wheels behave exactly as before (one notch = one switch)
+* No other changes.
+
+### 更新日志
+
+* 短视频模式：鼠标滚轮切换现在兼容高精度滚轮与远程桌面——这类设备/工具会把一个滚轮刻度拆成许多小增量发送，此前会被直接忽略（表现为滚轮完全无反应）；现在会累积到阈值后切换，标准滚轮行为与之前完全一致（一格 = 一次切换）
+* 本版无其他变化。
+
 ## v2.0.1
 
 ### Changelog

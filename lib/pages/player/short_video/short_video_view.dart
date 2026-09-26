@@ -24,6 +24,18 @@ void _togglePlay(BuildContext context) {
   }
 }
 
+/// 滚轮切换的累积阈值 (逻辑像素)。
+/// Windows 一个标准滚轮刻度约 33~100px (取决于系统"每次滚动几行": 行数 × 100/3),
+/// 高精度滚轮 / 远程桌面平滑滚动会把一个刻度拆成很多小增量;
+/// 统一累积到阈值再切换, 避免细粒度设备上滚轮完全没有反应。
+const double _wheelSwitchThreshold = 30.0;
+
+/// 两次滚轮事件间隔超过该值视为新的滚动动作, 累积重新计数。
+const Duration _wheelGestureGap = Duration(milliseconds: 400);
+
+/// 两次切换之间的最小间隔 (避免快速滚动一次跳过太多视频)。
+const Duration _wheelSwitchCooldown = Duration(milliseconds: 420);
+
 /// 短视频模式 (类抖音的竖向信息流界面):
 /// 一屏一条视频, 上滑下一条 / 下滑上一条, 单条循环播放。
 /// Media Kit 后端配合预载播放器池, 滑动切换无缝衔接。
@@ -240,24 +252,47 @@ class ShortVideoView extends HookWidget {
     //   拿到事件, 屏蔽其默认的滚轮翻页;
     // - 根部 Listener: 底部信息栏 / 按钮等覆盖层会吸收命中测试,
     //   指针在这些区域滚动时只有根部 Listener 能收到事件。
+    // 增量处理: 累积到阈值再切换 —— 标准滚轮一格约 33~100px, 单次事件即达
+    // 阈值; 高精度滚轮 / 远程桌面的细粒度增量则逐次累积 (此前直接丢弃
+    // <4px 的增量, 导致这类设备上滚轮完全没有反应)。
     final wheelCooldown = useRef<DateTime?>(null);
+    final wheelAccumulator = useRef(0.0);
+    final wheelLastEventAt = useRef<DateTime?>(null);
 
     void registerWheel(PointerSignalEvent event) {
       if (event is! PointerScrollEvent) return;
       GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
         final scrollEvent = resolved as PointerScrollEvent;
         final dy = scrollEvent.scrollDelta.dy;
-        // 忽略高精度滚轮 / 触控板的微小增量
-        if (dy.abs() < 4) return;
+        if (dy == 0) return;
         final now = DateTime.now();
-        final last = wheelCooldown.value;
-        // 冷却期内的事件直接丢弃, 避免快速滚动一次跳过太多视频
-        if (last != null &&
-            now.difference(last) < const Duration(milliseconds: 420)) {
+
+        // 冷却期内直接丢弃, 避免快速滚动一次跳过太多视频
+        final lastSwitch = wheelCooldown.value;
+        if (lastSwitch != null &&
+            now.difference(lastSwitch) < _wheelSwitchCooldown) {
+          wheelAccumulator.value = 0;
           return;
         }
+
+        // 间隔过久视为新的滚动动作; 反向滚动也从当前增量重新开始累积
+        final lastEventAt = wheelLastEventAt.value;
+        if (lastEventAt == null ||
+            now.difference(lastEventAt) > _wheelGestureGap) {
+          wheelAccumulator.value = 0;
+        }
+        wheelLastEventAt.value = now;
+        final accumulated = wheelAccumulator.value;
+        wheelAccumulator.value =
+            accumulated == 0 || accumulated.sign == dy.sign
+                ? accumulated + dy
+                : dy;
+
+        if (wheelAccumulator.value.abs() < _wheelSwitchThreshold) return;
+        final direction = wheelAccumulator.value > 0 ? 1 : -1;
+        wheelAccumulator.value = 0;
         wheelCooldown.value = now;
-        moveShortVideoBy(dy > 0 ? 1 : -1);
+        moveShortVideoBy(direction);
       });
     }
 
