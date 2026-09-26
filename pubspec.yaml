@@ -1,7 +1,7 @@
 name: iris
 description: A lightweight video player
 publish_to: none
-version: 1.8.2-rc.4+13
+version: 2.0.0+14
 
 environment:
   sdk: ^3.10.0
@@ -68,6 +68,10 @@ dependency_overrides:
   # 使用 third_party/pure_ftp 里打过补丁的内嵌版本 (见该目录 PATCHES.md)。
   pure_ftp:
     path: third_party/pure_ftp
+  # fvp 0.38.1 存在 Windows 崩溃 bug (#397/#401), 官方修复尚未发版,
+  # 使用 third_party/fvp 内嵌的修复版 (见该目录 PATCHES.md); 上游发版后可移除本项。
+  fvp:
+    path: third_party/fvp
 
 dev_dependencies:
   flutter_test:
@@ -92,7 +96,7 @@ msix_config:
   identity_name: 22P.IRISplayer
   publisher_display_name: 22P
   publisher: CN=9740B6B2-E777-4F52-8ECD-C4A577A73010
-  msix_version: 1.8.2.0
+  msix_version: 2.0.0.0
   logo_path: assets/images/logo.png
   trim_logo: false
   languages: en-us, zh-cn

@@ -98,16 +98,20 @@ class ShortVideoView extends HookWidget {
       }
     }
 
-    // 双击快进 / 快退
+    // 双击快进 / 快退。
+    // 注意: 不能用 build 时捕获的 player —— 短视频模式播放期间本组件不会重建,
+    // 捕获实例里的 position 是过期的 (≈0), 会导致快进总是从视频开头开始;
+    // context.read 取到的是随播放进度持续刷新的当前实例。
     void onDoubleTapDown(TapDownDetails details) {
       final seekStep = useAppStore().state.seekStepSeconds;
       final screenWidth = MediaQuery.sizeOf(context).width;
       final tapDx = details.globalPosition.dx;
+      final currentPlayer = context.read<MediaPlayer>();
 
       if (tapDx > screenWidth * 0.75) {
-        player.forward(seekStep);
+        currentPlayer.forward(seekStep);
       } else if (tapDx < screenWidth * 0.25) {
-        player.backward(seekStep);
+        currentPlayer.backward(seekStep);
       } else {
         _togglePlay(context);
       }
@@ -118,7 +122,7 @@ class ShortVideoView extends HookWidget {
     final isLongPress = useState(false);
 
     void onLongPressStart(LongPressStartDetails details) {
-      if (!player.isPlaying) return;
+      if (!context.read<MediaPlayer>().isPlaying) return;
       rateBeforeLongPress.value = useAppStore().state.rate;
       useAppStore().updateRate(
         useAppStore().state.longPressSpeed,
@@ -205,12 +209,14 @@ class ShortVideoView extends HookWidget {
           return;
         }
       }
+      // 同 onDoubleTapDown: 取当前实例的实时位置, 避免从过期位置 (≈0) 开始拖动
+      final currentPosition = context.read<MediaPlayer>().position;
       scrubState.value = (
         active: true,
-        start: player.position,
+        start: currentPosition,
         startDx: details.globalPosition.dx,
       );
-      scrubStart(player.position);
+      scrubStart(currentPosition);
     }
 
     void onHorizontalDragUpdate(DragUpdateDetails details) {

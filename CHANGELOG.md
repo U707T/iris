@@ -1,3 +1,21 @@
+## v2.0.0
+
+### Changelog
+
+* Fixed a Windows crash in the FVP playback backend: fvp 0.38.1 could crash while playing / tearing down videos and when closing the app; this build ships the patched FVP engine (upstream fixes #397 / #401, not yet released on pub)
+* Fixed short video mode seek: swiping to fast-forward (or double-tapping) always started from the beginning of the video — seeks now start from the current playback position (all platforms)
+* The 2.0 line brings the full dependency modernization: media stack (media_kit_video 2.0 / fvp / video_player 2.14), secure storage 11, file picker 13, permission handler 13, network drives (saf_util 3, win32 6), app links 7 — all dependencies are up to date
+* The UI runs on Flutter's new standalone `material_ui` package (the Material library moved out of the Flutter SDK)
+* Note: local playback history / settings reset once on the first launch after upgrading (secure storage format change)
+
+### 更新日志
+
+* 修复 Windows 端 FVP 播放后端的闪退：fvp 0.38.1 在播放/切换视频与关闭应用时可能崩溃；本版内置了已修复的 FVP 引擎（对应上游 #397 / #401，pub 尚未发版）
+* 修复短视频模式快进：右滑快进（或双击快进）总是从视频开头开始 —— 现在从当前播放位置开始（全平台）
+* 2.0 带来完整的依赖现代化：播放栈（media_kit_video 2.0 / fvp / video_player 2.14）、安全存储 11、文件选择 13、权限 13、网络盘（saf_util 3 / win32 6）、链接 7 等全部升级到最新
+* 界面运行在 Flutter 新的独立 `material_ui` 包上（Material 库已从 SDK 拆出）
+* 注意：升级后首次启动会重置一次本地播放历史 / 设置（安全存储格式变更）
+
 ## v1.8.2-rc.4
 
 ### Changelog
