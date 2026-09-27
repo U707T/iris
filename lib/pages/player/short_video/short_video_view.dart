@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -208,6 +210,82 @@ class ShortVideoView extends HookWidget {
       Future<void>.delayed(const Duration(milliseconds: 320), () {
         if (scrubAlive.value && scrubSession.value == session) {
           scrubPreview.value = null;
+        }
+      });
+    }
+
+    // 音量调节 (长按音量按钮后上下滑动):
+    // 与进度拖动同一套思路 —— 本地预览值实时跟手 (只重建指示器),
+    // 写入 store 做节流 (避免每帧都触发 3 个播放器的 setVolume),
+    // 松手时落盘一次。
+    final volumePreview = useMemoized(() => ValueNotifier<double?>(null), []);
+    final volumeAlive = useRef(true);
+    useEffect(() {
+      volumeAlive.value = true;
+      return () {
+        volumeAlive.value = false;
+        volumePreview.dispose();
+      };
+    }, [volumePreview]);
+    final volumeSession = useRef(0);
+    final volumeActive = useRef(false);
+    final volumeStart = useRef(0);
+    final volumeStartDy = useRef(0.0);
+    final lastVolumePushAt = useRef<DateTime?>(null);
+
+    /// 每滑动该像素数代表 1% 音量 (上下滑 260px = 0~100)
+    const double volumeDragPixelsPerPercent = 2.6;
+    /// 写入 store 的最小间隔
+    const Duration volumePushInterval = Duration(milliseconds: 100);
+
+    void pushVolume(double value, {bool force = false}) {
+      final now = DateTime.now();
+      final last = lastVolumePushAt.value;
+      if (force ||
+          last == null ||
+          now.difference(last) >= volumePushInterval) {
+        lastVolumePushAt.value = now;
+        unawaited(useAppStore().updateVolume(value.round(), persist: false));
+      }
+    }
+
+    void volumeAdjustStart(Offset globalPosition) {
+      volumeSession.value++;
+      volumeActive.value = true;
+      final appState = useAppStore().state;
+      // 静音状态下调节音量 -> 自动取消静音, 否则调了也听不到
+      if (appState.isMuted) {
+        unawaited(useAppStore().updateMute(false));
+      }
+      volumeStart.value = appState.volume;
+      volumeStartDy.value = globalPosition.dy;
+      lastVolumePushAt.value = null;
+      volumePreview.value = appState.volume.toDouble();
+    }
+
+    void volumeAdjustUpdate(Offset globalPosition) {
+      if (!volumeActive.value) return;
+      final delta =
+          (volumeStartDy.value - globalPosition.dy) / volumeDragPixelsPerPercent;
+      final value = (volumeStart.value + delta).clamp(0.0, 100.0);
+      volumePreview.value = value;
+      pushVolume(value);
+    }
+
+    void volumeAdjustEnd() {
+      if (!volumeActive.value) return;
+      volumeActive.value = false;
+      lastVolumePushAt.value = null;
+      final value = volumePreview.value;
+      final session = ++volumeSession.value;
+      // 落盘最终值
+      if (value != null) {
+        unawaited(useAppStore().updateVolume(value.round()));
+      }
+      // 保留预览值一小段时间, 避免松手瞬间指示器先跳回旧值
+      Future<void>.delayed(const Duration(milliseconds: 320), () {
+        if (volumeAlive.value && volumeSession.value == session) {
+          volumePreview.value = null;
         }
       });
     }
@@ -472,10 +550,33 @@ class ShortVideoView extends HookWidget {
                 ),
               ),
               // 右侧操作
-              const Positioned(
+              Positioned(
                 right: 10,
                 bottom: 110,
-                child: _FeedActions(),
+                child: _FeedActions(
+                  volumePreview: volumePreview,
+                  onVolumeAdjustStart: volumeAdjustStart,
+                  onVolumeAdjustUpdate: volumeAdjustUpdate,
+                  onVolumeAdjustEnd: volumeAdjustEnd,
+                ),
+              ),
+              // 音量调节指示 (长按音量按钮上下滑动时显示)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ValueListenableBuilder<double?>(
+                    valueListenable: volumePreview,
+                    builder: (context, preview, _) => AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 150),
+                      child: preview == null
+                          ? const SizedBox.shrink(
+                              key: ValueKey('no-volume-hint'))
+                          : Center(
+                              key: const ValueKey('volume-hint'),
+                              child: _FeedVolumeIndicator(volume: preview),
+                            ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -536,7 +637,17 @@ class _MediaKitVideoSurface extends StatelessWidget {
 
 /// 右侧操作按钮列
 class _FeedActions extends HookWidget {
-  const _FeedActions();
+  const _FeedActions({
+    required this.volumePreview,
+    required this.onVolumeAdjustStart,
+    required this.onVolumeAdjustUpdate,
+    required this.onVolumeAdjustEnd,
+  });
+
+  final ValueNotifier<double?> volumePreview;
+  final void Function(Offset globalPosition) onVolumeAdjustStart;
+  final void Function(Offset globalPosition) onVolumeAdjustUpdate;
+  final void Function() onVolumeAdjustEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -558,7 +669,154 @@ class _FeedActions extends HookWidget {
           tooltip: t.screenshot,
           onPressed: () => takeScreenshot(context, context.read<MediaPlayer>()),
         ),
+        const SizedBox(height: 12),
+        _FeedVolumeButton(
+          volumePreview: volumePreview,
+          onAdjustStart: onVolumeAdjustStart,
+          onAdjustUpdate: onVolumeAdjustUpdate,
+          onAdjustEnd: onVolumeAdjustEnd,
+        ),
       ],
+    );
+  }
+}
+
+/// 音量按钮: 点击 = 静音 / 取消静音 (音量 0 时恢复 80);
+/// 长按后上下滑动 = 调节音量 (仅按住按钮时生效, 不影响翻页 / 倍速 / 播放暂停)。
+class _FeedVolumeButton extends HookWidget {
+  const _FeedVolumeButton({
+    required this.volumePreview,
+    required this.onAdjustStart,
+    required this.onAdjustUpdate,
+    required this.onAdjustEnd,
+  });
+
+  final ValueNotifier<double?> volumePreview;
+  final void Function(Offset globalPosition) onAdjustStart;
+  final void Function(Offset globalPosition) onAdjustUpdate;
+  final void Function() onAdjustEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = getLocalizations(context);
+    final volume = useAppStore().select(context, (state) => state.volume);
+    final isMuted = useAppStore().select(context, (state) => state.isMuted);
+    final adjusting = useState(false);
+
+    return MergeSemantics(
+      child: Semantics(
+        label: t.volume,
+        child: GestureDetector(
+          // 在按钮上按住后上下滑动: 由长按识别器接管指针,
+          // PageView 的翻页 / 外层的手势都会在竞争中被拒绝
+          onLongPressStart: (details) {
+            adjusting.value = true;
+            onAdjustStart(details.globalPosition);
+          },
+          onLongPressMoveUpdate: (details) {
+            if (adjusting.value) onAdjustUpdate(details.globalPosition);
+          },
+          onLongPressEnd: (_) {
+            adjusting.value = false;
+            onAdjustEnd();
+          },
+          onLongPressCancel: () {
+            adjusting.value = false;
+            onAdjustEnd();
+          },
+          child: Listener(
+            // PC: 指针悬停在按钮上滚轮 = 微调音量 (拦截并取代翻页)
+            onPointerSignal: (event) {
+              if (event is! PointerScrollEvent) return;
+              GestureBinding.instance.pointerSignalResolver
+                  .register(event, (resolved) {
+                final scrollEvent = resolved as PointerScrollEvent;
+                final dy = scrollEvent.scrollDelta.dy;
+                if (dy == 0) return;
+                if (useAppStore().state.isMuted) {
+                  useAppStore().updateMute(false);
+                }
+                // 一格 (约 100px) 约 5% (1~10 之间)
+                final step = (dy.abs() / 20).ceil().clamp(1, 10);
+                final current = useAppStore().state.volume;
+                useAppStore().updateVolume(dy < 0 ? current + step : current - step);
+              });
+            },
+            child: ValueListenableBuilder<double?>(
+              valueListenable: volumePreview,
+              builder: (context, preview, _) {
+                final level = (preview ?? volume.toDouble()).round();
+                return Material(
+                  color: adjusting.value ? Colors.black54 : Colors.black38,
+                  shape: const CircleBorder(),
+                  clipBehavior: Clip.antiAlias,
+                  child: IconButton(
+                    icon: Icon(
+                      isMuted || level == 0
+                          ? Icons.volume_off_rounded
+                          : level < 50
+                              ? Icons.volume_down_rounded
+                              : Icons.volume_up_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                    onPressed: () {
+                      if (volume == 0) {
+                        useAppStore().updateVolume(80);
+                      } else {
+                        useAppStore().toggleMute();
+                      }
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 音量调节指示 (长按滑动时显示在画面中央)
+class _FeedVolumeIndicator extends StatelessWidget {
+  const _FeedVolumeIndicator({required this.volume});
+
+  final double volume;
+
+  @override
+  Widget build(BuildContext context) {
+    final level = volume.round();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 18, 12),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            level == 0
+                ? Icons.volume_off_rounded
+                : level < 50
+                    ? Icons.volume_down_rounded
+                    : Icons.volume_up_rounded,
+            color: Colors.white,
+            size: 24,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '$level%',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

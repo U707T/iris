@@ -73,14 +73,14 @@ class AppStore extends PersistentStore<AppState> {
     await save(state);
   }
 
-  Future<void> updateVolume(int volume) async {
+  Future<void> updateVolume(int volume, {bool persist = true}) async {
     set(state.copyWith(
         volume: volume < 0
             ? 0
             : volume > 100
                 ? 100
                 : volume));
-    await save(state);
+    if (persist) await save(state);
   }
 
   Future<void> updateMute(bool isMuted) async {

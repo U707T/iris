@@ -1,3 +1,23 @@
+## v2.1.0
+
+### Changelog
+
+* Short video mode: new volume button in the right-hand action column (below the screenshot button)
+  * Long-press it and slide up / down to adjust the volume — this only works while the button itself is held, so swiping the feed, tapping to pause, double-tap seeking, dragging to scrub and the long-press speed-up all keep working as before; a level indicator appears in the middle of the screen while adjusting
+  * Tap it to mute / unmute (tapping it at 0% restores 80%); the icon follows the current level and the muted state
+  * Adjusting the volume while muted automatically unmutes, and the value is written to the settings when you let go
+  * Desktop: scrolling the wheel over the button fine-tunes the volume instead of switching videos
+* No other changes.
+
+### 更新日志
+
+* 短视频模式：右侧操作栏（截图按钮下方）新增音量按钮
+  * 长按按钮后上下滑动即可调节音量——仅在按住按钮时生效，滑动翻页、点击暂停、双击快进、横向拖动快进与长按倍速等原有手势完全不受影响；调节时画面中央显示音量指示
+  * 点击按钮 = 静音 / 取消静音（音量为 0 时恢复到 80），图标跟随当前音量与静音状态
+  * 静音状态下调节音量会自动取消静音，松手后写入设置
+  * 桌面端：指针悬停在按钮上滚动滚轮可微调音量（不再翻页）
+* 本版无其他变化。
+
 ## v2.0.3
 
 ### Changelog
