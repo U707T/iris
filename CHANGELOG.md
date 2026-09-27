@@ -1,3 +1,21 @@
+## v2.2.0-rc.1
+
+### Changelog
+
+* Long-press speed-up now uses the same effect in the normal player and in short video mode: a soft white light streak breathing on the left and the right edge of the picture, instead of the box with the speed number in the middle of the screen. The effect is one shared widget (`lib/widgets/speed_boost_effect.dart`), so both screens stay in sync, and the centre of the picture is left clean. Nothing else about the gesture changed (long-press to speed up, release to go back to the normal rate)
+* Short video mode: the volume button moved up to the top of the right-hand action column (above the play / pause button) — higher up in the bottom-right corner, clear of the bottom info bar. Tap is still mute / unmute, hold and slide up / down still adjusts the volume
+* Short video mode: holding the volume button now takes over the gesture after 0.1 s instead of 0.5 s, so the volume starts following your finger much sooner; holding without sliding still counts as a tap (mute / unmute), and a normal tap keeps working as before
+* No other changes.
+* This is a release candidate (RC) build for testing before the next stable release.
+
+### 更新日志
+
+* 长按倍速动效：主播放界面与短视频模式改为同一套动效——画面左右两侧各一道呼吸的白色光带，取代原先画面中央的倍速提示方块；动效抽成一个公共组件（`lib/widgets/speed_boost_effect.dart`），两处共用、不再各写一套，画面中央也保持干净。手势本身没有任何变化（长按加速、松手恢复原速）
+* 短视频模式：音量按钮上移到右侧操作栏最上方（暂停按钮之上），即右下角更靠上的位置，不再贴着底部信息栏。点击仍是静音 / 取消静音，按住后上下滑动仍是调音量
+* 短视频模式：按住音量按钮的识别时间由 0.5s 缩短到 0.1s，音量明显更跟手；按住不滑动松手仍算点击（静音 / 取消静音），普通点击与之前一致
+* 本版无其他变化。
+* 本版本为候选发布版（RC），用于正式版发布前的测试验证
+
 ## v2.1.0
 
 ### Changelog

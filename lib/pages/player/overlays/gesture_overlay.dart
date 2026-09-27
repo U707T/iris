@@ -3,8 +3,8 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/hooks/use_gesture.dart';
 import 'package:iris/models/player.dart';
-import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
+import 'package:iris/widgets/speed_boost_effect.dart';
 import 'package:provider/provider.dart';
 
 class GestureOverlay extends HookWidget {
@@ -27,7 +27,6 @@ class GestureOverlay extends HookWidget {
     final isShowControl =
         usePlayerUiStore().select(context, (state) => state.isShowControl);
     final zoom = usePlayerUiStore().select(context, (state) => state.zoom);
-    final rate = useAppStore().select(context, (state) => state.rate);
 
     final cursor = useMemoized(
         () => isShowControl || !isPlaying
@@ -65,38 +64,10 @@ class GestureOverlay extends HookWidget {
           onPanCancel: gesture.onPanCancel,
           child: Stack(
             children: [
-              // 长按加速指示
-              if (gesture.isLongPress)
-                Positioned.fill(
-                  child: Center(
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 18, 12),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.fast_forward_rounded,
-                            color: Colors.white,
-                            size: 24,
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            '${rate}x',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+              // 长按加速动效 (与短视频模式共用)
+              Positioned.fill(
+                child: SpeedBoostEffect(visible: gesture.isLongPress),
+              ),
 
               // 画面缩放指示
               if (gesture.isZoomIndicatorVisible)

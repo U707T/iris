@@ -13,6 +13,7 @@ import 'package:iris/utils/format_duration_to_minutes.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/short_video.dart';
 import 'package:iris/utils/take_screenshot.dart';
+import 'package:iris/widgets/speed_boost_effect.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
@@ -480,47 +481,8 @@ class ShortVideoView extends HookWidget {
                   ),
                 ),
               ),
-              // 长按倍速指示
-              Positioned.fill(
-                child: IgnorePointer(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 150),
-                    child: isLongPress.value
-                        ? Center(
-                            child: Container(
-                              key: const ValueKey('speed-hint'),
-                              padding:
-                                  const EdgeInsets.fromLTRB(12, 12, 18, 12),
-                              decoration: BoxDecoration(
-                                color: Colors.black54,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.fast_forward_rounded,
-                                    color: Colors.white,
-                                    size: 24,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Text(
-                                    '${useAppStore().state.longPressSpeed}x',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                      decoration: TextDecoration.none,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        : const SizedBox.shrink(key: ValueKey('no-speed-hint')),
-                  ),
-                ),
-              ),
+              // 长按倍速动效 (与主播放界面共用)
+              SpeedBoostEffect(visible: isLongPress.value),
               // 底部信息与进度条
               Positioned(
                 left: 0,
@@ -658,6 +620,14 @@ class _FeedActions extends HookWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // 音量按钮放在暂停按钮上方 (右下区域里更靠上的位置)
+        _FeedVolumeButton(
+          volumePreview: volumePreview,
+          onAdjustStart: onVolumeAdjustStart,
+          onAdjustUpdate: onVolumeAdjustUpdate,
+          onAdjustEnd: onVolumeAdjustEnd,
+        ),
+        const SizedBox(height: 12),
         _FeedIconButton(
           icon: isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
           tooltip: t.play_pause,
@@ -669,20 +639,13 @@ class _FeedActions extends HookWidget {
           tooltip: t.screenshot,
           onPressed: () => takeScreenshot(context, context.read<MediaPlayer>()),
         ),
-        const SizedBox(height: 12),
-        _FeedVolumeButton(
-          volumePreview: volumePreview,
-          onAdjustStart: onVolumeAdjustStart,
-          onAdjustUpdate: onVolumeAdjustUpdate,
-          onAdjustEnd: onVolumeAdjustEnd,
-        ),
       ],
     );
   }
 }
 
 /// 音量按钮: 点击 = 静音 / 取消静音 (音量 0 时恢复 80);
-/// 长按后上下滑动 = 调节音量 (仅按住按钮时生效, 不影响翻页 / 倍速 / 播放暂停)。
+/// 按住 0.1s 后上下滑动 = 调节音量 (仅按住按钮时生效, 不影响翻页 / 倍速 / 播放暂停)。
 class _FeedVolumeButton extends HookWidget {
   const _FeedVolumeButton({
     required this.volumePreview,
@@ -696,33 +659,82 @@ class _FeedVolumeButton extends HookWidget {
   final void Function(Offset globalPosition) onAdjustUpdate;
   final void Function() onAdjustEnd;
 
+  /// 长按识别时长: 系统默认 500ms 太迟钝, 音量调节要求按住 100ms 就接管指针
+  static const Duration _longPressDelay = Duration(milliseconds: 100);
+
+  /// 判定为“滑动调音量”的最小竖直位移 (更小的抖动算点击, 不改音量)
+  static const double _slideSlop = 4.0;
+
   @override
   Widget build(BuildContext context) {
     final t = getLocalizations(context);
     final volume = useAppStore().select(context, (state) => state.volume);
     final isMuted = useAppStore().select(context, (state) => state.isMuted);
-    final adjusting = useState(false);
+    // 长按已识别 (按住期间按钮高亮)
+    final holding = useState(false);
+    // 长按之后确实滑动了 (没滑动就松手 = 点击)
+    final sliding = useState(false);
+    // 长按起点, 作为滑动的基准位置
+    final anchor = useRef(Offset.zero);
+
+    /// 点击语义: 音量为 0 → 恢复到 80; 否则切换静音
+    void toggleMuteOrRestore() {
+      if (useAppStore().state.volume == 0) {
+        unawaited(useAppStore().updateVolume(80));
+      } else {
+        useAppStore().toggleMute();
+      }
+    }
+
+    void onPressStart(LongPressStartDetails details) {
+      anchor.value = details.globalPosition;
+      holding.value = true;
+      sliding.value = false;
+    }
+
+    void onPressMove(LongPressMoveUpdateDetails details) {
+      if (!holding.value) return;
+      if (!sliding.value) {
+        // 抖动不算滑动: 此时不显示指示器, 松手仍按点击处理
+        if (details.offsetFromOrigin.dy.abs() < _slideSlop) return;
+        sliding.value = true;
+        // 以长按起点为基准, 第一段位移也计入音量变化
+        onAdjustStart(anchor.value);
+      }
+      onAdjustUpdate(details.globalPosition);
+    }
+
+    void onPressEnd() {
+      // 长按没识别 (快速点击): 交给 IconButton 的点击回调
+      if (!holding.value) return;
+      final wasSliding = sliding.value;
+      holding.value = false;
+      sliding.value = false;
+      if (wasSliding) {
+        onAdjustEnd();
+      } else {
+        // 按住但没滑动 = 点击 (长按已接管指针, IconButton 收不到点击)
+        toggleMuteOrRestore();
+      }
+    }
 
     return MergeSemantics(
       child: Semantics(
         label: t.volume,
-        child: GestureDetector(
-          // 在按钮上按住后上下滑动: 由长按识别器接管指针,
+        child: RawGestureDetector(
+          // 在按钮上按住后上下滑动: 长按识别器由按钮自己持有 (100ms),
           // PageView 的翻页 / 外层的手势都会在竞争中被拒绝
-          onLongPressStart: (details) {
-            adjusting.value = true;
-            onAdjustStart(details.globalPosition);
-          },
-          onLongPressMoveUpdate: (details) {
-            if (adjusting.value) onAdjustUpdate(details.globalPosition);
-          },
-          onLongPressEnd: (_) {
-            adjusting.value = false;
-            onAdjustEnd();
-          },
-          onLongPressCancel: () {
-            adjusting.value = false;
-            onAdjustEnd();
+          gestures: <Type, GestureRecognizerFactory>{
+            LongPressGestureRecognizer:
+                GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
+              () => LongPressGestureRecognizer(duration: _longPressDelay),
+              (instance) {
+                instance.onLongPressStart = onPressStart;
+                instance.onLongPressMoveUpdate = onPressMove;
+                instance.onLongPressEnd = (details) => onPressEnd();
+                instance.onLongPressCancel = onPressEnd;
+              },
+            ),
           },
           child: Listener(
             // PC: 指针悬停在按钮上滚轮 = 微调音量 (拦截并取代翻页)
@@ -747,7 +759,7 @@ class _FeedVolumeButton extends HookWidget {
               builder: (context, preview, _) {
                 final level = (preview ?? volume.toDouble()).round();
                 return Material(
-                  color: adjusting.value ? Colors.black54 : Colors.black38,
+                  color: holding.value ? Colors.black54 : Colors.black38,
                   shape: const CircleBorder(),
                   clipBehavior: Clip.antiAlias,
                   child: IconButton(
@@ -760,13 +772,7 @@ class _FeedVolumeButton extends HookWidget {
                       color: Colors.white,
                       size: 22,
                     ),
-                    onPressed: () {
-                      if (volume == 0) {
-                        useAppStore().updateVolume(80);
-                      } else {
-                        useAppStore().toggleMute();
-                      }
-                    },
+                    onPressed: toggleMuteOrRestore,
                   ),
                 );
               },

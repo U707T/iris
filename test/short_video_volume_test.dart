@@ -7,6 +7,7 @@ import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/short_video/short_video_view.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
+import 'package:iris/widgets/speed_boost_effect.dart';
 import 'package:provider/provider.dart';
 
 /// 短视频模式音量按钮测试:
@@ -147,13 +148,99 @@ void main() {
     expect(useAppStore().state.rate, useAppStore().state.longPressSpeed);
     expect(useAppStore().state.volume, 40);
 
+    // 长按加速光效: 左右各一道光带 (不再用画面中央的倍速文字)
+    expect(find.byKey(SpeedBoostEffect.leftGlowKey), findsOneWidget);
+    expect(find.byKey(SpeedBoostEffect.rightGlowKey), findsOneWidget);
+
     await gesture.up();
     await tester.pumpAndSettle();
+    expect(find.byKey(SpeedBoostEffect.leftGlowKey), findsNothing);
+    expect(find.byKey(SpeedBoostEffect.rightGlowKey), findsNothing);
 
     await tester.runAsync(() async {
       await useAppStore().updateRate(1.0, persist: false);
     });
     await _setVolume(tester, 20);
     await _setQueue(tester, 0);
+  });
+
+  testWidgets('长按识别 0.1s: 按住 150ms 后滑动即可调节音量', (tester) async {
+    await _setQueue(tester, 0);
+    await _setVolume(tester, 20);
+    await _pumpView(tester);
+
+    final center = tester.getCenter(find.byIcon(Icons.volume_down_rounded));
+    final gesture = await tester.startGesture(center);
+    // 只按住 150ms (旧实现要 500ms 才识别长按, 那时滑动既不改音量也不显示指示器)
+    await tester.pump(const Duration(milliseconds: 150));
+    // 上滑 26px = +10%
+    await gesture.moveBy(const Offset(0, -26));
+    await tester.pump();
+
+    expect(find.text('30%'), findsOneWidget);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(useAppStore().state.volume, 30);
+    expect(usePlayQueueStore().state.currentIndex, 0);
+
+    await _setVolume(tester, 20);
+    await _setQueue(tester, 0);
+  });
+
+  testWidgets('按住未滑动松手 = 点击 (静音 / 取消静音)', (tester) async {
+    await _setQueue(tester, 0);
+    await _setVolume(tester, 30);
+    await tester.runAsync(() async {
+      await useAppStore().updateMute(false);
+    });
+    await _pumpView(tester);
+
+    final center = tester.getCenter(find.byIcon(Icons.volume_down_rounded));
+
+    // 按住 150ms 没滑动: 长按已接管指针, 松手仍按点击处理 → 静音
+    var gesture = await tester.startGesture(center);
+    await tester.pump(const Duration(milliseconds: 150));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(useAppStore().state.isMuted, isTrue);
+    expect(useAppStore().state.volume, 30);
+    expect(find.text('30%'), findsNothing);
+
+    // 再次按住不滑动松手 → 取消静音
+    gesture = await tester.startGesture(center);
+    await tester.pump(const Duration(milliseconds: 150));
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(useAppStore().state.isMuted, isFalse);
+
+    await tester.runAsync(() async {
+      await useAppStore().updateMute(false);
+    });
+    await _setVolume(tester, 20);
+    await _setQueue(tester, 0);
+  });
+
+  testWidgets('音量按钮在暂停按钮上方, 位于屏幕右下区域', (tester) async {
+    await _setQueue(tester, 0);
+    await _setVolume(tester, 20);
+    await tester.runAsync(() async {
+      await useAppStore().updateMute(false);
+    });
+    await _pumpView(tester);
+
+    final volume = tester.getCenter(find.byIcon(Icons.volume_down_rounded));
+    final playPause = tester.getCenter(find.byIcon(Icons.pause_rounded));
+    final screenshot = tester.getCenter(find.byIcon(Icons.photo_camera_rounded));
+
+    // 音量 → 暂停 → 截图, 自上而下
+    expect(volume.dy, lessThan(playPause.dy));
+    expect(playPause.dy, lessThan(screenshot.dy));
+
+    final size = tester.getSize(find.byType(ShortVideoView));
+    expect(volume.dx, greaterThan(size.width * 0.8));
+    expect(volume.dy, greaterThan(size.height * 0.5));
+    expect(volume.dy, lessThan(playPause.dy));
   });
 }
