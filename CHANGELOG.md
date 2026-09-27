@@ -1,3 +1,23 @@
+## v2.0.3
+
+### Changelog
+
+* Short video mode: fixed the picture being displayed with a wrong aspect ratio (e.g. a square or squashed frame) which could appear after entering the mode or after switching videos, and only went away after re-entering the mode or another switch. Root cause: each video is opened in a freshly created player of the pool, and the player's video output (texture + surface size) is created asynchronously in parallel with the media open — when the media finished opening first, media_kit's surface-size sync was lost and the picture stayed at the initial 1x1 size. The pool now waits for the video output before opening a video, and additionally re-syncs the surface size once after loading and once right before a video is shown (idempotent, Android only)
+* Fixed both modes playing sound at the same time when switching between the normal and short video mode quickly (e.g. tapping a video and immediately entering short video mode): the outgoing player is now explicitly silenced before the mode is switched — its disposal is asynchronous, so it could keep playing while the other mode had already started. The short video pool also opens videos paused and starts playback only after the load completes, so leaving the mode while a video is still loading can no longer produce sound
+* Short video mode: subtitles are no longer rendered (the subtitle track is disabled, saving decoding/rendering work)
+* Short video mode: scrubbing no longer reads a stale playback state captured at build time — pausing first and then dragging to seek could resume playback unexpectedly (or not resume at all)
+* Stability: all fire-and-forget player commands (pause / stop / dispose / seek) are now guarded, so a player that is being disposed can't raise an unhandled error
+* No other changes.
+
+### 更新日志
+
+* 短视频模式：修复画面比例异常（例如变成方形 / 被拉伸）——进入模式或切换视频后可能出现，重进模式或再切一条才恢复。根因：池内每个视频都用新建的播放器打开，而播放器的视频输出（纹理 / 画面尺寸）与视频打开是并行初始化的；视频先打开时 media_kit 的画面尺寸同步会丢失，画面一直停留在初始的 1x1 尺寸。现在池内会等视频输出就绪再打开视频，并在装载完成后、视频即将展示时各补一次尺寸同步（幂等，仅 Android）
+* 修复快速切换普通模式 / 短视频模式时两个播放器同时出声（例如刚点开视频就进短视频模式）：切换前会先显式静音即将被替换的播放器——它的销毁是异步的，否则会在新模式开始播放后还在出声；短视频池也改为"先暂停打开、装载完成后再播放"，装载途中退出模式不会再出声
+* 短视频模式：不再显示字幕（关闭字幕轨，省去字幕解码 / 渲染开销）
+* 短视频模式：进度拖动不再读取构建时捕获的过期播放状态——先暂停再拖动快进时，松手可能会意外恢复（或不恢复）播放
+* 稳定性：所有"发后不管"的播放器命令（暂停 / 停止 / 销毁 / 跳转）都做了保护，播放器正在销毁时不会再抛出未处理的错误
+* 本版无其他变化。
+
 ## v2.0.2
 
 ### Changelog

@@ -70,7 +70,10 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       }
     }();
     return () {
-      player.dispose();
+      // 先立即静音再异步销毁: dispose 内部要等播放器初始化 / 视频输出就绪,
+      // 可能明显滞后 (切换模式时旧播放器继续出声的根因之一)
+      unawaited(player.stop().catchError((_) {}));
+      unawaited(player.dispose().catchError((_) {}));
     };
   }, []);
 
@@ -202,6 +205,15 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
     isInitializing.value = true;
 
     try {
+      // 视频输出先于 open 就绪: 二者并行初始化时, 若视频先打开, 包内基于
+      // videoParams 的画面尺寸同步会丢失, 画面会一直按初始的 1x1 比例显示
+      // (带超时兜底, 视频输出不可用时也不能把 open 卡死)
+      try {
+        await controller.platform.future.timeout(const Duration(seconds: 2));
+      } catch (e) {
+        logger('Video output not ready: $e');
+      }
+
       final storage = useStorageStore().findById(file.storageId);
       final auth = storage?.getAuth();
       logger('Open file: $file');

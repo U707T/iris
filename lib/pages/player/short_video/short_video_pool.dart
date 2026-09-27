@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
@@ -18,6 +20,10 @@ import 'package:media_stream/media_stream.dart';
 
 /// 播放器池大小: 上一条 / 当前 / 下一条
 const int _shortVideoPoolSize = 3;
+
+/// media_kit_video 的视频输出通道 (Android 兜底校正画面尺寸用, 见 [_syncVideoOutputSize])
+const MethodChannel _videoOutputChannel =
+    MethodChannel('com.alexmercerind/media_kit_video');
 
 /// 时长取值: 优先非零值 (流事件可能缺失, 此时以同步状态兜底)
 Duration _preferNonZero(Duration? preferred, Duration fallback) {
@@ -90,6 +96,9 @@ class ShortVideoPool extends ChangeNotifier {
     return null;
   }
 
+  /// 最近一次处于活动状态的槽位 (当前下标暂无槽位时的兜底, 避免误用第一个槽位的画面)
+  ShortVideoSlot? get activeSlot => _active;
+
   /// 根据当前下标决定各槽位的装载目标 (在 build 中调用)
   void reconcile(int current, List<PlayQueueItem> items) {
     if (disposed) return;
@@ -151,6 +160,12 @@ class ShortVideoPool extends ChangeNotifier {
           position: state.position,
           duration: state.duration,
         ));
+      }
+
+      // 立即静音被复用的槽位 (正常情况下它已经不是活动槽位, 这里是兜底:
+      // 避免上一个视频的声音延续到新视频开始装载)
+      if (slot.player.state.playing) {
+        unawaited(slot.player.pause().catchError((_) {}));
       }
 
       slot.feedIndex = want;
@@ -217,8 +232,12 @@ class ShortVideoPool extends ChangeNotifier {
     if (_ensureActivePending) {
       _ensureActivePending = false;
       if (active != null && !active.initializing && !userPaused) {
-        unawaited(active.player.play());
+        unawaited(active.player.play().catchError((_) {}));
         active.played = true;
+      }
+      // 兜底: 即将展示这条视频时再校正一次画面尺寸 (Android, 幂等)
+      if (active != null) {
+        unawaited(_syncVideoOutputSize(active, token: active.token));
       }
     }
 
@@ -226,7 +245,7 @@ class ShortVideoPool extends ChangeNotifier {
     if (active != null) {
       for (final slot in slots) {
         if (slot != active && slot.player.state.playing) {
-          unawaited(slot.player.pause());
+          unawaited(slot.player.pause().catchError((_) {}));
         }
       }
     }
@@ -253,25 +272,40 @@ class ShortVideoPool extends ChangeNotifier {
 
     final token = ++slot.token;
     try {
-      // 先应用循环 / 倍速 / 音量等设置, 避免 open 即播时短暂使用默认音量
+      // 视频输出必须先于 open 就绪。
+      // 播放器刚创建时 VideoController 的视频输出 (纹理 / 画面尺寸) 与 open 是
+      // 并行初始化的; 若视频先打开, 包内基于 videoParams 的尺寸同步会因为视频
+      // 输出还不存在而丢失, 之后画面一直按初始的 1x1 比例显示 —— 表现为
+      // "短视频模式比例很奇怪", 切换视频或重进模式才恢复。这里显式等待。
+      await _ensureVideoOutputReady(slot.controller);
+      if (disposed || token != slot.token) return;
+
+      // 先应用循环 / 字幕关闭 / 倍速 / 音量等设置, 避免开始播放时短暂使用默认值
       final appState = useAppStore().state;
       await slot.player.setPlaylistMode(PlaylistMode.loop);
+      // 短视频流不显示字幕: 显式关闭, 省去字幕解码 / 渲染开销
+      await slot.player.setSubtitleTrack(SubtitleTrack.no());
       await slot.player.setRate(appState.rate);
       await slot.player.setVolume(
           appState.isMuted ? 0 : appState.volume.toDouble());
       if (disposed || token != slot.token) return;
 
-      // 当前视频直接随 open 开始播放, 减少一次命令往返
-      final playNow = !userPaused && slotFor(currentFeedIndex) == slot;
-      await slot.player.open(buildMedia(file), play: playNow);
+      // 一律以暂停方式打开: 由下面的显式 play() 决定是否开始播放。
+      // 不能依赖 open(play: true) —— 打开是异步的, 若这期间退出短视频模式,
+      // 视频仍会在装载完成后自动出声, 与新模式的播放器重叠 (操作过快时
+      // "主模式和短视频模式同时出声" 的成因之一)。
+      await slot.player.open(buildMedia(file), play: false);
       if (disposed || token != slot.token) return;
 
       slot.initializing = false;
       notifyListeners();
 
-      // 已成为当前视频则确保处于播放状态 (用户主动暂停过则跳过)
+      // 兜底: 打开后校正一次视频输出尺寸 (Android, 幂等, 正常情况下是空操作)
+      unawaited(_syncVideoOutputSize(slot, token: token, delay: true));
+
+      // 已成为当前视频则开始播放 (用户主动暂停过 / 已被卸载则跳过)
       if (!userPaused && slotFor(currentFeedIndex) == slot) {
-        unawaited(slot.player.play());
+        unawaited(slot.player.play().catchError((_) {}));
         slot.played = true;
       }
 
@@ -288,6 +322,69 @@ class ShortVideoPool extends ChangeNotifier {
     }
   }
 
+  /// 等待视频输出初始化完成 (带超时兜底: 个别平台上视频输出不可用时也不能卡死)
+  Future<void> _ensureVideoOutputReady(VideoController controller) async {
+    try {
+      await controller.platform.future.timeout(const Duration(seconds: 2));
+    } catch (e) {
+      logger('Short video pool: video output not ready: $e');
+    }
+  }
+
+  /// Android 兜底: 校正视频输出的画面尺寸。
+  ///
+  /// 正常情况下 [VideoController] 收到 videoParams 会自动同步尺寸; 但在
+  /// "视频输出创建晚于 open" 等竞态下, 这次同步会丢失, 之后画面一直按初始的
+  /// 1x1 比例显示 (表现为短视频模式比例很奇怪, 切换视频 / 重进模式才恢复)。
+  /// 这里在装载完成后和即将展示时各补一次: 尺寸一致时原生侧会直接忽略,
+  /// 因此重复调用是安全且几乎零成本的。
+  Future<void> _syncVideoOutputSize(
+    ShortVideoSlot slot, {
+    required int token,
+    bool delay = false,
+  }) async {
+    if (!Platform.isAndroid) return;
+    try {
+      if (delay) {
+        // 给包内的尺寸同步留出时间, 避免和它同时写入
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        if (disposed || token != slot.token) return;
+      }
+      // 仍在装载 (尺寸可能还是上一条视频的) 时跳过
+      if (slot.initializing) return;
+
+      final params = slot.player.state.videoParams;
+      final dw = params.dw;
+      final dh = params.dh;
+      if (dw == null || dh == null || dw == 0 || dh == 0) return;
+
+      // 与 media_kit 的 AndroidVideoController 保持一致: 90/270 度旋转时宽高互换
+      final rotate = params.rotate ?? 0;
+      final int width;
+      final int height;
+      if (rotate == 0 || rotate == 180) {
+        width = dw;
+        height = dh;
+      } else {
+        width = dh;
+        height = dw;
+      }
+
+      final handle = await slot.player.handle;
+      if (disposed || token != slot.token) return;
+      await _videoOutputChannel.invokeMethod(
+        'VideoOutputManager.SetSurfaceSize',
+        {
+          'handle': handle.toString(),
+          'width': width.toString(),
+          'height': height.toString(),
+        },
+      );
+    } catch (e) {
+      logger('Short video pool: sync video output size failed: $e');
+    }
+  }
+
   /// duration 兜底: 短时间内轮询同步状态, 拿到值后通知界面刷新
   Future<void> _ensureSlotDuration(ShortVideoSlot slot, int token) async {
     for (var attempt = 0; attempt < 4; attempt++) {
@@ -299,7 +396,7 @@ class ShortVideoPool extends ChangeNotifier {
       }
       if (attempt == 1) {
         // 温和触发一次属性刷新 (跳到当前位置)
-        unawaited(slot.player.seek(slot.player.state.position));
+        unawaited(slot.player.seek(slot.player.state.position).catchError((_) {}));
       }
     }
   }
@@ -320,12 +417,26 @@ class ShortVideoPool extends ChangeNotifier {
     ));
   }
 
+  /// 立即静音所有槽位 (模式切换前调用, 见 player_handoff.dart)。
+  /// 销毁是异步的 (要等播放器初始化 / 锁), 先暂停才能保证不和新播放器同时出声。
+  void silence() {
+    for (final slot in slots) {
+      if (slot.player.state.playing) {
+        unawaited(slot.player.pause().catchError((_) {}));
+      }
+    }
+  }
+
   @override
   void dispose() {
     disposed = true;
     for (final slot in slots) {
       if (slot.played) saveSlotProgress(slot);
-      slot.player.dispose();
+      // 先立即静音, 再异步销毁
+      if (slot.player.state.playing) {
+        unawaited(slot.player.pause().catchError((_) {}));
+      }
+      unawaited(slot.player.dispose().catchError((_) {}));
     }
     super.dispose();
   }
@@ -423,7 +534,8 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
     return;
   }, [volume, isMuted]);
 
-  final active = pool.slotFor(currentFeedIndex) ?? pool.slots.first;
+  final active =
+      pool.slotFor(currentFeedIndex) ?? pool.activeSlot ?? pool.slots.first;
   final activePlayer = active.player;
 
   // 注意: media_kit 的流不重放历史事件, 订阅开始前发生的事件会错过
@@ -452,26 +564,39 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
     final slot = pool.slotFor(pool.currentFeedIndex);
     if (slot == null) return;
     pool.userPaused = false;
-    await slot.player.play();
-    slot.played = true;
+    // 播放器可能正在销毁 (模式刚退出), 失败时忽略
+    try {
+      await slot.player.play();
+      slot.played = true;
+    } catch (e) {
+      logger('Short video play error: $e');
+    }
   }
 
   Future<void> pause() async {
     final slot = pool.slotFor(pool.currentFeedIndex);
     if (slot == null) return;
     pool.userPaused = true;
-    await slot.player.pause();
+    try {
+      await slot.player.pause();
+    } catch (e) {
+      logger('Short video pause error: $e');
+    }
   }
 
   Future<void> seek(Duration newPosition) async {
     final slot = pool.slotFor(pool.currentFeedIndex);
     if (slot == null) return;
     final liveDuration = _preferNonZero(duration, slot.player.state.duration);
-    newPosition.inMilliseconds < 0
-        ? await slot.player.seek(Duration.zero)
-        : liveDuration > Duration.zero && newPosition > liveDuration
-            ? await slot.player.seek(liveDuration)
-            : await slot.player.seek(newPosition);
+    try {
+      newPosition.inMilliseconds < 0
+          ? await slot.player.seek(Duration.zero)
+          : liveDuration > Duration.zero && newPosition > liveDuration
+              ? await slot.player.seek(liveDuration)
+              : await slot.player.seek(newPosition);
+    } catch (e) {
+      logger('Short video seek error: $e');
+    }
   }
 
   Future<void> backward(int seconds) async =>
@@ -483,14 +608,22 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
   Future<void> stepBackward() async {
     final nativePlayer = pool.slotFor(pool.currentFeedIndex)?.player.platform;
     if (nativePlayer is NativePlayer) {
-      await nativePlayer.command(['frame-back-step']);
+      try {
+        await nativePlayer.command(['frame-back-step']);
+      } catch (e) {
+        logger('Short video step backward error: $e');
+      }
     }
   }
 
   Future<void> stepForward() async {
     final nativePlayer = pool.slotFor(pool.currentFeedIndex)?.player.platform;
     if (nativePlayer is NativePlayer) {
-      await nativePlayer.command(['frame-step']);
+      try {
+        await nativePlayer.command(['frame-step']);
+      } catch (e) {
+        logger('Short video step forward error: $e');
+      }
     }
   }
 

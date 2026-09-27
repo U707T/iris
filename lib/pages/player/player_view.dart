@@ -6,6 +6,7 @@ import 'package:iris/hooks/player/use_media_kit_player.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/models/store/app_state.dart';
 import 'package:iris/pages/player/player.dart';
+import 'package:iris/pages/player/player_handoff.dart';
 import 'package:iris/pages/player/short_video/short_video_pool.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:provider/provider.dart';
@@ -46,6 +47,11 @@ class _MediaKitNormalHost extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final player = useMediaKitPlayer(context);
+    // 注册当前播放器: 切换模式前先静音, 避免旧播放器 (异步销毁) 和新播放器同时出声
+    useEffect(() {
+      registerActivePlayer(player);
+      return () => unregisterActivePlayer(player);
+    }, [player]);
     return Provider<MediaPlayer>.value(
       value: player,
       child: const Player(key: ValueKey('media_kit_player')),
@@ -59,6 +65,11 @@ class _MediaKitShortVideoHost extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final player = useShortVideoMediaKitPlayer(context);
+    // 注册当前播放器 (池): 退出短视频模式前先静音全部槽位
+    useEffect(() {
+      registerActivePlayer(player);
+      return () => unregisterActivePlayer(player);
+    }, [player]);
     return Provider<MediaPlayer>.value(
       value: player,
       child: const Player(key: ValueKey('media_kit_short_video_player')),

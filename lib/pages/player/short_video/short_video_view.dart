@@ -17,10 +17,11 @@ import 'package:video_player/video_player.dart';
 
 void _togglePlay(BuildContext context) {
   final player = context.read<MediaPlayer>();
+  // 播放器可能正在销毁 (例如刚好退出模式), 失败时忽略
   if (player.isPlaying) {
-    player.pause();
+    player.pause().catchError((_) {});
   } else {
-    player.play();
+    player.play().catchError((_) {});
   }
 }
 
@@ -183,8 +184,12 @@ class ShortVideoView extends HookWidget {
     void scrubStart(Duration target) {
       scrubSession.value++;
       scrubActive.value = true;
-      scrubResume.value = player.isPlaying;
-      if (scrubResume.value) player.pause();
+      // 同 onDoubleTapDown: 用 context.read 取实时实例 —— 播放期间本组件不会重建,
+      // build 时捕获的实例里 isPlaying 是过期的, 先暂停再拖动时会误判为"未播放",
+      // 松手后不恢复 (或反过来意外恢复) 播放。
+      final currentPlayer = context.read<MediaPlayer>();
+      scrubResume.value = currentPlayer.isPlaying;
+      if (scrubResume.value) currentPlayer.pause();
       lastScrubSeekAt.value = null;
       scrubSeek(target, force: true);
     }
@@ -301,7 +306,12 @@ class ShortVideoView extends HookWidget {
       final slot = pool?.slotFor(index);
       final Widget content;
       if (slot != null) {
-        content = _MediaKitVideoSurface(controller: slot.controller);
+        // key 绑定到播放器实例: 槽位换播放器时强制重建画面 widget,
+        // 避免复用旧的订阅 / 可见性状态
+        content = _MediaKitVideoSurface(
+          key: ValueKey(slot.controller),
+          controller: slot.controller,
+        );
       } else if (index == currentFeedIndex) {
         content = const _FeedVideo();
       } else {
@@ -504,7 +514,7 @@ class _FeedVideo extends StatelessWidget {
 
 /// Media Kit 视频画面 (始终 contain 适配)
 class _MediaKitVideoSurface extends StatelessWidget {
-  const _MediaKitVideoSurface({required this.controller});
+  const _MediaKitVideoSurface({super.key, required this.controller});
 
   final VideoController controller;
 
@@ -514,6 +524,10 @@ class _MediaKitVideoSurface extends StatelessWidget {
       child: Video(
         controller: controller,
         controls: NoVideoControls,
+        // 短视频流不显示字幕 (池内已关闭字幕轨, 这里再关掉字幕层)
+        subtitleViewConfiguration: const SubtitleViewConfiguration(
+          visible: false,
+        ),
         fit: BoxFit.contain,
       ),
     );
