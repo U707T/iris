@@ -1,3 +1,23 @@
+## v2.2.0
+
+### Changelog
+
+* **Long-press speed-up** now shows the same effect everywhere: a soft white light streak breathing on the left and the right edge of the picture, in the normal player and in short video mode — the box with the speed number in the middle of the screen is gone, the centre of the picture stays clean. The effect lives in one shared widget (`lib/widgets/speed_boost_effect.dart`) instead of two copies, and its animation stops while hidden
+* **Short video mode volume button** (added in 2.1.0) was reworked: it sits at the top of the right-hand action column (above the play / pause button), and it now adjusts the **device volume** (the absolute volume the hardware volume keys change) instead of the player's software volume, exactly like the up / down drag in the normal player. It also reacts much faster: the long press is recognised after 0.1 s (was 0.5 s), the level is written straight to the system (no batching through the player), the current volume shows up as soon as you hold the button, and sliding is 2 px per 1 %. Tapping still only mutes IRIS itself, and the system volume panel stays hidden while adjusting
+* **Fixed videos starting with sound but a black picture** ("开局黑屏"): the player now opens videos paused and waits for the first frame to be ready before playback starts, so audio and picture appear together. Short video mode also decodes the first frame of the preloaded neighbours, so swiping to the next video shows a picture right away
+* **Shuffle rework**: the random order is regenerated every time shuffle is switched on (and the file order is restored when it is switched off), and the queue is re-shuffled on launch when shuffle is enabled, so every start of the app plays a fresh order — the whole list is played through in random order, with the current video kept first. Both the control-bar button and Ctrl + X use the same code path now
+* Stability: waiting for the first frame is capped by a timeout so a video can never stall the player; shuffle / queue sorting handle empty, single-item and unknown-index queues safely
+* No other changes.
+
+### 更新日志
+
+* **长按倍速动效统一**：主播放界面与短视频模式都改成画面左右两侧各一道呼吸的白色光带，画面中央的倍速提示方块去掉，中央区域保持干净。动效抽成一个公共组件（`lib/widgets/speed_boost_effect.dart`），两处共用、不再各写一套，隐藏时动画自动停掉
+* **短视频模式音量按钮**（2.1.0 新增）重做：位置移到右侧操作栏最上方（暂停按钮之上）；改为调节**设备音量**（绝对音量，就是手机音量键看到的那个），与主界面上下拖动完全一致；响应也更快——长按识别 0.1s（原 0.5s）、音量直写系统（不再经播放器批量写入）、一按住就显示当前音量、滑动灵敏度 2px = 1%。点击仍然只静音 IRIS 自己，调节期间不弹系统音量条
+* **修复"开局有声音但画面黑着"**：视频现在先以暂停方式打开，等首帧就绪后再开始播放，音画一起出现；短视频模式还会把预载的上一条 / 下一条先解出首帧，滑过去立刻有画面
+* **随机播放机制重做**：每次打开随机都会**重新洗牌**（关闭时恢复文件原始顺序），启动应用时若随机开着也会重洗一次，因此每次打开应用都是新的顺序——按这份顺序把整个列表播完，当前这条始终排在最前。控制栏按钮与 Ctrl + X 现在走同一套逻辑
+* 稳定性：等待首帧带超时兜底，个别视频不会把播放卡住；随机 / 队列排序对空队列、单条队列、下标不存在等情况都做了保护
+* 本版无其他变化。
+
 ## v2.2.0-rc.2
 
 ### Changelog

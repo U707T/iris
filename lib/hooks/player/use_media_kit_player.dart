@@ -17,6 +17,7 @@ import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/wait_for_first_frame.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:media_stream/media_stream.dart';
@@ -217,6 +218,9 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       final storage = useStorageStore().findById(file.storageId);
       final auth = storage?.getAuth();
       logger('Open file: $file');
+      // 视频: 先以暂停方式打开, 等首帧渲染出来再开始播放 —— 否则音频会先出声,
+      // 画面还黑着 (视频输出 / 首帧解码比音频慢)
+      final waitFirstFrame = autoPlay && file.type == ContentType.video;
       await player.open(
         Media(
           file.storageType == StorageType.ftp
@@ -224,8 +228,12 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
               : file.uri,
           httpHeaders: auth != null ? {'authorization': auth} : {},
         ),
-        play: autoPlay,
+        play: autoPlay && !waitFirstFrame,
       );
+      if (waitFirstFrame) {
+        await waitForFirstFrame(controller);
+        await player.play();
+      }
     } catch (e) {
       logger('Error initializing player: $e');
     }

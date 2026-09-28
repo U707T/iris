@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "IRIS"
-#define MyAppVersion "2.2.0-rc.2"
+#define MyAppVersion "2.2.0"
 #define MyAppPublisher "nini22P"
 #define MyAppURL "https://github.com/nini22P/iris"
 #define MyAppExeName "iris.exe"

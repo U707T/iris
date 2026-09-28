@@ -15,6 +15,7 @@ import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/short_video.dart';
 import 'package:iris/utils/take_screenshot.dart';
+import 'package:iris/utils/toggle_shuffle.dart';
 import 'package:iris/widgets/dialogs/show_shortcuts_dialog.dart';
 import 'package:iris/widgets/bottom_sheets/show_open_link_bottom_sheet.dart';
 import 'package:iris/widgets/dialogs/show_open_link_dialog.dart';
@@ -52,7 +53,6 @@ KeyboardEvent useKeyboard({
       }
 
       if (HardwareKeyboard.instance.isControlPressed) {
-        final appState = useAppStore().state;
         switch (event.logicalKey) {
           // 截图
           case LogicalKeyboardKey.keyS:
@@ -106,12 +106,7 @@ KeyboardEvent useKeyboard({
           // 随机
           case LogicalKeyboardKey.keyX:
             showControl();
-            if (appState.shuffle) {
-              usePlayQueueStore().sort();
-            } else {
-              usePlayQueueStore().shuffle();
-            }
-            useAppStore().updateShuffle(!appState.shuffle);
+            await toggleShuffle();
             break;
           // 循环
           case LogicalKeyboardKey.keyR:

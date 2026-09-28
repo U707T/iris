@@ -14,6 +14,7 @@ import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/short_video.dart';
+import 'package:iris/utils/wait_for_first_frame.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:media_stream/media_stream.dart';
@@ -295,6 +296,12 @@ class ShortVideoPool extends ChangeNotifier {
       // 视频仍会在装载完成后自动出声, 与新模式的播放器重叠 (操作过快时
       // "主模式和短视频模式同时出声" 的成因之一)。
       await slot.player.open(buildMedia(file), play: false);
+      if (disposed || token != slot.token) return;
+
+      // 等视频输出出首帧再往下走 (包含"成为当前视频后开始播放"),
+      // 否则会出现"先响声音、画面还黑着"; 预载槽位也顺手把首帧解出来,
+      // 滑动切过去时画面是现成的。
+      await waitForFirstFrame(slot.controller);
       if (disposed || token != slot.token) return;
 
       slot.initializing = false;

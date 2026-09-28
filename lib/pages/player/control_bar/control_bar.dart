@@ -27,6 +27,7 @@ import 'package:iris/utils/short_video.dart';
 import 'package:iris/utils/take_screenshot.dart';
 import 'package:iris/widgets/popups/play_queue.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/toggle_shuffle.dart';
 import 'package:iris/widgets/popup.dart';
 import 'package:iris/widgets/popups/storages/storages.dart';
 import 'package:provider/provider.dart';
@@ -207,8 +208,7 @@ class ControlBar extends HookWidget {
         ),
         onPressed: () {
           showControl();
-          shuffle ? usePlayQueueStore().sort() : usePlayQueueStore().shuffle();
-          useAppStore().updateShuffle(!shuffle);
+          toggleShuffle();
         },
         style: ButtonStyle(overlayColor: overlayColor),
       ),
