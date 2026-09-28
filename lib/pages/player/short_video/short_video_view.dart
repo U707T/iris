@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
+import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/short_video/short_video_pool.dart';
@@ -11,6 +12,7 @@ import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/utils/format_duration_to_minutes.dart';
 import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/short_video.dart';
 import 'package:iris/utils/take_screenshot.dart';
 import 'package:iris/widgets/speed_boost_effect.dart';
@@ -215,10 +217,10 @@ class ShortVideoView extends HookWidget {
       });
     }
 
-    // 音量调节 (长按音量按钮后上下滑动):
-    // 与进度拖动同一套思路 —— 本地预览值实时跟手 (只重建指示器),
-    // 写入 store 做节流 (避免每帧都触发 3 个播放器的 setVolume),
-    // 松手时落盘一次。
+    // 设备音量调节 (在音量按钮上按住后上下滑动):
+    // 与主界面上下拖动一致 —— 调的是**设备音量**(绝对音量, 手机音量键那个),
+    // 直接写 FlutterVolumeController: 平台调用本身很快, 这里不做节流,
+    // 否则声音会明显跟不上手指 (播放层的 setVolume 才需要节流)。
     final volumePreview = useMemoized(() => ValueNotifier<double?>(null), []);
     final volumeAlive = useRef(true);
     useEffect(() {
@@ -226,69 +228,107 @@ class ShortVideoView extends HookWidget {
       return () {
         volumeAlive.value = false;
         volumePreview.dispose();
+        // 离开模式时把"不显示系统音量条"的开关恢复, 免得影响别处
+        unawaited(FlutterVolumeController.updateShowSystemUI(true));
       };
     }, [volumePreview]);
     final volumeSession = useRef(0);
     final volumeActive = useRef(false);
-    final volumeStart = useRef(0);
+    /// 设备音量是否已读回 (读回前不处理位移, 免得拿旧值当基准)
+    final volumeReady = useRef(false);
+    /// 调节开始时的设备音量 (0~100) 与按下位置
+    final volumeStart = useRef(0.0);
     final volumeStartDy = useRef(0.0);
-    final lastVolumePushAt = useRef<DateTime?>(null);
 
-    /// 每滑动该像素数代表 1% 音量 (上下滑 260px = 0~100)
-    const double volumeDragPixelsPerPercent = 2.6;
-    /// 写入 store 的最小间隔
-    const Duration volumePushInterval = Duration(milliseconds: 100);
+    /// 每滑动该像素数代表 1% 音量 (与主界面上下拖动一致: 200px = 100%)
+    const double volumeDragPixelsPerPercent = 2.0;
 
-    void pushVolume(double value, {bool force = false}) {
-      final now = DateTime.now();
-      final last = lastVolumePushAt.value;
-      if (force ||
-          last == null ||
-          now.difference(last) >= volumePushInterval) {
-        lastVolumePushAt.value = now;
-        unawaited(useAppStore().updateVolume(value.round(), persist: false));
+    Future<void> applyDeviceVolume(double value) async {
+      try {
+        await FlutterVolumeController.setVolume(value / 100);
+      } catch (e) {
+        logger('Error setting volume: $e');
       }
     }
 
-    void volumeAdjustStart(Offset globalPosition) {
-      volumeSession.value++;
-      volumeActive.value = true;
-      final appState = useAppStore().state;
-      // 静音状态下调节音量 -> 自动取消静音, 否则调了也听不到
-      if (appState.isMuted) {
-        unawaited(useAppStore().updateMute(false));
+    /// 读当前设备音量 (0~100); 失败 / 平台不支持时回退到应用内音量设置
+    Future<double> readDeviceVolume() async {
+      try {
+        final value = await FlutterVolumeController.getVolume();
+        if (value != null) return (value * 100).clamp(0.0, 100.0);
+      } catch (e) {
+        logger('Error getting volume: $e');
       }
-      volumeStart.value = appState.volume;
-      volumeStartDy.value = globalPosition.dy;
-      lastVolumePushAt.value = null;
-      volumePreview.value = appState.volume.toDouble();
+      return useAppStore().state.volume.toDouble();
     }
 
-    void volumeAdjustUpdate(Offset globalPosition) {
-      if (!volumeActive.value) return;
-      final delta =
-          (volumeStartDy.value - globalPosition.dy) / volumeDragPixelsPerPercent;
-      final value = (volumeStart.value + delta).clamp(0.0, 100.0);
-      volumePreview.value = value;
-      pushVolume(value);
-    }
-
-    void volumeAdjustEnd() {
-      if (!volumeActive.value) return;
-      volumeActive.value = false;
-      lastVolumePushAt.value = null;
-      final value = volumePreview.value;
+    /// 调节结束 / 滚轮微调后, 预览值保留一小段时间再收起
+    void scheduleVolumePreviewClear() {
       final session = ++volumeSession.value;
-      // 落盘最终值
-      if (value != null) {
-        unawaited(useAppStore().updateVolume(value.round()));
-      }
-      // 保留预览值一小段时间, 避免松手瞬间指示器先跳回旧值
       Future<void>.delayed(const Duration(milliseconds: 320), () {
         if (volumeAlive.value && volumeSession.value == session) {
           volumePreview.value = null;
         }
       });
+    }
+
+    void volumeAdjustStart(Offset globalPosition) {
+      volumeSession.value++;
+      volumeActive.value = true;
+      volumeReady.value = false;
+      volumeStartDy.value = globalPosition.dy;
+      volumePreview.value = null;
+      // 调节期间不弹系统音量条 (自己已经有指示器了), 与主界面上下拖动一致
+      unawaited(FlutterVolumeController.updateShowSystemUI(false));
+      // 设备音量只能异步读: 长按识别 (100ms) 到手指真正滑动之间通常够它读完
+      final session = volumeSession.value;
+      unawaited(() async {
+        final value = await readDeviceVolume();
+        if (!volumeAlive.value ||
+            !volumeActive.value ||
+            volumeSession.value != session) {
+          return;
+        }
+        volumeStart.value = value;
+        volumeReady.value = true;
+        volumePreview.value = value;
+      }());
+    }
+
+    void volumeAdjustUpdate(Offset globalPosition) {
+      if (!volumeActive.value || !volumeReady.value) return;
+      // 应用处于静音时, 一旦真的开始滑动就先取消静音, 否则调了也听不到
+      // (按住不滑动松手 = 点击, 不在这里处理, 免得把点击语义吃掉)
+      if (useAppStore().state.isMuted) {
+        unawaited(useAppStore().updateMute(false));
+      }
+      final delta =
+          (volumeStartDy.value - globalPosition.dy) / volumeDragPixelsPerPercent;
+      final value = (volumeStart.value + delta).clamp(0.0, 100.0);
+      volumePreview.value = value;
+      unawaited(applyDeviceVolume(value));
+    }
+
+    void volumeAdjustEnd() {
+      if (!volumeActive.value) return;
+      volumeActive.value = false;
+      volumeReady.value = false;
+      // 恢复系统音量条 (退出模式 / 结束调节后, 硬件音量键照常显示)
+      unawaited(FlutterVolumeController.updateShowSystemUI(true));
+      // 设备音量由系统自己记住, 无需落盘, 收起指示器即可
+      scheduleVolumePreviewClear();
+    }
+
+    /// PC: 指针悬停在音量按钮上滚轮 = 微调设备音量 (同时取代翻页)
+    Future<void> volumeWheel(double deltaPercent) async {
+      if (useAppStore().state.isMuted) {
+        unawaited(useAppStore().updateMute(false));
+      }
+      final base = volumePreview.value ?? await readDeviceVolume();
+      final value = (base + deltaPercent).clamp(0.0, 100.0);
+      volumePreview.value = value;
+      unawaited(applyDeviceVolume(value));
+      scheduleVolumePreviewClear();
     }
 
     // 水平拖动调节进度 (相对拖动, 任意位置可用)
@@ -520,6 +560,7 @@ class ShortVideoView extends HookWidget {
                   onVolumeAdjustStart: volumeAdjustStart,
                   onVolumeAdjustUpdate: volumeAdjustUpdate,
                   onVolumeAdjustEnd: volumeAdjustEnd,
+                  onVolumeWheel: volumeWheel,
                 ),
               ),
               // 音量调节指示 (长按音量按钮上下滑动时显示)
@@ -604,12 +645,14 @@ class _FeedActions extends HookWidget {
     required this.onVolumeAdjustStart,
     required this.onVolumeAdjustUpdate,
     required this.onVolumeAdjustEnd,
+    required this.onVolumeWheel,
   });
 
   final ValueNotifier<double?> volumePreview;
   final void Function(Offset globalPosition) onVolumeAdjustStart;
   final void Function(Offset globalPosition) onVolumeAdjustUpdate;
   final void Function() onVolumeAdjustEnd;
+  final void Function(double deltaPercent) onVolumeWheel;
 
   @override
   Widget build(BuildContext context) {
@@ -626,6 +669,7 @@ class _FeedActions extends HookWidget {
           onAdjustStart: onVolumeAdjustStart,
           onAdjustUpdate: onVolumeAdjustUpdate,
           onAdjustEnd: onVolumeAdjustEnd,
+          onWheel: onVolumeWheel,
         ),
         const SizedBox(height: 12),
         _FeedIconButton(
@@ -644,20 +688,23 @@ class _FeedActions extends HookWidget {
   }
 }
 
-/// 音量按钮: 点击 = 静音 / 取消静音 (音量 0 时恢复 80);
-/// 按住 0.1s 后上下滑动 = 调节音量 (仅按住按钮时生效, 不影响翻页 / 倍速 / 播放暂停)。
+/// 音量按钮: 点击 = 静音 / 取消静音 (只静音本应用, 应用音量为 0 时恢复 80);
+/// 按住 0.1s 后上下滑动 = 调节**设备音量**(绝对音量, 与主界面上下拖动一致);
+/// 仅按住按钮时生效, 不影响翻页 / 倍速 / 播放暂停。
 class _FeedVolumeButton extends HookWidget {
   const _FeedVolumeButton({
     required this.volumePreview,
     required this.onAdjustStart,
     required this.onAdjustUpdate,
     required this.onAdjustEnd,
+    required this.onWheel,
   });
 
   final ValueNotifier<double?> volumePreview;
   final void Function(Offset globalPosition) onAdjustStart;
   final void Function(Offset globalPosition) onAdjustUpdate;
   final void Function() onAdjustEnd;
+  final void Function(double deltaPercent) onWheel;
 
   /// 长按识别时长: 系统默认 500ms 太迟钝, 音量调节要求按住 100ms 就接管指针
   static const Duration _longPressDelay = Duration(milliseconds: 100);
@@ -690,16 +737,17 @@ class _FeedVolumeButton extends HookWidget {
       anchor.value = details.globalPosition;
       holding.value = true;
       sliding.value = false;
+      // 长按一识别就进入调节: 立刻去读设备音量并显示出指示器,
+      // 手指真正滑动时基准值已经就绪 (没有"先等半秒才开始"的感觉)
+      onAdjustStart(anchor.value);
     }
 
     void onPressMove(LongPressMoveUpdateDetails details) {
       if (!holding.value) return;
       if (!sliding.value) {
-        // 抖动不算滑动: 此时不显示指示器, 松手仍按点击处理
+        // 抖动不算滑动 (此时松手仍按点击处理)
         if (details.offsetFromOrigin.dy.abs() < _slideSlop) return;
         sliding.value = true;
-        // 以长按起点为基准, 第一段位移也计入音量变化
-        onAdjustStart(anchor.value);
       }
       onAdjustUpdate(details.globalPosition);
     }
@@ -710,9 +758,8 @@ class _FeedVolumeButton extends HookWidget {
       final wasSliding = sliding.value;
       holding.value = false;
       sliding.value = false;
-      if (wasSliding) {
-        onAdjustEnd();
-      } else {
+      onAdjustEnd();
+      if (!wasSliding) {
         // 按住但没滑动 = 点击 (长按已接管指针, IconButton 收不到点击)
         toggleMuteOrRestore();
       }
@@ -737,7 +784,7 @@ class _FeedVolumeButton extends HookWidget {
             ),
           },
           child: Listener(
-            // PC: 指针悬停在按钮上滚轮 = 微调音量 (拦截并取代翻页)
+            // PC: 指针悬停在按钮上滚轮 = 微调设备音量 (拦截并取代翻页)
             onPointerSignal: (event) {
               if (event is! PointerScrollEvent) return;
               GestureBinding.instance.pointerSignalResolver
@@ -745,13 +792,9 @@ class _FeedVolumeButton extends HookWidget {
                 final scrollEvent = resolved as PointerScrollEvent;
                 final dy = scrollEvent.scrollDelta.dy;
                 if (dy == 0) return;
-                if (useAppStore().state.isMuted) {
-                  useAppStore().updateMute(false);
-                }
                 // 一格 (约 100px) 约 5% (1~10 之间)
-                final step = (dy.abs() / 20).ceil().clamp(1, 10);
-                final current = useAppStore().state.volume;
-                useAppStore().updateVolume(dy < 0 ? current + step : current - step);
+                final step = (dy.abs() / 20).ceil().clamp(1, 10).toDouble();
+                onWheel(dy < 0 ? step : -step);
               });
             },
             child: ValueListenableBuilder<double?>(

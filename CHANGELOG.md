@@ -1,3 +1,23 @@
+## v2.2.0-rc.2
+
+### Changelog
+
+* Short video mode: the volume button now adjusts the **device volume** — the absolute volume you see with the hardware volume keys — instead of the player's own software volume, so it behaves exactly like the up / down drag in the normal player. Tap still only mutes IRIS itself (other apps keep playing), and starting to slide while IRIS is muted unmutes it first so the change is audible
+* Sliding now reacts much faster: the device volume is written straight to the system (no more 100 ms batching through the player), the current device volume appears as soon as the long press is recognised (no waiting for the first movement), and the sensitivity matches the normal player's drag (2 px = 1%)
+* The system volume panel stays hidden while adjusting (IRIS shows its own indicator) and is restored afterwards / when leaving the mode
+* Desktop: scrolling the wheel over the button fine-tunes the device volume as well
+* No other changes.
+* This is a release candidate (RC) build for testing before the next stable release.
+
+### 更新日志
+
+* 短视频模式：音量按钮改为调节**设备音量**（绝对音量，就是手机音量键看到的那个），不再改播放器自身的软件音量——手感和行为与主界面上下拖动完全一致。点击仍然只静音 IRIS 自己（不影响其他应用）；静音状态下开始滑动会先自动取消静音，否则调了也听不到
+* 滑动明显更跟手：设备音量直写系统（不再经播放器 100ms 批量写入），长按一识别就显示当前设备音量（不用等第一次滑动），灵敏度也与主界面上下拖动对齐（2px = 1%）
+* 调节期间不弹系统音量条（IRIS 自己已有指示器），结束调节 / 退出模式后恢复
+* 桌面端：指针悬停在按钮上滚轮同样改为微调设备音量
+* 本版无其他变化。
+* 本版本为候选发布版（RC），用于正式版发布前的测试验证
+
 ## v2.2.0-rc.1
 
 ### Changelog
