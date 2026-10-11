@@ -6,12 +6,12 @@ on:
       - dev
     paths-ignore:
       - README.md
-      - README_CN.md
+      - README_EN.md
       - LICENSE
   pull_request:
     paths-ignore:
       - README.md
-      - README_CN.md
+      - README_EN.md
       - LICENSE
   workflow_dispatch:
 
