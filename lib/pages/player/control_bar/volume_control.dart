@@ -50,12 +50,13 @@ class VolumeControl extends HookWidget {
         if (event is PointerScrollEvent) {
           if (event.scrollDelta.dy < 0) {
             showControl();
+            // 静音时上滚 = 取消静音并把音量加上去。
+            // (旧实现先 updateVolume(0) 再取消静音, 第一格滚动"取消了静音
+            // 却还是没声音", 要再滚一次才听得到。)
             if (isMuted) {
-              await useAppStore().updateVolume(0);
               await useAppStore().updateMute(false);
-            } else {
-              useAppStore().updateVolume(volume + 2);
             }
+            await useAppStore().updateVolume(volume + 2);
           } else {
             showControl();
             useAppStore().updateVolume(volume - 2);

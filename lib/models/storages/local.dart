@@ -166,9 +166,9 @@ Future<PlayQueueState?> getLocalPlayQueue(String filePath) async {
       .map((entry) => PlayQueueItem(file: entry.value, index: entry.key))
       .toList();
 
-  final clickedFile = filteredFiles.where((file) => file.uri == filePath).first;
+  final clickedIndex = filteredFiles.indexWhere((file) => file.uri == filePath);
 
-  final index = filteredFiles.indexOf(clickedFile);
+  final index = clickedIndex < 0 ? 0 : clickedIndex;
   return PlayQueueState(
     playQueue: playQueue,
     currentIndex: index < 0 || index >= playQueue.length ? 0 : index,

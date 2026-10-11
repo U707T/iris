@@ -72,6 +72,7 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
       set(state.copyWith(playQueue: [], currentIndex: 0));
     } else {
       final index = state.playQueue.indexOf(item);
+      if (index < 0) return;
       if (state.playQueue[index].index == state.currentIndex) {
         if (index + 1 < state.playQueue.length) {
           set(state.copyWith(

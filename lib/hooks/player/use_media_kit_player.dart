@@ -145,6 +145,9 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
   final isInitializing = useState(false);
 
+  /// 装载会话: 每次 init 递增, 用于丢弃过期的异步结果
+  final openSession = useRef(0);
+
   // 播放统计 (由定时器异步刷新, 供 UI 同步读取)
   final mediaKitStats = useRef<Map<String, String>?>(null);
   final statsTimer = useRef<Timer?>(null);
@@ -203,6 +206,7 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
   Future<void> init(FileItem file) async {
     if (file.uri == '') return;
+    final session = ++openSession.value;
     isInitializing.value = true;
 
     try {
@@ -232,13 +236,20 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       );
       if (waitFirstFrame) {
         await waitForFirstFrame(controller);
-        await player.play();
+        // 等待期间用户可能已暂停 / 已切换文件: 这时不要抢回播放
+        final stillCurrent = session == openSession.value;
+        if (stillCurrent && useAppStore().state.autoPlay) {
+          await player.play();
+        }
       }
     } catch (e) {
       logger('Error initializing player: $e');
     }
 
-    isInitializing.value = false;
+    // 已有更新的装载在进行时, 由它负责收尾 (避免提前熄灭加载指示)
+    if (session == openSession.value) {
+      isInitializing.value = false;
+    }
   }
 
   useEffect(() {

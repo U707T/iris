@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -23,8 +26,10 @@ final List<double> deviceVolumeSets = [];
 /// 记录设备音量 + 系统音量条开关的调用
 final List<String> deviceVolumeCalls = [];
 
-/// 假设备音量 (0.5 = 50%), 并把插件通道换成可断言的假实现
-void _mockVolumeController({double volume = 0.5}) {
+/// 假设备音量 (0.5 = 50%), 并把插件通道换成可断言的假实现。
+/// [readGate] 非空时, getVolume 会挂起直到该 Completer 完成,
+/// 用于复现"读取尚未返回时又来了下一次调节"的并发竞态。
+void _mockVolumeController({double volume = 0.5, Completer<String>? readGate}) {
   deviceVolumeSets.clear();
   deviceVolumeCalls.clear();
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -33,6 +38,7 @@ void _mockVolumeController({double volume = 0.5}) {
     deviceVolumeCalls.add(call.method);
     switch (call.method) {
       case 'getVolume': // 插件读回来的是字符串
+        if (readGate != null) return await readGate.future;
         return '$volume';
       case 'setVolume':
         deviceVolumeSets.add((call.arguments as Map)['volume'] as double);
@@ -265,6 +271,73 @@ void main() {
     await tester.runAsync(() async {
       await useAppStore().updateMute(false);
     });
+    await _setVolume(tester, 20);
+    await _setQueue(tester, 0);
+  });
+
+  testWidgets('按住时的轻微抖动 (<8px) 仍算点击: 只静音, 不改设备音量', (tester) async {
+    await _setQueue(tester, 0);
+    await _setVolume(tester, 30);
+    await tester.runAsync(() async {
+      await useAppStore().updateMute(false);
+    });
+    await _pumpView(tester);
+
+    final center = tester.getCenter(find.byIcon(Icons.volume_down_rounded));
+    final gesture = await tester.startGesture(center);
+    await tester.pump(const Duration(milliseconds: 150));
+    // 6px 抖动: 大于旧阈值 4px、小于新阈值 8px -> 不应进入滑动
+    await gesture.moveBy(const Offset(0, -6));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(useAppStore().state.isMuted, isTrue, reason: '小抖动应仍视为点击 (静音)');
+    expect(deviceVolumeSets, isEmpty, reason: '小抖动不应改设备音量');
+
+    await tester.runAsync(() async {
+      await useAppStore().updateMute(false);
+    });
+    await _setVolume(tester, 20);
+    await _setQueue(tester, 0);
+  });
+
+  testWidgets('快速连续滚轮不丢步: 读取未返回时的两次微调都落地', (tester) async {
+    await _setQueue(tester, 0);
+    await _setVolume(tester, 20);
+    await tester.runAsync(() async {
+      await useAppStore().updateMute(false);
+    });
+    // 挂起设备音量读取, 保证两次滚轮都发生在"读取完成"之前 (复现并发竞态)
+    final gate = Completer<String>();
+    _mockVolumeController(readGate: gate);
+    await _pumpView(tester);
+
+    final center = tester.getCenter(find.byIcon(Icons.volume_down_rounded));
+    await tester.sendEventToBinding(PointerScrollEvent(
+      position: center,
+      scrollDelta: const Offset(0, -20),
+    ));
+    await tester.sendEventToBinding(PointerScrollEvent(
+      position: center,
+      scrollDelta: const Offset(0, -20),
+    ));
+    await tester.pump();
+
+    // 放行读取: 两次微调应各 +1% (设备音量 50% -> 52%), 不互相覆盖
+    gate.complete('0.5');
+    await tester.pump();
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    expect(deviceVolumeSets, isNotEmpty);
+    expect(deviceVolumeSets.last, closeTo(0.52, 0.001),
+        reason: '两次滚动各 +1%, 不应丢步');
+
+    // 让"预览值保留 320ms"的收起计时器走完, 避免测试结束时还有挂起的 Timer
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+
     await _setVolume(tester, 20);
     await _setQueue(tester, 0);
   });

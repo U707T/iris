@@ -1,50 +1,32 @@
-import 'dart:async';
-
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
-import 'package:flutter_volume_controller/flutter_volume_controller.dart';
-import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
+import 'package:iris/pages/player/short_video/short_video_feed_widgets.dart';
 import 'package:iris/pages/player/short_video/short_video_pool.dart';
+import 'package:iris/pages/player/short_video/short_video_scrub.dart';
+import 'package:iris/pages/player/short_video/short_video_seek_feedback.dart';
+import 'package:iris/pages/player/short_video/short_video_volume.dart';
+import 'package:iris/pages/player/short_video/short_video_wheel.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
-import 'package:iris/utils/format_duration_to_minutes.dart';
 import 'package:iris/utils/get_localizations.dart';
-import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/short_video.dart';
-import 'package:iris/utils/take_screenshot.dart';
 import 'package:iris/widgets/speed_boost_effect.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
-import 'package:video_player/video_player.dart';
-
-void _togglePlay(BuildContext context) {
-  final player = context.read<MediaPlayer>();
-  // 播放器可能正在销毁 (例如刚好退出模式), 失败时忽略
-  if (player.isPlaying) {
-    player.pause().catchError((_) {});
-  } else {
-    player.play().catchError((_) {});
-  }
-}
-
-/// 滚轮切换的累积阈值 (逻辑像素)。
-/// Windows 一个标准滚轮刻度约 33~100px (取决于系统"每次滚动几行": 行数 × 100/3),
-/// 高精度滚轮 / 远程桌面平滑滚动会把一个刻度拆成很多小增量;
-/// 统一累积到阈值再切换, 避免细粒度设备上滚轮完全没有反应。
-const double _wheelSwitchThreshold = 30.0;
-
-/// 两次滚轮事件间隔超过该值视为新的滚动动作, 累积重新计数。
-const Duration _wheelGestureGap = Duration(milliseconds: 400);
-
-/// 两次切换之间的最小间隔 (避免快速滚动一次跳过太多视频)。
-const Duration _wheelSwitchCooldown = Duration(milliseconds: 420);
 
 /// 短视频模式 (类抖音的竖向信息流界面):
 /// 一屏一条视频, 上滑下一条 / 下滑上一条, 单条循环播放。
 /// Media Kit 后端配合预载播放器池, 滑动切换无缝衔接。
+///
+/// 本文件只负责编排: 页面 (PageView) 与队列同步、手势接线、覆盖层组合。
+/// 各交互系统的状态与规则在各自文件里:
+/// - `short_video_wheel.dart`         鼠标滚轮切换上 / 下一条
+/// - `short_video_scrub.dart`         进度拖动会话 (画面拖动 / 进度条共用)
+/// - `short_video_volume.dart`        设备音量调节 (含音量按钮 / 指示器)
+/// - `short_video_feed_widgets.dart`  画面 / 底部信息 / 进度条 / 操作按钮
+/// - `short_video_seek_feedback.dart` 双击快进 / 快退提示
 class ShortVideoView extends HookWidget {
   const ShortVideoView({super.key});
 
@@ -116,6 +98,13 @@ class ShortVideoView extends HookWidget {
       }
     }
 
+    // 双击快进 / 快退的瞬时提示 (方向 + 步长)
+    final seekFeedback =
+        useMemoized(() => ShortVideoSeekFeedbackController(), []);
+    useEffect(() {
+      return seekFeedback.dispose;
+    }, [seekFeedback]);
+
     // 双击快进 / 快退。
     // 注意: 不能用 build 时捕获的 player —— 短视频模式播放期间本组件不会重建,
     // 捕获实例里的 position 是过期的 (≈0), 会导致快进总是从视频开头开始;
@@ -128,10 +117,12 @@ class ShortVideoView extends HookWidget {
 
       if (tapDx > screenWidth * 0.75) {
         currentPlayer.forward(seekStep);
+        seekFeedback.show(forward: true, seconds: seekStep);
       } else if (tapDx < screenWidth * 0.25) {
         currentPlayer.backward(seekStep);
+        seekFeedback.show(forward: false, seconds: seekStep);
       } else {
-        _togglePlay(context);
+        toggleShortVideoPlay(context);
       }
     }
 
@@ -157,179 +148,16 @@ class ShortVideoView extends HookWidget {
       isLongPress.value = false;
     }
 
-    // 进度拖动: 本地预览位置让进度条实时跟手, 预览 seek 做节流,
-    // 拖动时暂停播放, 松手后精确 seek 并恢复播放。
-    final scrubPreview = useMemoized(() => ValueNotifier<Duration?>(null), []);
-    final scrubAlive = useRef(true);
+    // 进度拖动会话 (画面横向拖动 / 底部进度条共用)
+    final scrub = useMemoized(
+      () => ShortVideoScrubSession(
+        readPlayer: () => context.read<MediaPlayer>(),
+      ),
+      [],
+    );
     useEffect(() {
-      scrubAlive.value = true;
-      return () {
-        scrubAlive.value = false;
-        scrubPreview.dispose();
-      };
-    }, [scrubPreview]);
-    final scrubSession = useRef(0);
-    final scrubActive = useRef(false);
-    final scrubResume = useRef(false);
-    final lastScrubSeekAt = useRef<DateTime?>(null);
-
-    void scrubSeek(Duration target, {bool force = false}) {
-      if (!force && !scrubActive.value) return;
-      scrubPreview.value = target;
-      final now = DateTime.now();
-      final last = lastScrubSeekAt.value;
-      if (force ||
-          last == null ||
-          now.difference(last) >= const Duration(milliseconds: 140)) {
-        lastScrubSeekAt.value = now;
-        player.seek(target);
-      }
-    }
-
-    void scrubStart(Duration target) {
-      scrubSession.value++;
-      scrubActive.value = true;
-      // 同 onDoubleTapDown: 用 context.read 取实时实例 —— 播放期间本组件不会重建,
-      // build 时捕获的实例里 isPlaying 是过期的, 先暂停再拖动时会误判为"未播放",
-      // 松手后不恢复 (或反过来意外恢复) 播放。
-      final currentPlayer = context.read<MediaPlayer>();
-      scrubResume.value = currentPlayer.isPlaying;
-      if (scrubResume.value) currentPlayer.pause();
-      lastScrubSeekAt.value = null;
-      scrubSeek(target, force: true);
-    }
-
-    void scrubEnd() {
-      if (!scrubActive.value) return;
-      final target = scrubPreview.value;
-      scrubActive.value = false;
-      lastScrubSeekAt.value = null;
-      final resume = scrubResume.value;
-      scrubResume.value = false;
-      final session = ++scrubSession.value;
-      if (target != null) player.seek(target);
-      if (resume) player.play();
-      // 保持预览位置一小段时间, 避免松手瞬间进度先回跳再跳
-      Future<void>.delayed(const Duration(milliseconds: 320), () {
-        if (scrubAlive.value && scrubSession.value == session) {
-          scrubPreview.value = null;
-        }
-      });
-    }
-
-    // 设备音量调节 (在音量按钮上按住后上下滑动):
-    // 与主界面上下拖动一致 —— 调的是**设备音量**(绝对音量, 手机音量键那个),
-    // 直接写 FlutterVolumeController: 平台调用本身很快, 这里不做节流,
-    // 否则声音会明显跟不上手指 (播放层的 setVolume 才需要节流)。
-    final volumePreview = useMemoized(() => ValueNotifier<double?>(null), []);
-    final volumeAlive = useRef(true);
-    useEffect(() {
-      volumeAlive.value = true;
-      return () {
-        volumeAlive.value = false;
-        volumePreview.dispose();
-        // 离开模式时把"不显示系统音量条"的开关恢复, 免得影响别处
-        unawaited(FlutterVolumeController.updateShowSystemUI(true));
-      };
-    }, [volumePreview]);
-    final volumeSession = useRef(0);
-    final volumeActive = useRef(false);
-    /// 设备音量是否已读回 (读回前不处理位移, 免得拿旧值当基准)
-    final volumeReady = useRef(false);
-    /// 调节开始时的设备音量 (0~100) 与按下位置
-    final volumeStart = useRef(0.0);
-    final volumeStartDy = useRef(0.0);
-
-    /// 每滑动该像素数代表 1% 音量 (与主界面上下拖动一致: 200px = 100%)
-    const double volumeDragPixelsPerPercent = 2.0;
-
-    Future<void> applyDeviceVolume(double value) async {
-      try {
-        await FlutterVolumeController.setVolume(value / 100);
-      } catch (e) {
-        logger('Error setting volume: $e');
-      }
-    }
-
-    /// 读当前设备音量 (0~100); 失败 / 平台不支持时回退到应用内音量设置
-    Future<double> readDeviceVolume() async {
-      try {
-        final value = await FlutterVolumeController.getVolume();
-        if (value != null) return (value * 100).clamp(0.0, 100.0);
-      } catch (e) {
-        logger('Error getting volume: $e');
-      }
-      return useAppStore().state.volume.toDouble();
-    }
-
-    /// 调节结束 / 滚轮微调后, 预览值保留一小段时间再收起
-    void scheduleVolumePreviewClear() {
-      final session = ++volumeSession.value;
-      Future<void>.delayed(const Duration(milliseconds: 320), () {
-        if (volumeAlive.value && volumeSession.value == session) {
-          volumePreview.value = null;
-        }
-      });
-    }
-
-    void volumeAdjustStart(Offset globalPosition) {
-      volumeSession.value++;
-      volumeActive.value = true;
-      volumeReady.value = false;
-      volumeStartDy.value = globalPosition.dy;
-      volumePreview.value = null;
-      // 调节期间不弹系统音量条 (自己已经有指示器了), 与主界面上下拖动一致
-      unawaited(FlutterVolumeController.updateShowSystemUI(false));
-      // 设备音量只能异步读: 长按识别 (100ms) 到手指真正滑动之间通常够它读完
-      final session = volumeSession.value;
-      unawaited(() async {
-        final value = await readDeviceVolume();
-        if (!volumeAlive.value ||
-            !volumeActive.value ||
-            volumeSession.value != session) {
-          return;
-        }
-        volumeStart.value = value;
-        volumeReady.value = true;
-        volumePreview.value = value;
-      }());
-    }
-
-    void volumeAdjustUpdate(Offset globalPosition) {
-      if (!volumeActive.value || !volumeReady.value) return;
-      // 应用处于静音时, 一旦真的开始滑动就先取消静音, 否则调了也听不到
-      // (按住不滑动松手 = 点击, 不在这里处理, 免得把点击语义吃掉)
-      if (useAppStore().state.isMuted) {
-        unawaited(useAppStore().updateMute(false));
-      }
-      final delta =
-          (volumeStartDy.value - globalPosition.dy) / volumeDragPixelsPerPercent;
-      final value = (volumeStart.value + delta).clamp(0.0, 100.0);
-      volumePreview.value = value;
-      unawaited(applyDeviceVolume(value));
-    }
-
-    void volumeAdjustEnd() {
-      if (!volumeActive.value) return;
-      volumeActive.value = false;
-      volumeReady.value = false;
-      // 恢复系统音量条 (退出模式 / 结束调节后, 硬件音量键照常显示)
-      unawaited(FlutterVolumeController.updateShowSystemUI(true));
-      // 设备音量由系统自己记住, 无需落盘, 收起指示器即可
-      scheduleVolumePreviewClear();
-    }
-
-    /// PC: 指针悬停在音量按钮上滚轮 = 微调设备音量 (同时取代翻页)
-    Future<void> volumeWheel(double deltaPercent) async {
-      if (useAppStore().state.isMuted) {
-        unawaited(useAppStore().updateMute(false));
-      }
-      final base = volumePreview.value ?? await readDeviceVolume();
-      final value = (base + deltaPercent).clamp(0.0, 100.0);
-      volumePreview.value = value;
-      unawaited(applyDeviceVolume(value));
-      scheduleVolumePreviewClear();
-    }
+      return scrub.dispose;
+    }, [scrub]);
 
     // 水平拖动调节进度 (相对拖动, 任意位置可用)
     final scrubState =
@@ -352,7 +180,7 @@ class ShortVideoView extends HookWidget {
         start: currentPosition,
         startDx: details.globalPosition.dx,
       );
-      scrubStart(currentPosition);
+      scrub.start(currentPosition);
     }
 
     void onHorizontalDragUpdate(DragUpdateDetails details) {
@@ -361,64 +189,25 @@ class ShortVideoView extends HookWidget {
       const double sensitivity = 3.0; // 每滑动 3 像素代表 1 秒
       final target = scrubState.value.start +
           Duration(milliseconds: (totalDx / sensitivity * 1000).round());
-      scrubSeek(target);
+      scrub.seek(target);
     }
 
     void onHorizontalDragEnd() {
       if (!scrubState.value.active) return;
       scrubState.value = (active: false, start: Duration.zero, startDx: 0.0);
-      scrubEnd();
+      scrub.end();
     }
 
-    // 鼠标滚轮切换上 / 下一条 (接管 PageView 默认的滚轮行为)。
-    // 注册点在两处, 缺一不可:
-    // - buildPage 内的页面级 Listener: 位于 PageView 内部, 会先于 Scrollable
-    //   拿到事件, 屏蔽其默认的滚轮翻页;
-    // - 根部 Listener: 底部信息栏 / 按钮等覆盖层会吸收命中测试,
-    //   指针在这些区域滚动时只有根部 Listener 能收到事件。
-    // 增量处理: 累积到阈值再切换 —— 标准滚轮一格约 33~100px, 单次事件即达
-    // 阈值; 高精度滚轮 / 远程桌面的细粒度增量则逐次累积 (此前直接丢弃
-    // <4px 的增量, 导致这类设备上滚轮完全没有反应)。
-    final wheelCooldown = useRef<DateTime?>(null);
-    final wheelAccumulator = useRef(0.0);
-    final wheelLastEventAt = useRef<DateTime?>(null);
+    // 设备音量调节 (音量按钮上按住上下滑动 / 悬停滚轮微调)
+    final volume = useMemoized(() => ShortVideoDeviceVolumeController(), []);
+    useEffect(() {
+      return volume.dispose;
+    }, [volume]);
 
-    void registerWheel(PointerSignalEvent event) {
-      if (event is! PointerScrollEvent) return;
-      GestureBinding.instance.pointerSignalResolver.register(event, (resolved) {
-        final scrollEvent = resolved as PointerScrollEvent;
-        final dy = scrollEvent.scrollDelta.dy;
-        if (dy == 0) return;
-        final now = DateTime.now();
-
-        // 冷却期内直接丢弃, 避免快速滚动一次跳过太多视频
-        final lastSwitch = wheelCooldown.value;
-        if (lastSwitch != null &&
-            now.difference(lastSwitch) < _wheelSwitchCooldown) {
-          wheelAccumulator.value = 0;
-          return;
-        }
-
-        // 间隔过久视为新的滚动动作; 反向滚动也从当前增量重新开始累积
-        final lastEventAt = wheelLastEventAt.value;
-        if (lastEventAt == null ||
-            now.difference(lastEventAt) > _wheelGestureGap) {
-          wheelAccumulator.value = 0;
-        }
-        wheelLastEventAt.value = now;
-        final accumulated = wheelAccumulator.value;
-        wheelAccumulator.value =
-            accumulated == 0 || accumulated.sign == dy.sign
-                ? accumulated + dy
-                : dy;
-
-        if (wheelAccumulator.value.abs() < _wheelSwitchThreshold) return;
-        final direction = wheelAccumulator.value > 0 ? 1 : -1;
-        wheelAccumulator.value = 0;
-        wheelCooldown.value = now;
-        moveShortVideoBy(direction);
-      });
-    }
+    // 鼠标滚轮切换上 / 下一条 (接管 PageView 默认的滚轮行为;
+    // 注册逻辑与增量规则见 ShortVideoWheelSwitcher)
+    final wheel = useMemoized(
+        () => ShortVideoWheelSwitcher(onSwitch: moveShortVideoBy), []);
 
     Widget buildPage(BuildContext context, int index) {
       // 预载池里有该下标的画面就直接使用 (滑动时可见下一帧)
@@ -427,19 +216,19 @@ class ShortVideoView extends HookWidget {
       if (slot != null) {
         // key 绑定到播放器实例: 槽位换播放器时强制重建画面 widget,
         // 避免复用旧的订阅 / 可见性状态
-        content = _MediaKitVideoSurface(
+        content = ShortVideoMediaKitSurface(
           key: ValueKey(slot.controller),
           controller: slot.controller,
         );
       } else if (index == currentFeedIndex) {
-        content = const _FeedVideo();
+        content = const ShortVideoFeedVideo();
       } else {
         content = const ColoredBox(color: Colors.black);
       }
-      // 页面级滚轮注册: 先于 PageView 的 Scrollable 抢到事件 (详见 registerWheel)
+      // 页面级滚轮注册: 先于 PageView 的 Scrollable 拿到事件
       return Listener(
         behavior: HitTestBehavior.opaque,
-        onPointerSignal: registerWheel,
+        onPointerSignal: wheel.register,
         child: content,
       );
     }
@@ -459,10 +248,10 @@ class ShortVideoView extends HookWidget {
         onPointerUp: (_) => isDragging.value = false,
         onPointerCancel: (_) => isDragging.value = false,
         // 覆盖层 (底部信息 / 按钮) 挡住页面级滚轮时, 由此处兜底
-        onPointerSignal: registerWheel,
+        onPointerSignal: wheel.register,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => _togglePlay(context),
+          onTap: () => toggleShortVideoPlay(context),
           onDoubleTapDown: onDoubleTapDown,
           onLongPressStart: onLongPressStart,
           onLongPressEnd: (_) => onLongPressEnd(),
@@ -523,21 +312,26 @@ class ShortVideoView extends HookWidget {
               ),
               // 长按倍速动效 (与主播放界面共用)
               SpeedBoostEffect(visible: isLongPress.value),
+              // 双击快进 / 快退提示 (方向 + 步长)
+              Positioned.fill(
+                child: ShortVideoSeekFeedbackOverlay(controller: seekFeedback),
+              ),
               // 底部信息与进度条
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: _FeedFooter(
+                child: ShortVideoFeedFooter(
                   items: items,
                   currentFeedIndex: currentFeedIndex,
-                  scrubPreview: scrubPreview,
-                  progressBar: _FeedProgressBar(
-                    scrubPreview: scrubPreview,
-                    onScrubStart: scrubStart,
-                    onScrubSeek: scrubSeek,
-                    onScrubEnd: scrubEnd,
-                    onTapSeek: (target) => player.seek(target),
+                  scrubPreview: scrub.preview,
+                  progressBar: ShortVideoFeedProgressBar(
+                    scrubPreview: scrub.preview,
+                    onScrubStart: scrub.start,
+                    onScrubSeek: scrub.seek,
+                    onScrubEnd: scrub.end,
+                    onTapSeek: (target) =>
+                        context.read<MediaPlayer>().seek(target),
                   ),
                 ),
               ),
@@ -545,7 +339,7 @@ class ShortVideoView extends HookWidget {
               Positioned(
                 left: 8,
                 top: 8,
-                child: _FeedIconButton(
+                child: ShortVideoFeedIconButton(
                   icon: Icons.arrow_back_rounded,
                   tooltip: t.exit_short_video_mode,
                   onPressed: exitShortVideoMode,
@@ -555,19 +349,13 @@ class ShortVideoView extends HookWidget {
               Positioned(
                 right: 10,
                 bottom: 110,
-                child: _FeedActions(
-                  volumePreview: volumePreview,
-                  onVolumeAdjustStart: volumeAdjustStart,
-                  onVolumeAdjustUpdate: volumeAdjustUpdate,
-                  onVolumeAdjustEnd: volumeAdjustEnd,
-                  onVolumeWheel: volumeWheel,
-                ),
+                child: ShortVideoFeedActions(volume: volume),
               ),
               // 音量调节指示 (长按音量按钮上下滑动时显示)
               Positioned.fill(
                 child: IgnorePointer(
                   child: ValueListenableBuilder<double?>(
-                    valueListenable: volumePreview,
+                    valueListenable: volume.preview,
                     builder: (context, preview, _) => AnimatedSwitcher(
                       duration: const Duration(milliseconds: 150),
                       child: preview == null
@@ -575,7 +363,7 @@ class ShortVideoView extends HookWidget {
                               key: ValueKey('no-volume-hint'))
                           : Center(
                               key: const ValueKey('volume-hint'),
-                              child: _FeedVolumeIndicator(volume: preview),
+                              child: ShortVideoVolumeIndicator(volume: preview),
                             ),
                     ),
                   ),
@@ -584,564 +372,6 @@ class ShortVideoView extends HookWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// 当前页视频画面 (无预载池时的回退路径, 也用于 FVP 后端)
-class _FeedVideo extends StatelessWidget {
-  const _FeedVideo();
-
-  @override
-  Widget build(BuildContext context) {
-    final player = context.read<MediaPlayer>();
-    return SizedBox.expand(
-      child: switch (player) {
-        MediaKitPlayer player =>
-          _MediaKitVideoSurface(controller: player.controller),
-        FvpPlayer player => player.width == 0 || player.height == 0
-            ? const SizedBox.shrink()
-            : FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(
-                  width: player.width,
-                  height: player.height,
-                  child: VideoPlayer(player.controller),
-                ),
-              ),
-        _ => const SizedBox.shrink(),
-      },
-    );
-  }
-}
-
-/// Media Kit 视频画面 (始终 contain 适配)
-class _MediaKitVideoSurface extends StatelessWidget {
-  const _MediaKitVideoSurface({super.key, required this.controller});
-
-  final VideoController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: Video(
-        controller: controller,
-        controls: NoVideoControls,
-        // 短视频流不显示字幕 (池内已关闭字幕轨, 这里再关掉字幕层)
-        subtitleViewConfiguration: const SubtitleViewConfiguration(
-          visible: false,
-        ),
-        fit: BoxFit.contain,
-      ),
-    );
-  }
-}
-
-/// 右侧操作按钮列
-class _FeedActions extends HookWidget {
-  const _FeedActions({
-    required this.volumePreview,
-    required this.onVolumeAdjustStart,
-    required this.onVolumeAdjustUpdate,
-    required this.onVolumeAdjustEnd,
-    required this.onVolumeWheel,
-  });
-
-  final ValueNotifier<double?> volumePreview;
-  final void Function(Offset globalPosition) onVolumeAdjustStart;
-  final void Function(Offset globalPosition) onVolumeAdjustUpdate;
-  final void Function() onVolumeAdjustEnd;
-  final void Function(double deltaPercent) onVolumeWheel;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = getLocalizations(context);
-    final isPlaying =
-        context.select<MediaPlayer, bool>((player) => player.isPlaying);
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 音量按钮放在暂停按钮上方 (右下区域里更靠上的位置)
-        _FeedVolumeButton(
-          volumePreview: volumePreview,
-          onAdjustStart: onVolumeAdjustStart,
-          onAdjustUpdate: onVolumeAdjustUpdate,
-          onAdjustEnd: onVolumeAdjustEnd,
-          onWheel: onVolumeWheel,
-        ),
-        const SizedBox(height: 12),
-        _FeedIconButton(
-          icon: isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-          tooltip: t.play_pause,
-          onPressed: () => _togglePlay(context),
-        ),
-        const SizedBox(height: 12),
-        _FeedIconButton(
-          icon: Icons.photo_camera_rounded,
-          tooltip: t.screenshot,
-          onPressed: () => takeScreenshot(context, context.read<MediaPlayer>()),
-        ),
-      ],
-    );
-  }
-}
-
-/// 音量按钮: 点击 = 静音 / 取消静音 (只静音本应用, 应用音量为 0 时恢复 80);
-/// 按住 0.1s 后上下滑动 = 调节**设备音量**(绝对音量, 与主界面上下拖动一致);
-/// 仅按住按钮时生效, 不影响翻页 / 倍速 / 播放暂停。
-class _FeedVolumeButton extends HookWidget {
-  const _FeedVolumeButton({
-    required this.volumePreview,
-    required this.onAdjustStart,
-    required this.onAdjustUpdate,
-    required this.onAdjustEnd,
-    required this.onWheel,
-  });
-
-  final ValueNotifier<double?> volumePreview;
-  final void Function(Offset globalPosition) onAdjustStart;
-  final void Function(Offset globalPosition) onAdjustUpdate;
-  final void Function() onAdjustEnd;
-  final void Function(double deltaPercent) onWheel;
-
-  /// 长按识别时长: 系统默认 500ms 太迟钝, 音量调节要求按住 100ms 就接管指针
-  static const Duration _longPressDelay = Duration(milliseconds: 100);
-
-  /// 判定为“滑动调音量”的最小竖直位移 (更小的抖动算点击, 不改音量)
-  static const double _slideSlop = 4.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = getLocalizations(context);
-    final volume = useAppStore().select(context, (state) => state.volume);
-    final isMuted = useAppStore().select(context, (state) => state.isMuted);
-    // 长按已识别 (按住期间按钮高亮)
-    final holding = useState(false);
-    // 长按之后确实滑动了 (没滑动就松手 = 点击)
-    final sliding = useState(false);
-    // 长按起点, 作为滑动的基准位置
-    final anchor = useRef(Offset.zero);
-
-    /// 点击语义: 音量为 0 → 恢复到 80; 否则切换静音
-    void toggleMuteOrRestore() {
-      if (useAppStore().state.volume == 0) {
-        unawaited(useAppStore().updateVolume(80));
-      } else {
-        useAppStore().toggleMute();
-      }
-    }
-
-    void onPressStart(LongPressStartDetails details) {
-      anchor.value = details.globalPosition;
-      holding.value = true;
-      sliding.value = false;
-      // 长按一识别就进入调节: 立刻去读设备音量并显示出指示器,
-      // 手指真正滑动时基准值已经就绪 (没有"先等半秒才开始"的感觉)
-      onAdjustStart(anchor.value);
-    }
-
-    void onPressMove(LongPressMoveUpdateDetails details) {
-      if (!holding.value) return;
-      if (!sliding.value) {
-        // 抖动不算滑动 (此时松手仍按点击处理)
-        if (details.offsetFromOrigin.dy.abs() < _slideSlop) return;
-        sliding.value = true;
-      }
-      onAdjustUpdate(details.globalPosition);
-    }
-
-    void onPressEnd() {
-      // 长按没识别 (快速点击): 交给 IconButton 的点击回调
-      if (!holding.value) return;
-      final wasSliding = sliding.value;
-      holding.value = false;
-      sliding.value = false;
-      onAdjustEnd();
-      if (!wasSliding) {
-        // 按住但没滑动 = 点击 (长按已接管指针, IconButton 收不到点击)
-        toggleMuteOrRestore();
-      }
-    }
-
-    return MergeSemantics(
-      child: Semantics(
-        label: t.volume,
-        child: RawGestureDetector(
-          // 在按钮上按住后上下滑动: 长按识别器由按钮自己持有 (100ms),
-          // PageView 的翻页 / 外层的手势都会在竞争中被拒绝
-          gestures: <Type, GestureRecognizerFactory>{
-            LongPressGestureRecognizer:
-                GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-              () => LongPressGestureRecognizer(duration: _longPressDelay),
-              (instance) {
-                instance.onLongPressStart = onPressStart;
-                instance.onLongPressMoveUpdate = onPressMove;
-                instance.onLongPressEnd = (details) => onPressEnd();
-                instance.onLongPressCancel = onPressEnd;
-              },
-            ),
-          },
-          child: Listener(
-            // PC: 指针悬停在按钮上滚轮 = 微调设备音量 (拦截并取代翻页)
-            onPointerSignal: (event) {
-              if (event is! PointerScrollEvent) return;
-              GestureBinding.instance.pointerSignalResolver
-                  .register(event, (resolved) {
-                final scrollEvent = resolved as PointerScrollEvent;
-                final dy = scrollEvent.scrollDelta.dy;
-                if (dy == 0) return;
-                // 一格 (约 100px) 约 5% (1~10 之间)
-                final step = (dy.abs() / 20).ceil().clamp(1, 10).toDouble();
-                onWheel(dy < 0 ? step : -step);
-              });
-            },
-            child: ValueListenableBuilder<double?>(
-              valueListenable: volumePreview,
-              builder: (context, preview, _) {
-                final level = (preview ?? volume.toDouble()).round();
-                return Material(
-                  color: holding.value ? Colors.black54 : Colors.black38,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: IconButton(
-                    icon: Icon(
-                      isMuted || level == 0
-                          ? Icons.volume_off_rounded
-                          : level < 50
-                              ? Icons.volume_down_rounded
-                              : Icons.volume_up_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                    onPressed: toggleMuteOrRestore,
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 音量调节指示 (长按滑动时显示在画面中央)
-class _FeedVolumeIndicator extends StatelessWidget {
-  const _FeedVolumeIndicator({required this.volume});
-
-  final double volume;
-
-  @override
-  Widget build(BuildContext context) {
-    final level = volume.round();
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 18, 12),
-      decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            level == 0
-                ? Icons.volume_off_rounded
-                : level < 50
-                    ? Icons.volume_down_rounded
-                    : Icons.volume_up_rounded,
-            color: Colors.white,
-            size: 24,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            '$level%',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              decoration: TextDecoration.none,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// 底部标题 / 序号 / 时间与可拖拽进度条。
-/// 渐变背景覆盖整个底部区域 (含进度条), 与视频明暗衔接自然。
-class _FeedFooter extends HookWidget {
-  const _FeedFooter({
-    required this.items,
-    required this.currentFeedIndex,
-    required this.scrubPreview,
-    required this.progressBar,
-  });
-
-  final List<PlayQueueItem> items;
-  final int currentFeedIndex;
-  final ValueNotifier<Duration?> scrubPreview;
-  final Widget progressBar;
-
-  @override
-  Widget build(BuildContext context) {
-    final position =
-        context.select<MediaPlayer, Duration>((player) => player.position);
-    final duration =
-        context.select<MediaPlayer, Duration>((player) => player.duration);
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withValues(alpha: 0),
-            Colors.black.withValues(alpha: 0.35),
-            Colors.black.withValues(alpha: 0.65),
-          ],
-          stops: const [0.0, 0.5, 1.0],
-        ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IgnorePointer(
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 40, 16, 10),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    items[currentFeedIndex].file.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      decoration: TextDecoration.none,
-                      shadows: [Shadow(color: Colors.black54, blurRadius: 2)],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ValueListenableBuilder<Duration?>(
-                    valueListenable: scrubPreview,
-                    builder: (context, preview, _) {
-                      final display = preview ?? position;
-                      final TextStyle metaStyle = TextStyle(
-                        color: Colors.white
-                            .withValues(alpha: preview != null ? 1.0 : 0.7),
-                        fontSize: 12,
-                        decoration: TextDecoration.none,
-                        shadows: const [
-                          Shadow(color: Colors.black54, blurRadius: 2),
-                        ],
-                      );
-                      return Row(
-                        children: [
-                          Text(
-                            '${currentFeedIndex + 1}/${items.length}',
-                            style: metaStyle,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            '${formatDurationToMinutes(display)} / ${formatDurationToMinutes(duration)}',
-                            style: metaStyle,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          progressBar,
-        ],
-      ),
-    );
-  }
-}
-
-/// 可拖拽 / 点击跳转的细进度条。
-/// 拖动期间圆点与时间气泡由本地预览位置实时驱动, 不等待播放器回调。
-class _FeedProgressBar extends HookWidget {
-  const _FeedProgressBar({
-    required this.scrubPreview,
-    required this.onScrubStart,
-    required this.onScrubSeek,
-    required this.onScrubEnd,
-    required this.onTapSeek,
-  });
-
-  final ValueNotifier<Duration?> scrubPreview;
-  final void Function(Duration target) onScrubStart;
-  final void Function(Duration target) onScrubSeek;
-  final void Function() onScrubEnd;
-  final void Function(Duration target) onTapSeek;
-
-  @override
-  Widget build(BuildContext context) {
-    final position =
-        context.select<MediaPlayer, Duration>((player) => player.position);
-    final duration =
-        context.select<MediaPlayer, Duration>((player) => player.duration);
-
-    return SizedBox(
-      height: 32,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-
-          Duration? targetOf(double localX) {
-            if (duration <= Duration.zero) return null;
-            final fraction = (localX / width).clamp(0.0, 1.0);
-            return duration * fraction;
-          }
-
-          return ValueListenableBuilder<Duration?>(
-            valueListenable: scrubPreview,
-            builder: (context, preview, _) {
-              final display = preview ?? position;
-              final isSeeking = preview != null;
-              final double progress = duration > Duration.zero
-                  ? (display.inMilliseconds / duration.inMilliseconds)
-                      .clamp(0.0, 1.0)
-                      .toDouble()
-                  : 0.0;
-              const double barHeight = 3.0;
-
-              return Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  // 拖动 / 点击热区 (translucent: 竖直滑动手势仍可穿透给翻页)
-                  GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTapUp: (details) {
-                      final target = targetOf(details.localPosition.dx);
-                      if (target != null) onTapSeek(target);
-                    },
-                    onHorizontalDragStart: (details) {
-                      final target = targetOf(details.localPosition.dx);
-                      if (target != null) onScrubStart(target);
-                    },
-                    onHorizontalDragUpdate: (details) {
-                      final target = targetOf(details.localPosition.dx);
-                      if (target != null) onScrubSeek(target);
-                    },
-                    onHorizontalDragEnd: (_) => onScrubEnd(),
-                    onHorizontalDragCancel: onScrubEnd,
-                    child: const SizedBox.expand(),
-                  ),
-                  // 轨道
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 10,
-                    height: barHeight,
-                    child: const IgnorePointer(
-                      child: ColoredBox(color: Colors.white24),
-                    ),
-                  ),
-                  // 已播放部分
-                  Positioned(
-                    left: 0,
-                    bottom: 10,
-                    height: barHeight,
-                    width: width * progress,
-                    child: const IgnorePointer(
-                      child: ColoredBox(color: Colors.white),
-                    ),
-                  ),
-                  // 拖动圆点
-                  Positioned(
-                    left: (width * progress - 5).clamp(0.0, width - 10),
-                    bottom: 10 + barHeight / 2 - 5,
-                    child: IgnorePointer(
-                      child: AnimatedOpacity(
-                        opacity: isSeeking ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 150),
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(color: Colors.black38, blurRadius: 4),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // 拖动进度预览
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 34,
-                    child: IgnorePointer(
-                      child: AnimatedOpacity(
-                        opacity: isSeeking ? 1.0 : 0.0,
-                        duration: const Duration(milliseconds: 150),
-                        child: Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              '${formatDurationToMinutes(display)} / ${formatDurationToMinutes(duration)}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 13,
-                                decoration: TextDecoration.none,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// 圆形半透明底的操作按钮
-class _FeedIconButton extends StatelessWidget {
-  const _FeedIconButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black38,
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: IconButton(
-        tooltip: tooltip,
-        icon: Icon(icon, color: Colors.white, size: 22),
-        onPressed: onPressed,
       ),
     );
   }

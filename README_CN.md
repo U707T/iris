@@ -90,10 +90,9 @@
 
 ## 故障排查
 
-- **Windows：应用启动后立即（或最初几次操作时）闪退**（`flutter_windows.dll` 报 `0xC0000005`）。这是 Flutter 引擎在 Windows 上的已知 bug（[flutter/flutter#175041](https://github.com/flutter/flutter/issues/175041)）：当 UI 自动化客户端（远程桌面工具如 Chrome Remote Desktop / RDP、读屏软件、自动化工具等）在应用启动期间枚举窗口元素时触发。在 Flutter 发布引擎修复前，可开启兼容开关（二选一）：
-  - 设置环境变量 `IRIS_DISABLE_WINDOWS_A11Y=1`（例如执行一次 `setx IRIS_DISABLE_WINDOWS_A11Y 1` 后重新启动 IRIS），或
-  - 以命令行参数 `--disable-windows-a11y` 启动 IRIS。
-  该开关会关闭应用的 Windows 无障碍集成（屏幕阅读器将无法读取 IRIS），仅面向遇到此崩溃的机器。
+- **Windows：应用启动后立即（或最初几次操作时）闪退**（`flutter_windows.dll` 报 `0xC0000005`）。这是 Flutter 引擎在 Windows 上的已知 bug（[flutter/flutter#175041](https://github.com/flutter/flutter/issues/175041)）：当 UI 自动化客户端（远程桌面工具如 Chrome Remote Desktop / RDP、读屏软件、自动化工具等）在应用启动期间枚举窗口元素时触发。**兼容规避已内置并默认生效，应用开箱即可正常使用**；代价是 IRIS 会关闭自身的 Windows 无障碍集成（屏幕阅读器无法读取应用）。如你确实需要读屏、且愿自担崩溃风险，可显式退出兼容（二选一）：
+  - 设置环境变量 `IRIS_ENABLE_WINDOWS_A11Y=1`（例如执行一次 `setx IRIS_ENABLE_WINDOWS_A11Y 1` 后重新启动 IRIS），或
+  - 以命令行参数 `--enable-windows-a11y` 启动 IRIS。
 
 ## 贡献
 

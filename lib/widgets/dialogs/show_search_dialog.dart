@@ -33,16 +33,16 @@ class SearchDialog extends HookWidget {
         useStorageStore().select(context, (state) => state.currentPath);
 
     final controller = useTextEditingController();
-    final query = useState('');
     final isSearching = useState(false);
     final results = useState<List<FileItem>>([]);
     final hasSearched = useState(false);
+    final searchSession = useRef(0);
 
     Future<void> search() async {
       final keyword = controller.text.trim();
       if (keyword.isEmpty) return;
 
-      query.value = keyword;
+      final session = ++searchSession.value;
       isSearching.value = true;
       hasSearched.value = true;
 
@@ -51,6 +51,9 @@ class SearchDialog extends HookWidget {
         basePath: currentPath,
         query: keyword,
       );
+
+      // 期间又发起了新搜索 / 对话框已关闭: 丢弃这次结果
+      if (searchSession.value != session || !context.mounted) return;
 
       results.value = files;
       isSearching.value = false;

@@ -138,6 +138,7 @@ KeyboardEvent useKeyboard({
           // 关闭当前播放媒体文件
           case LogicalKeyboardKey.keyC:
             showControl();
+            useAppStore().updateAutoPlay(false);
             player.pause();
             usePlayQueueStore().updateCurrentIndex(-1);
             break;
@@ -304,7 +305,12 @@ KeyboardEvent useKeyboard({
             if (event.runtimeType == KeyDownEvent) moveShortVideoBy(-1);
           } else {
             showControl();
-            await useAppStore().updateVolume(useAppStore().state.volume + 1);
+            // 连按 (KeyRepeat) 只在内存里变化, 松开时统一落盘 (见下方 KeyUp),
+            // 避免按住方向键时每几十毫秒写一次安全存储
+            await useAppStore().updateVolume(
+              useAppStore().state.volume + 1,
+              persist: event.runtimeType == KeyDownEvent,
+            );
           }
           break;
         // 降低音量 / 短视频模式: 下一条
@@ -313,7 +319,24 @@ KeyboardEvent useKeyboard({
             if (event.runtimeType == KeyDownEvent) moveShortVideoBy(1);
           } else {
             showControl();
-            await useAppStore().updateVolume(useAppStore().state.volume - 1);
+            await useAppStore().updateVolume(
+              useAppStore().state.volume - 1,
+              persist: event.runtimeType == KeyDownEvent,
+            );
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    if (event.runtimeType == KeyUpEvent) {
+      // 方向键调音量: 松开时把最终值落盘
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.arrowUp:
+        case LogicalKeyboardKey.arrowDown:
+          if (!usePlayerUiStore().state.isShortVideoMode) {
+            await useAppStore().updateVolume(useAppStore().state.volume);
           }
           break;
         default:

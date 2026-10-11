@@ -73,11 +73,13 @@ class PlayerUiStore extends Store<PlayerUiState> {
     }
   }
 
+  /// 全屏开关 (桌面端)。
+  /// 参数是「设置为」的目标值, 不是「切换」—— 旧实现忽略参数直接取反,
+  /// 任何显式传值的调用方 (如 Escape 传 false) 都只是在碰巧下能用。
   Future<void> updateFullScreen(bool bool) async {
-    if (isDesktop) {
-      windowManager.setFullScreen(!state.isFullScreen);
-      set(state.copyWith(isFullScreen: !state.isFullScreen));
-    }
+    if (!isDesktop) return;
+    windowManager.setFullScreen(bool);
+    set(state.copyWith(isFullScreen: bool));
   }
 
   void updateIsSeeking(bool bool) {

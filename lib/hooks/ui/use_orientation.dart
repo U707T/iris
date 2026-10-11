@@ -4,17 +4,14 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/store/app_state.dart';
 import 'package:iris/store/use_app_store.dart';
-import 'package:iris/store/use_player_ui_store.dart';
 
 void useOrientation() {
   final context = useContext();
   final orientation =
       useAppStore().select(context, (state) => state.orientation);
 
-  final aspectRatio =
-      usePlayerUiStore().select(context, (state) => state.aspectRatio);
-
-  setOrientation(ScreenOrientation orientation, double? aspect) {
+  // ignore: no_leading_underscores_for_local_identifiers
+  void _setOrientation(ScreenOrientation orientation) {
     if (Platform.isAndroid || Platform.isIOS) {
       switch (orientation) {
         case ScreenOrientation.device:
@@ -37,12 +34,12 @@ void useOrientation() {
   }
 
   useEffect(() {
-    setOrientation(orientation, aspectRatio);
+    _setOrientation(orientation);
     return () => SystemChrome.setPreferredOrientations([]);
   }, []);
 
   useEffect(() {
-    setOrientation(orientation, aspectRatio);
+    _setOrientation(orientation);
     return;
-  }, [orientation, aspectRatio]);
+  }, [orientation]);
 }

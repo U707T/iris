@@ -110,19 +110,15 @@ class ShortVideoPool extends ChangeNotifier {
         final index = slot.feedIndex;
         if (index == null) continue;
         if (index >= items.length || items[index].file != slot.loadedFile) {
-          final state = slot.player.state;
-          if (slot.played &&
-              slot.loadedFile != null &&
-              state.duration != Duration.zero) {
-            _pendingSaves.add((
-              file: slot.loadedFile!,
-              position: state.position,
-              duration: state.duration,
-            ));
-          }
+          _collectSlotSave(slot);
           slot.pendingOpen = false;
           slot.played = false;
           slot.feedIndex = null;
+          // 立即作废仍在飞行中的装载 / 尺寸同步 (token 递增), 并复位装载标记:
+          // 槽位随后可能被重新分配给别的下标, 旧一代的异步结果不能落到新一代上
+          // (先播放旧视频 / 提前熄灭加载指示)。
+          slot.token++;
+          slot.initializing = false;
         }
       }
     }
@@ -152,16 +148,7 @@ class ShortVideoPool extends ChangeNotifier {
       if (slot == null) continue;
 
       // 复用前捕获旧视频的播放进度
-      final state = slot.player.state;
-      if (slot.played &&
-          slot.loadedFile != null &&
-          state.duration != Duration.zero) {
-        _pendingSaves.add((
-          file: slot.loadedFile!,
-          position: state.position,
-          duration: state.duration,
-        ));
-      }
+      _collectSlotSave(slot);
 
       // 立即静音被复用的槽位 (正常情况下它已经不是活动槽位, 这里是兜底:
       // 避免上一个视频的声音延续到新视频开始装载)
@@ -174,6 +161,8 @@ class ShortVideoPool extends ChangeNotifier {
       slot.initializing = true;
       slot.played = false;
       slot.pendingOpen = true;
+      // 递增 token: 作废该槽位上一代 (旧下标) 仍在飞行中的异步操作
+      slot.token++;
     }
 
     // 激活当前下标所在槽位
@@ -206,17 +195,7 @@ class ShortVideoPool extends ChangeNotifier {
     if (disposed) return;
 
     // 保存队列变化时收集的进度
-    if (_pendingSaves.isNotEmpty) {
-      for (final save in _pendingSaves) {
-        useHistoryStore().add(Progress(
-          dateTime: DateTime.now().toUtc(),
-          position: save.position,
-          duration: save.duration,
-          file: save.file,
-        ));
-      }
-      _pendingSaves.clear();
-    }
+    _flushPendingSaves();
 
     // 打开待装载的槽位, 当前视频优先
     final pending = slots.where((slot) => slot.pendingOpen).toList()
@@ -408,20 +387,39 @@ class ShortVideoPool extends ChangeNotifier {
     }
   }
 
-  /// 保存某个槽位的播放进度
-  void saveSlotProgress(ShortVideoSlot slot) {
+  /// 收集槽位的播放进度 (在 reconcile 中调用, 帧后统一写入)
+  void _collectSlotSave(ShortVideoSlot slot) {
     final file = slot.loadedFile;
-    if (file == null) return;
+    if (file == null || !slot.played) return;
 
     final state = slot.player.state;
     if (state.duration == Duration.zero) return;
 
-    useHistoryStore().add(Progress(
-      dateTime: DateTime.now().toUtc(),
+    _pendingSaves.add((
+      file: file,
       position: state.position,
       duration: state.duration,
-      file: file,
     ));
+  }
+
+  /// 写入已收集的进度
+  void _flushPendingSaves() {
+    if (_pendingSaves.isEmpty) return;
+    for (final save in _pendingSaves) {
+      useHistoryStore().add(Progress(
+        dateTime: DateTime.now().toUtc(),
+        position: save.position,
+        duration: save.duration,
+        file: save.file,
+      ));
+    }
+    _pendingSaves.clear();
+  }
+
+  /// 保存某个槽位的播放进度 (立即写入, 调用方需保证不在 build 期间)
+  void saveSlotProgress(ShortVideoSlot slot) {
+    _collectSlotSave(slot);
+    _flushPendingSaves();
   }
 
   /// 立即静音所有槽位 (模式切换前调用, 见 player_handoff.dart)。

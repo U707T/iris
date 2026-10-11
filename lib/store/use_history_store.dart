@@ -9,15 +9,27 @@ import 'package:iris/utils/logger.dart';
 class HistoryStore extends PersistentStore<HistoryState> {
   HistoryStore() : super(HistoryState());
 
+  /// 最多保留的历史条数 (防止无限增长: 每个条目都会随整个 map 一起
+  /// 序列化写盘, 不设上限时 save 会随观看历史越来越慢)。
+  static const int maxEntries = 300;
+
   Progress? findById(String id) => state.history[id];
 
   Future<void> add(Progress progress) async {
-    set(state.copyWith(
-      history: {
-        ...state.history,
-        progress.file.getID(): progress,
-      },
-    ));
+    final history = {
+      ...state.history,
+      progress.file.getID(): progress,
+    };
+
+    if (history.length > maxEntries) {
+      final entries = history.entries.toList()
+        ..sort((a, b) => b.value.dateTime.compareTo(a.value.dateTime));
+      history
+        ..clear()
+        ..addEntries(entries.take(maxEntries));
+    }
+
+    set(state.copyWith(history: history));
     await save(state);
   }
 

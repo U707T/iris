@@ -29,16 +29,22 @@ void main(List<String> arguments) async {
   logger('arguments: $arguments');
   // 兼容开关自身不能当作文档路径传给播放队列 (use_play_queue_store 会取 arguments[0])
   globals.arguments = List<String>.from(arguments)
-    ..removeWhere((argument) => argument == kDisableWindowsA11yArgument);
+    ..removeWhere((argument) =>
+        argument == kDisableWindowsA11yArgument ||
+        argument == kEnableWindowsA11yArgument);
   globals.disableWindowsA11y = shouldDisableWindowsA11y(
     isWindows: Platform.isWindows,
     environment: Platform.environment,
     arguments: arguments,
   );
-  if (globals.disableWindowsA11y) {
+  if (Platform.isWindows) {
     logger(
-      'Windows accessibility disabled by compat flag '
-      '(engine crash workaround, flutter/flutter#175041)',
+      globals.disableWindowsA11y
+          ? 'Windows accessibility disabled by default compat mode '
+              '(engine crash workaround, flutter/flutter#175041; '
+              'set IRIS_ENABLE_WINDOWS_A11Y=1 to opt out)'
+          : 'Windows accessibility enabled by opt-out flag '
+              '(engine crash workaround off, flutter/flutter#175041)',
     );
   }
 

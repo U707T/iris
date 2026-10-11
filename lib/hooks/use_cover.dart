@@ -6,6 +6,7 @@ import 'package:iris/models/storages/local.dart';
 import 'package:iris/models/storages/storage.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_storage_store.dart';
+import 'package:iris/utils/logger.dart';
 
 FileItem? useCover() {
   final context = useContext();
@@ -37,16 +38,26 @@ FileItem? useCover() {
   final cover = useState<FileItem?>(null);
 
   useEffect(() {
+    var alive = true;
+
     () async {
       if (storage == null || file == null || file.type != ContentType.audio) {
-        cover.value = null;
+        if (alive) cover.value = null;
         return;
       }
 
       final dir =
           file.path.isEmpty ? <String>[] : ([...file.path]..removeLast());
 
-      final files = await storage.getFiles(dir);
+      List<FileItem> files;
+      try {
+        files = await storage.getFiles(dir);
+      } catch (e) {
+        logger('Error getting cover files: $e');
+        if (alive) cover.value = null;
+        return;
+      }
+      if (!alive) return;
 
       final images =
           files.where((file) => file.type == ContentType.image).toList();
@@ -58,7 +69,8 @@ FileItem? useCover() {
               image.name.toLowerCase().startsWith('folder')) ??
           images.firstOrNull;
     }();
-    return null;
+
+    return () => alive = false;
   }, [storage, file]);
 
   return cover.value;

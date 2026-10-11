@@ -1,3 +1,27 @@
+## v2.3.0
+
+### Changelog
+
+* **Windows: the accessibility workaround for the engine crash (flutter/flutter#175041) is now built in and enabled by default** — Windows builds start normally out of the box, no environment variable or command-line flag needed. The trade-off is unchanged: while the workaround is active, IRIS turns its own Windows accessibility integration off, so screen readers cannot read the app. If you need accessibility tools to work (and accept the crash risk), opt out with `IRIS_ENABLE_WINDOWS_A11Y=1` or `--enable-windows-a11y`; the old `IRIS_DISABLE_WINDOWS_A11Y=1` / `--disable-windows-a11y` are still accepted. The README troubleshooting section has been updated
+* **Short video mode: double-tap seek feedback** — double-tapping the right / left quarter now shows a brief "±Ns" pill in the centre of the picture (it reads the configured seek step, e.g. 5 s), so you can see how far the jump went; the long-press speed effect is unchanged
+* Short video mode fixes: a queue change while a video was still loading could let stale loading work land on a reassigned slot (occasionally playing the old video briefly or hiding the loading spinner early) — that race is closed; fine-tuning the device volume with the mouse wheel no longer loses steps when several wheel events arrive at once; and the press-and-hold mute gesture now tolerates a bit of natural finger movement (8 px) instead of treating it as a volume slide
+* **Player: the volume popover no longer swallows the first scroll-up while muted** — it now unmutes and raises the volume in one step (before, the first scroll unmuted but left the volume at 0, so nothing could be heard)
+* Keyboard: Ctrl + C (stop) now clears auto-play exactly like the stop button; holding the volume arrow keys no longer writes to disk on every key repeat (the final value is saved when the key is released)
+* Stability: the playback history is capped at 300 entries (it used to grow forever, making every progress save slower); the fullscreen toggle now honours the requested state instead of always flipping; the folder search dialog discards stale results and no longer touches a closed dialog; opening a file whose path is not in the listing no longer throws; audio cover lookup handles storage errors; and the first-frame wait no longer overrides a pause or a file switch made while the video was still opening
+* Structure (no behaviour change): the short video screen, the playback control bar and the file browser were split from giant single-widget files into focused modules (wheel / scrub / volume / feed widgets; layout + button modules; file list row + bottom bar). All unit and widget tests pass
+* No other changes.
+
+### 更新日志
+
+* **Windows：引擎崩溃（flutter/flutter#175041）的无障碍兼容规避已内置、默认生效** —— Windows 版开箱即用，不再需要任何环境变量或命令行参数。代价照旧：规避生效时 IRIS 会关闭自身的 Windows 无障碍集成，屏幕阅读器无法读取应用。如你确实需要读屏、且愿自担崩溃风险，可用 `IRIS_ENABLE_WINDOWS_A11Y=1` 或 `--enable-windows-a11y` 显式退出；旧的 `IRIS_DISABLE_WINDOWS_A11Y=1` / `--disable-windows-a11y` 仍然兼容。README 故障排查一节已同步更新
+* **短视频模式：双击快进 / 快退反馈** —— 双击画面右侧 / 左侧四分之一区域时，画面中央短暂显示「±Ns」提示（取设置里的实际步长，如 5s），跳了多少一目了然；长按倍速光效保持不变
+* 短视频模式修复：装载进行中队列发生变化时，过期的异步装载可能落到已被重新分配的槽位上（偶发播放到旧视频 / 加载指示提前熄灭）——该竞态已修复；鼠标滚轮微调设备音量在连续快速滚动时不再丢步；按住音量按钮的静音手势现在容忍几像素的自然抖动（滑动判定 8px），不再被误判成滑动
+* **播放器：静音时音量浮层上滚不再"第一步白滚"** —— 现在一步到位：取消静音并同时加音量（此前第一格只取消静音、音量仍是 0）
+* 键盘：Ctrl + C（停止）现在与控制栏停止按钮一致，会清除自动播放标记；按住音量方向键不再每个按键重复都写一次磁盘（松开时落盘最终值）
+* 稳定性：播放历史上限 300 条（此前无限增长，每次保存进度越来越慢）；全屏开关改为按传入的目标值设置而不是无条件取反；文件夹搜索对话框会丢弃过期结果、关闭后不再写入状态；打开不在列表中的文件不再抛异常；音频封面查找处理存储错误；首帧等待不再覆盖用户在打开期间做出的暂停 / 切歌操作
+* 结构（无行为变化）：短视频界面、播放控制栏、文件浏览面板从单个巨型组件拆分为职责单一的小模块（滚轮 / 拖动 / 音量 / 画面组件；布局 + 按钮模块；文件行 + 底部工具条）。全部单元 / 组件测试通过
+* 本版无其他变化。
+
 ## v2.2.0
 
 ### Changelog
