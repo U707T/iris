@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
 import 'package:fvp/fvp.dart' as fvp;
@@ -50,53 +52,92 @@ void main(List<String> arguments) async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 全局兜底: 未捕获的异常至少要进日志, 并把 release 版的红屏 / 灰屏
+  // 换成一个可读的提示 (单个组件出错不再让整个画面变成色块)。
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    logger('Flutter error: ${details.exceptionAsString()}\n${details.stack}');
+  };
+  ui.PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+    logger('Uncaught error: $error\n$stack');
+    return true;
+  };
+  if (kReleaseMode) {
+    ErrorWidget.builder = (details) => const _UnexpectedErrorView();
+  }
+
   MediaKit.ensureInitialized();
 
-  fvp.registerWith(options: {
-    // 'fastSeek': true,
-    'player': {
-      if (Platform.isAndroid) 'audio.renderer': 'AudioTrack',
-      'avio.reconnect': '1',
-      'avio.reconnect_delay_max': '7',
-      'buffer': '2000+80000',
-      'demux.buffer.ranges': '8',
-    },
-    if (Platform.isAndroid)
-      'subtitleFontFile': 'assets/fonts/NotoSansCJKsc-Medium.otf',
-    // 仅在调试构建中开启详细日志, 减少 release 版性能开销
-    'global': {'log': kDebugMode ? 'debug' : 'off'},
-  });
+  try {
+    fvp.registerWith(options: {
+      // 'fastSeek': true,
+      'player': {
+        if (Platform.isAndroid) 'audio.renderer': 'AudioTrack',
+        'avio.reconnect': '1',
+        'avio.reconnect_delay_max': '7',
+        'buffer': '2000+80000',
+        'demux.buffer.ranges': '8',
+      },
+      if (Platform.isAndroid)
+        'subtitleFontFile': 'assets/fonts/NotoSansCJKsc-Medium.otf',
+      // 仅在调试构建中开启详细日志, 减少 release 版性能开销
+      'global': {'log': kDebugMode ? 'debug' : 'off'},
+    });
+  } catch (e) {
+    // FVP 后端注册失败不应阻止应用启动 (Media Kit 后端仍可用)
+    logger('Failed to register FVP backend: $e');
+  }
 
-  final appLinks = AppLinks();
-  final initUri = await appLinks.getInitialLinkString();
+  // 冷启动的 "打开方式" 链接: 失败时照常启动, 不能卡在启动页
+  try {
+    final appLinks = AppLinks();
+    final initUri = await appLinks.getInitialLinkString();
 
-  if (initUri != null) {
-    logger('initUri: $initUri');
-    globals.initUri = initUri;
+    if (initUri != null) {
+      logger('initUri: $initUri');
+      globals.initUri = initUri;
+    }
+  } catch (e) {
+    logger('Failed to read initial link: $e');
   }
 
   if (isDesktop) {
-    await windowManager.ensureInitialized();
+    try {
+      await windowManager.ensureInitialized();
 
-    WindowOptions windowOptions = const WindowOptions(
-      size: Size(1280, 720),
-      minimumSize: Size(427, 240),
-      center: true,
-      backgroundColor: Colors.transparent,
-      skipTaskbar: false,
-      titleBarStyle: TitleBarStyle.hidden,
-    );
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(1280, 720),
+        minimumSize: Size(427, 240),
+        center: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
+      );
 
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
-      await windowManager.show();
-      await windowManager.focus();
-    });
+      unawaited(
+        windowManager
+            .waitUntilReadyToShow(windowOptions, () async {
+          await windowManager.show();
+          await windowManager.focus();
+        })
+            .catchError((Object e) {
+          logger('Failed to show window: $e');
+        }),
+      );
+    } catch (e) {
+      logger('Failed to initialize window manager: $e');
+    }
   }
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
-  MediaStream mediaStream = MediaStream();
-  mediaStream.startServer();
+  try {
+    MediaStream mediaStream = MediaStream();
+    await mediaStream.startServer();
+  } catch (e) {
+    // FTP 串流服务起不来时只影响 FTP 播放, 本地 / 直链播放不受影响
+    logger('Failed to start MediaStream server: $e');
+  }
 
   runApp(const StoreScope(child: MyApp()));
 }
@@ -108,11 +149,15 @@ class MyApp extends HookWidget {
   Widget build(BuildContext context) {
     useEffect(() {
       () async {
-        globals.storagePermissionStatus = Platform.isAndroid
-            ? await isAndroid11OrHigher()
-                ? await Permission.manageExternalStorage.status
-                : await Permission.storage.status
-            : PermissionStatus.granted;
+        try {
+          globals.storagePermissionStatus = Platform.isAndroid
+              ? await isAndroid11OrHigher()
+                  ? await Permission.manageExternalStorage.status
+                  : await Permission.storage.status
+              : PermissionStatus.granted;
+        } catch (e) {
+          logger('Failed to read storage permission status: $e');
+        }
       }();
       return null;
     }, []);
@@ -131,22 +176,26 @@ class MyApp extends HookWidget {
         if (uri != null && globals.initUri != uri) {
           logger('Uri: $uri');
           if (Platform.isAndroid) {
-            final file = await SafUtil().documentFileFromUri(uri, false);
-            if (file != null) {
-              await useAppStore().updateAutoPlay(true);
-              await usePlayQueueStore().update(
-                playQueue: [
-                  PlayQueueItem(
-                    file: FileItem(
-                      name: file.name,
-                      uri: file.uri,
-                      size: file.length,
+            try {
+              final file = await SafUtil().documentFileFromUri(uri, false);
+              if (file != null) {
+                await useAppStore().updateAutoPlay(true);
+                await usePlayQueueStore().update(
+                  playQueue: [
+                    PlayQueueItem(
+                      file: FileItem(
+                        name: file.name,
+                        uri: file.uri,
+                        size: file.length,
+                      ),
+                      index: 0,
                     ),
-                    index: 0,
-                  ),
-                ],
-                index: 0,
-              );
+                  ],
+                  index: 0,
+                );
+              }
+            } catch (e) {
+              logger('Failed to open URI: $e');
             }
           }
         }
@@ -190,14 +239,60 @@ class MyApp extends HookWidget {
           AppLocalizations.delegate,
           ...GlobalMaterialLocalizations.delegates,
         ],
-        localeResolutionCallback: (locale, supportedLocales) => supportedLocales
-                .map((e) => e.languageCode)
-                .toList()
-                .contains(locale!.languageCode)
-            ? null
-            : const Locale('en'),
+        localeResolutionCallback: (locale, supportedLocales) {
+          if (locale == null) return const Locale('en');
+          return supportedLocales
+                  .map((e) => e.languageCode)
+                  .toList()
+                  .contains(locale.languageCode)
+              ? null
+              : const Locale('en');
+        },
         supportedLocales: AppLocalizations.supportedLocales,
       );
     });
+  }
+}
+
+/// release 构建下的兜底错误界面。
+///
+/// Flutter 默认在 release 里只画一个灰色方块, 用户看不出发生了什么。
+/// 这里给一个可读的提示 (不依赖 Material / 本地化, 组件树出问题时也能画出来)。
+class _UnexpectedErrorView extends StatelessWidget {
+  const _UnexpectedErrorView();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Directionality(
+      textDirection: TextDirection.ltr,
+      child: ColoredBox(
+        color: Color(0xFF101012),
+        child: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.error_outline_rounded,
+                  size: 40,
+                  color: Colors.white54,
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Something went wrong',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                    decoration: TextDecoration.none,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

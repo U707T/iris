@@ -63,6 +63,12 @@ FvpPlayer useFvpPlayer(BuildContext context) {
 
   final isInitializing = useState(false);
 
+  /// 装载失败信息 (供界面显示错误 + 重试)
+  final loadError = useState<String?>(null);
+
+  /// 已经恢复过进度的文件 (duration 多次变化时只恢复一次)
+  final resumedFile = useRef<String?>(null);
+
   MediaStream mediaStream = useMemoized(() => MediaStream());
   final streamUrl = useMemoized(() => mediaStream.url);
 
@@ -152,6 +158,8 @@ FvpPlayer useFvpPlayer(BuildContext context) {
 
   Future<void> init(FileItem? file) async {
     isInitializing.value = true;
+    // 重试时先清掉上一次的错误, 让界面回到"加载中"
+    loadError.value = null;
 
     try {
       if (controller.value.value.isInitialized) {
@@ -193,6 +201,7 @@ FvpPlayer useFvpPlayer(BuildContext context) {
       await controller.value.setVolume(isMuted ? 0 : volume / 100);
     } catch (e) {
       logger('Error initializing player: $e');
+      loadError.value = e.toString();
     } finally {
       isInitializing.value = false;
     }
@@ -251,6 +260,8 @@ FvpPlayer useFvpPlayer(BuildContext context) {
           controller.value.value.duration != Duration.zero) {
         logger('Completed: ${file.name}');
         if (looping) return;
+        // 队列可能已被清空, 此时没有"下一条"
+        if (playQueue.isEmpty) return;
         if (currentPlayIndex == playQueue.length - 1) {
           if (repeat == Repeat.all) {
             await usePlayQueueStore().updateCurrentIndex(playQueue[0].index);
@@ -292,15 +303,19 @@ FvpPlayer useFvpPlayer(BuildContext context) {
           controller.value.value.duration != Duration.zero &&
           file != null &&
           file.type == ContentType.video) {
-        Progress? progress = history[file.getID()];
-        if (progress != null) {
-          if (!alwaysPlayFromBeginning &&
-              (progress.duration.inMilliseconds -
-                      progress.position.inMilliseconds) >
-                  5000) {
-            logger(
-                'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
-            await controller.value.seekTo(progress.position);
+        final fileId = file.getID();
+        if (resumedFile.value != fileId) {
+          resumedFile.value = fileId;
+          Progress? progress = history[fileId];
+          if (progress != null) {
+            if (!alwaysPlayFromBeginning &&
+                (progress.duration.inMilliseconds -
+                        progress.position.inMilliseconds) >
+                    5000) {
+              logger(
+                  'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
+              await controller.value.seekTo(progress.position);
+            }
           }
         }
       }
@@ -421,6 +436,8 @@ FvpPlayer useFvpPlayer(BuildContext context) {
       controller: controller.value,
       isInitializing: isInitializing.value,
       isPlaying: isPlaying,
+      error: loadError.value,
+      retry: file == null ? null : () => init(file),
       externalSubtitle: externalSubtitle,
       externalSubtitles: externalSubtitles,
       position:
@@ -461,7 +478,9 @@ FvpPlayer useFvpPlayer(BuildContext context) {
     [
       controller.value,
       controller.value.value.isInitialized,
+      file,
       isInitializing.value,
+      loadError.value,
       isPlaying,
       externalSubtitle.value,
       externalSubtitles,

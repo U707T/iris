@@ -31,6 +31,26 @@ class Files extends HookWidget {
     final refreshState = useState(false);
     void refresh() => refreshState.value = !refreshState.value;
 
+    // 用户去系统设置授权后回到应用: 自动复查权限状态并刷新列表
+    // (只在"确实去过后台"后刷新, 避免每次打开面板都多请求一次网络存储)
+    final wentBackground = useRef(false);
+    final appLifecycleState = useAppLifecycleState();
+    useEffect(() {
+      if (appLifecycleState != AppLifecycleState.resumed) {
+        wentBackground.value = true;
+        return null;
+      }
+      if (!wentBackground.value) return null;
+      wentBackground.value = false;
+      if (Platform.isAndroid) {
+        () async {
+          await getStoragePermissionStatus();
+          refresh();
+        }();
+      }
+      return null;
+    }, [appLifecycleState]);
+
     final sortBy = useAppStore().select(context, (state) => state.sortBy);
     final sortOrder = useAppStore().select(context, (state) => state.sortOrder);
     final folderFirst =
@@ -114,23 +134,76 @@ class Files extends HookWidget {
       if (Platform.isAndroid &&
           globals.storagePermissionStatus != PermissionStatus.granted &&
           storage is LocalStorage) {
+        // 已永久拒绝时 request() 不会再弹框, 只能引导去系统设置
+        final permanentlyDenied =
+            globals.storagePermissionStatus?.isPermanentlyDenied ?? false;
         return Center(
-          child: ElevatedButton(
-              onPressed: () async {
-                await requestStoragePermission();
-                refresh();
-              },
-              child: Text(t.grant_storage_permission)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  t.storage_permission_hint,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () async {
+                    if (permanentlyDenied) {
+                      await openStoragePermissionSettings();
+                    } else {
+                      await requestStoragePermission();
+                      refresh();
+                    }
+                  },
+                  icon: Icon(permanentlyDenied
+                      ? Icons.settings_rounded
+                      : Icons.folder_open_rounded),
+                  label: Text(permanentlyDenied
+                      ? t.open_settings
+                      : t.grant_storage_permission),
+                ),
+              ],
+            ),
+          ),
         );
       }
       if (isLoading) {
         return const Center(child: CircularProgressIndicator());
       }
       if (isError) {
-        return Center(child: Text(t.unable_to_fetch_files));
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(t.unable_to_fetch_files),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: refresh,
+                icon: const Icon(Icons.refresh_rounded),
+                label: Text(t.retry),
+              ),
+            ],
+          ),
+        );
       }
       if (files.isEmpty) {
-        return const Center();
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              t.no_media_files,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        );
       }
       return Card(
         color: Colors.transparent,

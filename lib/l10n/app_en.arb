@@ -167,5 +167,11 @@
   "shift_for_large_step": "Shift for larger step",
   "seek_step_large": "Skip duration (Shift)",
   "short_video_mode": "Short video mode",
-  "exit_short_video_mode": "Exit short video mode"
+  "exit_short_video_mode": "Exit short video mode",
+  "unable_to_play": "Unable to play this file",
+  "open_settings": "Open settings",
+  "storage_permission_hint": "Storage permission is required to browse local files",
+  "no_media_files": "No playable media in this folder",
+  "empty_player_hint": "Drop a file here, or press Ctrl+O to open",
+  "empty_player_hint_mobile": "Tap the screen, then \u201cOpen file\u201d to pick a video"
 }

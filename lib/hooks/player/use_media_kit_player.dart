@@ -145,6 +145,13 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
   final isInitializing = useState(false);
 
+  /// 装载失败信息 (供界面显示错误 + 重试)
+  final loadError = useState<String?>(null);
+
+  /// 已经恢复过进度的文件: duration 可能多次变化, 只恢复一次,
+  /// 否则会把用户拖到别处后又被拉回旧进度。
+  final resumedFile = useRef<String?>(null);
+
   /// 装载会话: 每次 init 递增, 用于丢弃过期的异步结果
   final openSession = useRef(0);
 
@@ -208,6 +215,8 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
     if (file.uri == '') return;
     final session = ++openSession.value;
     isInitializing.value = true;
+    // 重试时先清掉上一次的错误, 让界面回到"加载中"
+    loadError.value = null;
 
     try {
       // 视频输出先于 open 就绪: 二者并行初始化时, 若视频先打开, 包内基于
@@ -244,6 +253,10 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       }
     } catch (e) {
       logger('Error initializing player: $e');
+      // 只有仍是当前装载会话时才报错 (旧会话的失败不该覆盖新文件)
+      if (session == openSession.value) {
+        loadError.value = e.toString();
+      }
     }
 
     // 已有更新的装载在进行时, 由它负责收尾 (避免提前熄灭加载指示)
@@ -254,6 +267,7 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
   useEffect(() {
     if (file == null || playQueue.isEmpty) {
+      loadError.value = null;
       player.stop();
     } else {
       init(file);
@@ -287,15 +301,19 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       }
       // 查询播放进度
       if (file != null && file.type == ContentType.video) {
-        Progress? progress = history[file.getID()];
-        if (progress != null) {
-          if (!alwaysPlayFromBeginning &&
-              (progress.duration.inMilliseconds -
-                      progress.position.inMilliseconds) >
-                  5000) {
-            logger(
-                'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
-            await player.seek(progress.position);
+        final fileId = file.getID();
+        if (resumedFile.value != fileId) {
+          resumedFile.value = fileId;
+          Progress? progress = history[fileId];
+          if (progress != null) {
+            if (!alwaysPlayFromBeginning &&
+                (progress.duration.inMilliseconds -
+                        progress.position.inMilliseconds) >
+                    5000) {
+              logger(
+                  'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
+              await player.seek(progress.position);
+            }
           }
         }
       }
@@ -327,6 +345,8 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
     () async {
       if (completed) {
         if (repeat == Repeat.one) return;
+        // 队列可能已被清空 (例如删掉了最后一条), 此时没有"下一条"
+        if (playQueue.isEmpty) return;
         if (currentPlayIndex == playQueue.length - 1) {
           if (repeat == Repeat.all) {
             await usePlayQueueStore().updateCurrentIndex(playQueue[0].index);
@@ -451,6 +471,8 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       audios: audios,
       isInitializing: isInitializing.value,
       isPlaying: playing,
+      error: loadError.value,
+      retry: file == null ? null : () => init(file),
       position: duration == Duration.zero ? Duration.zero : position,
       duration: duration,
       buffer: duration == Duration.zero ? Duration.zero : buffer,
@@ -481,12 +503,14 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
     [
       player,
       controller,
+      file,
       subtitle,
       subtitles,
       externalSubtitles,
       audio,
       audios,
       isInitializing.value,
+      loadError.value,
       playing,
       position,
       duration,
