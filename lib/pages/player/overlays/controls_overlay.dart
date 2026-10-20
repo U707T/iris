@@ -57,7 +57,6 @@ class ControlsOverlay extends HookWidget {
 
     void onHover(PointerHoverEvent event) {
       if (event.kind != PointerDeviceKind.touch) {
-        usePlayerUiStore().updateIsHovering(true);
         showControl();
       }
     }
@@ -72,6 +71,13 @@ class ControlsOverlay extends HookWidget {
           left: 0,
           right: 0,
           child: MouseRegion(
+            onEnter: (_) => usePlayerUiStore().updateIsHovering(true),
+            // 离开时重启计时器: 否则之前的 5s 计时早已空转结束,
+            // 指针移出窗口后控制栏会一直停在屏幕上。
+            onExit: (_) {
+              usePlayerUiStore().updateIsHovering(false);
+              showControl();
+            },
             onHover: onHover,
             child: GestureDetector(
               onTap: () => showControl(),
@@ -97,6 +103,11 @@ class ControlsOverlay extends HookWidget {
           child: Align(
             alignment: Alignment.bottomCenter,
             child: MouseRegion(
+              onEnter: (_) => usePlayerUiStore().updateIsHovering(true),
+              onExit: (_) {
+                usePlayerUiStore().updateIsHovering(false);
+                showControl();
+              },
               onHover: onHover,
               child: GestureDetector(
                 onTap: () => showControl(),

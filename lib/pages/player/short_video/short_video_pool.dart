@@ -2,17 +2,11 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/file.dart';
-import 'package:iris/models/player.dart';
 import 'package:iris/models/progress.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_history_store.dart';
-import 'package:iris/store/use_play_queue_store.dart';
-import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/logger.dart';
-import 'package:iris/utils/short_video.dart';
 import 'package:iris/utils/wait_for_first_frame.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -24,12 +18,6 @@ const int _shortVideoPoolSize = 3;
 const MethodChannel _videoOutputChannel =
     MethodChannel('com.alexmercerind/media_kit_video');
 
-/// 时长取值: 优先非零值 (流事件可能缺失, 此时以同步状态兜底)
-Duration _preferNonZero(Duration? preferred, Duration fallback) {
-  if (preferred != null && preferred > Duration.zero) return preferred;
-  if (fallback > Duration.zero) return fallback;
-  return preferred ?? fallback;
-}
 
 /// 单个播放器槽位
 class ShortVideoSlot {
@@ -55,6 +43,9 @@ class ShortVideoSlot {
 
   /// 是否有等待执行的装载请求
   bool pendingOpen = false;
+
+  /// 装载失败原因 (null = 正常), 由界面显示 + 重试
+  String? error;
 }
 
 /// 短视频模式使用的预载播放器池:
@@ -111,6 +102,7 @@ class ShortVideoPool extends ChangeNotifier {
           _collectSlotSave(slot);
           slot.pendingOpen = false;
           slot.played = false;
+          slot.error = null;
           slot.feedIndex = null;
           // 立即作废仍在飞行中的装载 / 尺寸同步 (token 递增), 并复位装载标记:
           // 槽位随后可能被重新分配给别的下标, 旧一代的异步结果不能落到新一代上
@@ -249,6 +241,7 @@ class ShortVideoPool extends ChangeNotifier {
     if (file == null) return;
 
     final token = ++slot.token;
+    slot.error = null;
     try {
       // 视频输出必须先于 open 就绪。
       // 播放器刚创建时 VideoController 的视频输出 (纹理 / 画面尺寸) 与 open 是
@@ -258,10 +251,9 @@ class ShortVideoPool extends ChangeNotifier {
       await _ensureVideoOutputReady(slot.controller);
       if (disposed || token != slot.token) return;
 
-      // 先应用循环 / 字幕关闭 / 倍速 / 音量等设置, 避免开始播放时短暂使用默认值
+      // 先应用循环 / 倍速 / 音量等设置, 避免开始播放时短暂使用默认值
       final appState = useAppStore().state;
       await slot.player.setPlaylistMode(PlaylistMode.loop);
-      // 短视频流不显示字幕: 显式关闭, 省去字幕解码 / 渲染开销
       await slot.player.setRate(appState.rate);
       await slot.player.setVolume(
           appState.isMuted ? 0 : appState.volume.toDouble());
@@ -300,9 +292,26 @@ class ShortVideoPool extends ChangeNotifier {
       logger('Short video pool open error: $e');
       if (!disposed && token == slot.token) {
         slot.initializing = false;
+        slot.error = e.toString();
         notifyListeners();
       }
     }
+  }
+
+  /// 重新装载一个失败的槽位 (界面上的"重试")。
+  /// 只重置错误/装载标记, 真正的 open 仍走帧后调度, 不在 build 期间碰播放器。
+  void reopen(ShortVideoSlot slot) {
+    if (disposed) return;
+    slot.error = null;
+    slot.initializing = true;
+    slot.played = false;
+    slot.pendingOpen = true;
+    // 作废该槽位上一代正在飞的 open / 尺寸同步
+    slot.token++;
+    userPaused = false;
+    // 立刻刷新界面 (收起错误卡片 / 显示加载指示)
+    notifyListeners();
+    _maybeSchedule();
   }
 
   /// 等待视频输出初始化完成 (带超时兜底: 个别平台上视频输出不可用时也不能卡死)
@@ -444,221 +453,3 @@ class ShortVideoPool extends ChangeNotifier {
   }
 }
 
-/// 短视频模式专用的 MediaPlayer, 附带播放器池供预载页面显示画面
-class ShortVideoMediaKitPlayer extends MediaKitPlayer {
-  final ShortVideoPool pool;
-
-  ShortVideoMediaKitPlayer({
-    required this.pool,
-    required super.player,
-    required super.controller,
-    required super.audio,
-    required super.audios,
-    required super.isInitializing,
-    required super.isPlaying,
-    required super.position,
-    required super.duration,
-    required super.buffer,
-    required super.width,
-    required super.height,
-    required super.saveProgress,
-    required super.play,
-    required super.pause,
-    required super.backward,
-    required super.forward,
-    required super.stepBackward,
-    required super.stepForward,
-    required super.seek,
-    super.screenshot,
-    super.getStats,
-  });
-}
-
-/// 短视频模式的 Media Kit 播放器池宿主
-MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
-  final playQueue =
-      usePlayQueueStore().select(context, (state) => state.playQueue);
-  final currentIndex =
-      usePlayQueueStore().select(context, (state) => state.currentIndex);
-
-  final items = useMemoized(() => getVideoItems(playQueue), [playQueue]);
-  final currentFeedIndex = useMemoized(
-    () => items.indexWhere((item) => item.index == currentIndex),
-    [items, currentIndex],
-  );
-
-
-  final pool = useMemoized(
-    () => ShortVideoPool(
-      buildMedia: (file) {
-        final storage = useStorageStore().findById(file.storageId);
-        final auth = storage?.getAuth();
-        return Media(
-          file.uri,
-          httpHeaders: auth != null ? {'authorization': auth} : {},
-        );
-      },
-    ),
-  );
-
-  useEffect(() {
-    return () => pool.dispose();
-  }, [pool]);
-
-  // 槽位装载完成 / 失败时刷新界面
-  useListenable(pool);
-
-  pool.reconcile(currentFeedIndex, items);
-
-  final rate = useAppStore().select(context, (state) => state.rate);
-  final volume = useAppStore().select(context, (state) => state.volume);
-  final isMuted = useAppStore().select(context, (state) => state.isMuted);
-
-  useEffect(() {
-    for (final slot in pool.slots) {
-      if (slot.loadedFile != null) slot.player.setRate(rate);
-    }
-    return;
-  }, [rate]);
-
-  useEffect(() {
-    for (final slot in pool.slots) {
-      if (slot.loadedFile != null) {
-        slot.player.setVolume(isMuted ? 0 : volume.toDouble());
-      }
-    }
-    return;
-  }, [volume, isMuted]);
-
-  final active =
-      pool.slotFor(currentFeedIndex) ?? pool.activeSlot ?? pool.slots.first;
-  final activePlayer = active.player;
-
-  // 注意: media_kit 的流不重放历史事件, 订阅开始前发生的事件会错过
-  // (预载槽位在激活前就已经打开完毕), 因此用同步的 state 做兜底。
-  final playing = useStream(
-        activePlayer.stream.playing,
-        preserveState: false,
-      ).data ??
-      activePlayer.state.playing;
-  final position = useStream(
-        activePlayer.stream.position,
-        preserveState: false,
-      ).data ??
-      activePlayer.state.position;
-  final duration = _preferNonZero(
-    useStream(activePlayer.stream.duration, preserveState: false).data,
-    activePlayer.state.duration,
-  );
-  final videoParams = useStream(
-        activePlayer.stream.videoParams,
-        preserveState: false,
-      ).data ??
-      activePlayer.state.videoParams;
-
-  Future<void> play() async {
-    final slot = pool.slotFor(pool.currentFeedIndex);
-    if (slot == null) return;
-    pool.userPaused = false;
-    // 播放器可能正在销毁 (模式刚退出), 失败时忽略
-    try {
-      await slot.player.play();
-      slot.played = true;
-    } catch (e) {
-      logger('Short video play error: $e');
-    }
-  }
-
-  Future<void> pause() async {
-    final slot = pool.slotFor(pool.currentFeedIndex);
-    if (slot == null) return;
-    pool.userPaused = true;
-    try {
-      await slot.player.pause();
-    } catch (e) {
-      logger('Short video pause error: $e');
-    }
-  }
-
-  Future<void> seek(Duration newPosition) async {
-    final slot = pool.slotFor(pool.currentFeedIndex);
-    if (slot == null) return;
-    final liveDuration = _preferNonZero(duration, slot.player.state.duration);
-    try {
-      newPosition.inMilliseconds < 0
-          ? await slot.player.seek(Duration.zero)
-          : liveDuration > Duration.zero && newPosition > liveDuration
-              ? await slot.player.seek(liveDuration)
-              : await slot.player.seek(newPosition);
-    } catch (e) {
-      logger('Short video seek error: $e');
-    }
-  }
-
-  Future<void> backward(int seconds) async =>
-      await seek(Duration(seconds: position.inSeconds - seconds));
-
-  Future<void> forward(int seconds) async =>
-      await seek(Duration(seconds: position.inSeconds + seconds));
-
-  Future<void> stepBackward() async {
-    final nativePlayer = pool.slotFor(pool.currentFeedIndex)?.player.platform;
-    if (nativePlayer is NativePlayer) {
-      try {
-        await nativePlayer.command(['frame-back-step']);
-      } catch (e) {
-        logger('Short video step backward error: $e');
-      }
-    }
-  }
-
-  Future<void> stepForward() async {
-    final nativePlayer = pool.slotFor(pool.currentFeedIndex)?.player.platform;
-    if (nativePlayer is NativePlayer) {
-      try {
-        await nativePlayer.command(['frame-step']);
-      } catch (e) {
-        logger('Short video step forward error: $e');
-      }
-    }
-  }
-
-  Future<void> saveProgress() async {
-    final slot = pool.slotFor(pool.currentFeedIndex);
-    if (slot != null && slot.played) pool.saveSlotProgress(slot);
-  }
-
-  return ShortVideoMediaKitPlayer(
-    pool: pool,
-    player: activePlayer,
-    controller: active.controller,
-    audio: AudioTrack.no(),
-    audios: const [],
-    isInitializing: active.initializing,
-    isPlaying: playing,
-    position: duration == Duration.zero ? Duration.zero : position,
-    duration: duration,
-    buffer: Duration.zero,
-    width: videoParams.w?.toDouble() ?? 0,
-    height: videoParams.h?.toDouble() ?? 0,
-    play: play,
-    pause: pause,
-    backward: backward,
-    forward: forward,
-    stepBackward: stepBackward,
-    stepForward: stepForward,
-    seek: seek,
-    saveProgress: saveProgress,
-    screenshot: () async {
-      try {
-        return await activePlayer.screenshot(
-          format: 'image/jpeg',
-        );
-      } catch (e) {
-        logger('Error taking screenshot: $e');
-        return null;
-      }
-    },
-    getStats: () => const {},
-  );
-}

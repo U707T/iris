@@ -8,6 +8,7 @@ import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/logger.dart';
+import 'package:iris/utils/toggle_mute_or_restore.dart';
 
 /// 短视频模式的设备音量调节 (音量按钮上按住上下滑动 / 悬停滚轮微调)。
 ///
@@ -182,15 +183,7 @@ class ShortVideoVolumeButton extends HookWidget {
     // 长按起点, 作为滑动的基准位置
     final anchor = useRef(Offset.zero);
 
-    /// 点击语义: 音量为 0 → 恢复到 80; 否则切换静音
-    void toggleMuteOrRestore() {
-      if (useAppStore().state.volume == 0) {
-        unawaited(useAppStore().updateVolume(80));
-      } else {
-        useAppStore().toggleMute();
-      }
-    }
-
+    /// 点击语义: 静音 / 取消静音 (音量为 0 时恢复到 80), 与主界面共用
     void onPressStart(LongPressStartDetails details) {
       anchor.value = details.globalPosition;
       holding.value = true;

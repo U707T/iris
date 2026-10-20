@@ -5,7 +5,7 @@ import 'package:iris/hooks/player/use_media_kit_player.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/player.dart';
 import 'package:iris/pages/player/player_handoff.dart';
-import 'package:iris/pages/player/short_video/short_video_pool.dart';
+import 'package:iris/pages/player/short_video/short_video_player.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:provider/provider.dart';
 

@@ -8,6 +8,14 @@ List<String> arguments = [];
 String? initUri;
 PermissionStatus? storagePermissionStatus;
 
+/// 本次启动由命令行 / Intent 显式打开文件 (应自动播放)。
+///
+/// 不直接 `updateAutoPlay(true)`: AppStore 与 PlayQueueStore 是两个独立
+/// 异步 load 的 store, 谁后完成谁说了算; 直接写会被 AppState.load 里的
+/// `autoPlay: false` 覆盖 (表现为"双击文件打开了却不播")。AppState.load
+/// 会读这个标记, 两种加载顺序都能得到正确结果。
+bool autoPlayOnLaunch = false;
+
 /// Windows 无障碍兼容开关 (规避引擎崩溃 flutter/flutter#175041)。
 /// 见 lib/utils/windows_a11y_compat.dart; main() 启动时按环境变量 / 命令行参数设置。
 bool disableWindowsA11y = false;

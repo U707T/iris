@@ -1,3 +1,37 @@
+## v2.3.4
+
+### Changelog
+
+* **Desktop: closing the window now saves your position.** Alt+F4, the taskbar close button and the in-app close button all go through one `WM_CLOSE` handler that saves the current playback position before destroying the window. A 30-second autosave (only once playback has advanced 20 seconds) covers crashes and force-kills as well
+* **A file that cannot be played now says so.** Opening has a 15-second timeout and every file switch invalidates the previous loader session — a slow network source can no longer land on top of the file you just switched to. Timeouts and decode errors show a card with the file name and a Retry button, in normal and short-video mode alike
+* **Resume works reliably again.** The resume decision waits for the history to be read from disk and is made once per file; `duration` changes during opening no longer drag you back to an old position. Switching files or stopping re-arms it
+* **Android: mixed local + SAF queues are saved.** A queue containing `content://` entries used to stop being persisted entirely; now only the session-only SAF entries are stripped (the current index is remapped), and the rest survives a restart. Deleting the last local item no longer brings it back on the next launch
+* **"Open with" / command-line auto-play race fixed.** The app state and the play queue load independently; a launch flag is now shared, so a file opened from the command line or an Intent starts playing regardless of which store finished first
+* **Drag and drop across folders.** Dropping several files builds the queue from the dropped list itself (duplicates and non-media files filtered); previously only the first file's folder was scanned, the other files were dropped silently, and a path mismatch could leave a queue that played nothing. Relative paths (`iris movie.mp4`) now work too
+* **Volume fixes.** "Muted + volume 0" now unmutes and restores 80% in one click; dragging the volume slider no longer writes the whole encrypted app state on every frame (once on release), and fast mouse-wheel steps are no longer lost (coalesced 400 ms write)
+* **The control bar no longer vanishes while you aim at it.** The 5-second auto-hide honours pointer hover on the title / control bars and restarts the timer when the pointer leaves
+* **Seeking while dragging is throttled** (120 ms, exact final position on release) in both the main player and short-video mode, instead of sending dozens of mpv seek commands per drag
+* **Queue order is consistent.** The file picker, drag and drop and the command line now use the same sort by name / size / modified time as the file browser
+* **WebDAV: new "default gateway" shortcut.** A small lightning button next to the Host field fills in the router's IP (Windows `route print`, Linux / Android `ip route` / `/proc/net/route`, macOS `route -n get default`). If it cannot be read, the dialog says so instead of guessing
+* Short video: the playback-stats OSD is no longer offered there (it had no data source); programmatic page jumps no longer commit intermediate pages
+* No other changes.
+
+### 更新日志
+
+* **桌面端关窗会保存进度了。** Alt+F4、任务栏关闭和自绘标题栏的 X 现在走同一个 `WM_CLOSE` 处理：先保存当前位置，再销毁窗口。另加 30 秒自动保存（位置前进超过 20 秒才写），崩溃 / 被强杀也能兜住
+* **播不了的文件会明确报错。** 打开加了 15 秒超时，切文件会作废上一轮装载 —— 慢速网络源不会再“晚到”并顶掉你刚切到的文件。超时 / 解码失败会显示文件名片 + 重试按钮，普通模式和短视频模式都有
+* **续播恢复可靠了。** 恢复判断会等历史记录读盘完成，且每个文件只决策一次；打开期间 `duration` 多次变化不会再把你拽回旧位置。切文件 / 停止后会重新允许恢复
+* **Android：本地 + SAF 混合队列会保存了。** 以前队列里只要有一条 `content://` 就整份不落盘；现在只剔除重启后打不开的 SAF 条目（当前索引自动映射），其余照常保留。删掉最后一条本地条目也不会在下次启动时“复活”
+* **“用其他应用打开” / 命令行的自动播放竞态修复。** 设置与播放队列是两个独立异步加载的 store，现在共用一个启动标记：从命令行或 Intent 打开文件，不管哪个先加载完都会自动播
+* **跨文件夹拖放。** 拖入多个文件时直接用拖入列表建队列（去重、过滤非媒体）；以前只扫第一个文件所在目录，其他文件被静默丢弃，路径对不上时还会出现“队列有内容但什么都不播”。相对路径（`iris movie.mp4`）也能用了
+* **音量修复。** “静音 + 音量 0”点一次就取消静音并恢复到 80%；拖动音量滑杆不再每帧把整份加密状态写盘（松手写一次）；快速滚轮不再丢步（400ms 合并写）
+* **鼠标停在控制栏上时不会被自动隐藏了。** 5 秒自动隐藏会看指针是否停在标题栏 / 控制栏上，指针离开时重新计时
+* **拖动进度条时 seek 节流**（120ms，松手补最终位置），主界面和短视频模式一致，不再一次拖动发几十条 mpv seek
+* **队列顺序统一。** 文件选择器、拖放和命令行现在都跟文件浏览器用同一套排序（名称 / 大小 / 修改时间）
+* **WebDAV：新增“默认网关”快捷按钮。** 主机框右侧的小闪电会自动填入路由器 IP（Windows `route print`、Linux / Android `ip route` / `/proc/net/route`、macOS `route -n get default`）；读不到就在输入框下方提示，不瞎猜
+* 短视频：不再提供播放统计 OSD（那边没有数据源）；程序化翻页不会再提交中间页
+* 本版无其他变化。
+
 ## v2.3.3
 
 ### Changelog

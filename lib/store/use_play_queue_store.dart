@@ -14,10 +14,25 @@ import 'package:iris/utils/get_shuffle_play_queue.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/purge_legacy_storage_types.dart';
+import 'package:iris/utils/queue_persistence.dart';
 import 'package:saf_util/saf_util.dart';
 
 class PlayQueueStore extends PersistentStore<PlayQueueState> {
   PlayQueueStore() : super(PlayQueueState());
+
+  /// 统一落盘入口: update / updateCurrentIndex / add / remove 必须走同一判定,
+  /// 否则会出现"索引被存了、队列却没存"的错位 (重启后索引指向不存在的条目)。
+  ///
+  /// 具体策略见 [persistedQueueState]: 混合队列只剔除 content:// 条目,
+  /// 而不是整份丢弃; 删除路径额外要求"全 SAF 时写空", 免得刚删掉的条目复活。
+  Future<void> _saveQueue({bool keepPreviousWhenEmpty = true}) async {
+    final snapshot = persistedQueueState(
+      state,
+      keepPreviousWhenEmpty: keepPreviousWhenEmpty,
+    );
+    if (snapshot == null) return;
+    await save(snapshot);
+  }
 
   Future<void> update({
     required List<PlayQueueItem> playQueue,
@@ -27,22 +42,12 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
       playQueue: playQueue,
       currentIndex: index ?? state.currentIndex,
     ));
-    if (Platform.isAndroid &&
-        state.playQueue.any((e) => e.file.uri.startsWith('content://'))) {
-      return;
-    }
-    await save(state);
+    await _saveQueue();
   }
 
   Future<void> updateCurrentIndex(int index) async {
     set(state.copyWith(currentIndex: index));
-    if (Platform.isAndroid &&
-        state.playQueue.any((e) =>
-            globals.initUri == e.file.uri &&
-            e.file.uri.startsWith('content://'))) {
-      return;
-    }
-    await save(state);
+    await _saveQueue();
   }
 
   Future<void> add(List<FileItem> files) async {
@@ -59,13 +64,7 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
         .toList();
 
     set(state.copyWith(playQueue: [...state.playQueue, ...playQueue]));
-    if (Platform.isAndroid &&
-        state.playQueue.any((e) =>
-            globals.initUri == e.file.uri &&
-            e.file.uri.startsWith('content://'))) {
-      return;
-    }
-    await save(state);
+    await _saveQueue();
   }
 
   Future<void> remove(PlayQueueItem item) async {
@@ -92,11 +91,8 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
         ));
       }
     }
-    if (Platform.isAndroid &&
-        state.playQueue.any((e) => e.file.uri.startsWith('content://'))) {
-      return;
-    }
-    await save(state);
+    // 删除路径不能"全 SAF 就保留旧快照": 否则刚删掉的本地条目会在重启后复活
+    await _saveQueue(keepPreviousWhenEmpty: false);
   }
 
   Future<void> previous() async {
@@ -158,6 +154,9 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
             ],
             currentIndex: 0,
           );
+          // 显式打开 (命令行 / Intent): 标记给 AppState.load 用, 避免
+          // 两个 store 的加载顺序把 autoPlay 冲掉。见 globals.autoPlayOnLaunch。
+          globals.autoPlayOnLaunch = true;
           await useAppStore().updateAutoPlay(true);
           await save(state);
           return state;
@@ -168,6 +167,9 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
         if (isMediaFile(filePath)) {
           final state = await getLocalPlayQueue(filePath);
           if (state != null && state.playQueue.isNotEmpty) {
+            // 显式打开 (命令行 / Intent): 标记给 AppState.load 用, 避免
+            // 两个 store 的加载顺序把 autoPlay 冲掉。见 globals.autoPlayOnLaunch。
+            globals.autoPlayOnLaunch = true;
             await useAppStore().updateAutoPlay(true);
             await save(state);
             return state;
@@ -181,6 +183,9 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
       if (uri != null && Platform.isAndroid) {
         final file = await SafUtil().documentFileFromUri(uri, false);
         if (file != null) {
+          // 显式打开 (命令行 / Intent): 标记给 AppState.load 用, 避免
+          // 两个 store 的加载顺序把 autoPlay 冲掉。见 globals.autoPlayOnLaunch。
+          globals.autoPlayOnLaunch = true;
           await useAppStore().updateAutoPlay(true);
           return PlayQueueState(
             playQueue: [

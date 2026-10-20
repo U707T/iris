@@ -66,6 +66,10 @@ class PlayerUiStore extends Store<PlayerUiState> {
     set(state.copyWith(isShowStats: !state.isShowStats));
   }
 
+  void updateIsShowStats(bool isShowStats) {
+    set(state.copyWith(isShowStats: isShowStats));
+  }
+
   Future<void> toggleIsAlwaysOnTop() async {
     if (isDesktop) {
       windowManager.setAlwaysOnTop(!state.isAlwaysOnTop);

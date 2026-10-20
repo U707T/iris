@@ -1,8 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/player.dart';
-import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/format_duration_to_minutes.dart';
 import 'package:provider/provider.dart';
@@ -21,7 +19,10 @@ class ControlBarSlider extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final autoPlay = useAppStore().select(context, (state) => state.autoPlay);
+    // 拖动开始时是否正在播放 (决定松手后要不要恢复) ——
+    // 不能用全局 autoPlay 判断: 被系统/媒体键暂停时 autoPlay 仍是 true,
+    // 拖一下进度条会莫名其妙开始播放。
+    final wasPlaying = useRef(false);
 
     final progress = context.select<
         MediaPlayer,
@@ -98,15 +99,18 @@ class ControlBarSlider extends HookWidget {
                   onChangeStart: disabled
                       ? null
                       : (value) {
+                          wasPlaying.value =
+                              context.read<MediaPlayer>().isPlaying;
                           usePlayerUiStore().updateIsSeeking(true);
                           pause();
                         },
                   onChangeEnd: disabled
                       ? null
                       : (value) async {
-                          if (autoPlay) {
-                            play();
+                          if (wasPlaying.value) {
+                            await play();
                           }
+                          wasPlaying.value = false;
                           usePlayerUiStore().updateIsSeeking(false);
                         },
                 ),

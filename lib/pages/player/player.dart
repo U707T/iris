@@ -11,16 +11,16 @@ import 'package:iris/hooks/use_keyboard.dart';
 import 'package:iris/info.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
-import 'package:iris/models/storages/local.dart';
 import 'package:iris/pages/player/audio.dart';
 import 'package:iris/pages/player/overlays/controls_overlay.dart';
 import 'package:iris/pages/player/overlays/gesture_overlay.dart';
 import 'package:iris/pages/player/overlays/minimal_progress_overlay.dart';
+import 'package:iris/pages/player/overlays/playback_error_overlay.dart';
 import 'package:iris/pages/player/overlays/stats_overlay.dart';
 import 'package:iris/pages/player/short_video/short_video_view.dart';
 import 'package:iris/pages/player/video_view.dart';
 import 'package:iris/store/use_player_ui_store.dart';
-import 'package:iris/utils/check_content_type.dart';
+import 'package:iris/utils/drop_queue.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
@@ -49,6 +49,8 @@ class Player extends HookWidget {
     final fit = useAppStore().select(context, (state) => state.fit);
     final isShortVideoMode =
         usePlayerUiStore().select(context, (state) => state.isShortVideoMode);
+    final playbackError =
+        context.select<MediaPlayer, String?>((player) => player.error);
 
     final playQueue =
         usePlayQueueStore().select(context, (state) => state.playQueue);
@@ -115,7 +117,8 @@ class Player extends HookWidget {
 
     void showControl() {
       usePlayerUiStore().updateIsShowControl(true);
-      usePlayerUiStore().updateIsHovering(false);
+      // 不要在这里重置 isHovering: 悬停回调会先置 true 再调 showControl,
+      // 重置会把"指针停在控制栏上"的状态抹掉, 5 秒后控制栏照样消失。
       resetControlHideTimer();
     }
 
@@ -131,6 +134,8 @@ class Player extends HookWidget {
         showControl();
         usePlayerUiStore().updateIsHovering(true);
         await callback;
+        // 弹层关闭后没人在鼠标事件里复位, 这里显式收尾
+        usePlayerUiStore().updateIsHovering(false);
         showControl();
       } catch (e) {
         logger(e.toString());
@@ -242,30 +247,17 @@ class Player extends HookWidget {
 
     return DropTarget(
       onDragDone: (details) async {
-        final files = details.files
-            .map((file) => checkContentType(file.path) == ContentType.video ||
-                    checkContentType(file.path) == ContentType.audio
-                ? file.path
-                : null)
-            .where((element) => element != null)
-            .toList() as List<String>;
-        if (files.isNotEmpty) {
-          final firstFile = files[0];
-          if (firstFile.isEmpty) return;
-          final playQueue = await getLocalPlayQueue(firstFile);
-          if (playQueue == null || playQueue.playQueue.isEmpty) return;
-          final List<PlayQueueItem> filteredPlayQueue = [];
-          for (final item in playQueue.playQueue) {
-            final file = item.file;
-            if (files.contains(file.uri)) {
-              filteredPlayQueue.add(item);
-            }
-          }
-          if (filteredPlayQueue.isEmpty) return;
-          useAppStore().updateAutoPlay(true);
-          usePlayQueueStore().update(
-              playQueue: filteredPlayQueue, index: playQueue.currentIndex);
-        }
+        // 直接用拖入列表建队列 (跨目录拖入不再丢文件,
+        // currentIndex 也不会指向被过滤掉的条目)
+        final playQueue =
+            buildDropPlayQueue(details.files.map((file) => file.path));
+        if (playQueue == null || playQueue.playQueue.isEmpty) return;
+
+        useAppStore().updateAutoPlay(true);
+        usePlayQueueStore().update(
+          playQueue: playQueue.playQueue,
+          index: playQueue.currentIndex,
+        );
       },
       child: PopScope(
         canPop: false,
@@ -314,9 +306,10 @@ class Player extends HookWidget {
                   ),
                 ),
               ],
-              // 播放统计 OSD
-              if (usePlayerUiStore()
-                  .select(context, (state) => state.isShowStats))
+              // 播放统计 OSD (短视频模式没有统计源, 不显示, 免得开出一个空面板)
+              if (!isShortVideoMode &&
+                  usePlayerUiStore()
+                      .select(context, (state) => state.isShowStats))
                 const StatsOverlay(),
               // 退出确认提示 (Android 返回键二次确认)
               if (isExitConfirm.value)
@@ -353,6 +346,14 @@ class Player extends HookWidget {
                     showControlForHover: showControlForHover,
                     hideControl: hideControl,
                     showProgress: showProgress,
+                  ),
+                ),
+              // 播放失败提示 (装载超时 / 解码失败 / 网络错误)
+              if (!isShortVideoMode && playbackError != null)
+                Positioned.fill(
+                  child: PlaybackErrorOverlay(
+                    fileName: file?.name,
+                    onRetry: () => context.read<MediaPlayer>().play(),
                   ),
                 ),
             ],

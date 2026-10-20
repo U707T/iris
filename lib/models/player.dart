@@ -10,6 +10,11 @@ class MediaPlayer {
   final Duration buffer;
   final double width;
   final double height;
+
+  /// 最近一次装载 / 播放失败的原因 (null = 正常)。
+  /// release 下 logger 是空操作, 没有这个字段用户只会看到黑屏。
+  final String? error;
+
   final Future<void> Function() saveProgress;
   final Future<void> Function() play;
   final Future<void> Function() pause;
@@ -33,6 +38,7 @@ class MediaPlayer {
     required this.buffer,
     required this.width,
     required this.height,
+    this.error,
     required this.saveProgress,
     required this.play,
     required this.pause,
@@ -64,6 +70,7 @@ class MediaKitPlayer extends MediaPlayer {
     required super.buffer,
     required super.width,
     required super.height,
+    super.error,
     required super.saveProgress,
     required super.play,
     required super.pause,

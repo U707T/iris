@@ -38,8 +38,14 @@ class VolumeSlider extends HookWidget {
             value: isMuted ? 0 : volume.toDouble(),
             onChanged: (value) {
               showControl();
-              useAppStore().updateMute(false);
-              useAppStore().updateVolume((value).toInt());
+              // 拖动过程中只改内存: 每个 tick 都落盘会把整份 AppState
+              // 加密写一次 (一次拖动几十次)。松手时由 onChangeEnd 统一保存。
+              useAppStore().updateMute(false, persist: false);
+              useAppStore().updateVolume(value.toInt(), persist: false);
+            },
+            onChangeEnd: (_) {
+              // 落盘最终音量 (整份 state 一起写入, 静音状态也会被带上)
+              useAppStore().updateVolume(useAppStore().state.volume);
             },
             min: 0,
             max: 100,

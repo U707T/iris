@@ -167,5 +167,9 @@
   "shift_for_large_step": "按住 Shift 步长更大",
   "seek_step_large": "快进/快退时长（按住 Shift）",
   "short_video_mode": "短视频模式",
-  "exit_short_video_mode": "退出短视频模式"
+  "exit_short_video_mode": "退出短视频模式",
+  "playback_failed": "无法播放此文件",
+  "retry": "重试",
+  "default_gateway": "默认网关",
+  "default_gateway_failed": "无法读取默认网关"
 }

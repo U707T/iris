@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
+import 'package:iris/globals.dart' as globals;
 import 'package:iris/models/store/app_state.dart';
 import 'package:iris/store/persistent_store.dart';
 import 'package:iris/utils/logger.dart';
@@ -83,9 +84,9 @@ class AppStore extends PersistentStore<AppState> {
     if (persist) await save(state);
   }
 
-  Future<void> updateMute(bool isMuted) async {
+  Future<void> updateMute(bool isMuted, {bool persist = true}) async {
     set(state.copyWith(isMuted: isMuted));
-    await save(state);
+    if (persist) await save(state);
   }
 
   Future<void> toggleMute() async {
@@ -173,7 +174,11 @@ class AppStore extends PersistentStore<AppState> {
 
       if (appState != null) {
         return AppState.fromJson(json.decode(appState)).copyWith(
-          autoPlay: false,
+          // 默认不自动播放 (避免启动就出声); 但命令行 / Intent 显式打开
+          // 文件时, 队列那边已经把 globals.autoPlayOnLaunch 置 true。
+          // 读这个标记而不是硬编码 false: 两个 store 的异步加载顺序不定,
+          // 硬编码会把显式打开的 autoPlay 覆盖掉。
+          autoPlay: globals.autoPlayOnLaunch,
         );
       }
     } catch (e) {

@@ -147,8 +147,41 @@ class ControlBar extends HookWidget {
     const double mobileBreakpoint = 640.0;
     const double tabletBreakpoint = 1024.0;
 
-    final Widget controlLayout;
+    // 按钮只声明一次, 三种布局只决定"怎么摆":
+    // 以前三份列表各写一遍, 已经分叉 (mobile 没有 rate), 加按钮要改三处。
+    final List<Widget> mobileTransportButtons = [
+      shuffleButton,
+      prevButton,
+      playPauseButton,
+      stopButton,
+      nextButton,
+      repeatButton,
+    ];
+    final List<Widget> desktopTransportButtons = [
+      playPauseButton,
+      stopButton,
+      prevButton,
+      nextButton,
+      shuffleButton,
+      repeatButton,
+    ];
+    final List<Widget> viewButtons = [
+      if (file?.type != ContentType.audio) fitButton,
+      if (file?.type != ContentType.audio) zoomButton,
+      // 手机这一行已经放不下, rate 只保留在平板 / 桌面
+      if (width >= mobileBreakpoint) rateButton,
+      volumeWidget,
+    ];
+    final List<Widget> panelButtons = [
+      audioTrackButton,
+      playQueueButton,
+      storageButton,
+      if (hasVideos) shortVideoButton,
+      if (isDesktop) fullscreenButton,
+      moreMenuButton,
+    ];
 
+    final Widget controlLayout;
     if (width < mobileBreakpoint) {
       controlLayout = Column(
         mainAxisSize: MainAxisSize.min,
@@ -157,30 +190,13 @@ class ControlBar extends HookWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              shuffleButton,
-              prevButton,
-              playPauseButton,
-              stopButton,
-              nextButton,
-              repeatButton,
-            ],
+            children: mobileTransportButtons,
           ),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (file?.type != ContentType.audio) fitButton,
-              if (file?.type != ContentType.audio) zoomButton,
-              volumeWidget,
-              audioTrackButton,
-              playQueueButton,
-              storageButton,
-              if (hasVideos) shortVideoButton,
-              if (isDesktop) fullscreenButton,
-              moreMenuButton,
-            ],
-          )
+            children: [...viewButtons, ...panelButtons],
+          ),
         ],
       );
     } else if (width < tabletBreakpoint) {
@@ -192,23 +208,10 @@ class ControlBar extends HookWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              playPauseButton,
-              stopButton,
-              prevButton,
-              nextButton,
-              shuffleButton,
-              repeatButton,
-              if (file?.type != ContentType.audio) fitButton,
-              if (file?.type != ContentType.audio) zoomButton,
-              rateButton,
-              volumeWidget,
+              ...desktopTransportButtons,
+              ...viewButtons,
               const Spacer(),
-              audioTrackButton,
-              playQueueButton,
-              storageButton,
-              if (hasVideos) shortVideoButton,
-              if (isDesktop) fullscreenButton,
-              moreMenuButton,
+              ...panelButtons,
             ],
           ),
         ],
@@ -217,23 +220,10 @@ class ControlBar extends HookWidget {
       controlLayout = Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          playPauseButton,
-          stopButton,
-          prevButton,
-          nextButton,
-          shuffleButton,
-          repeatButton,
-          if (file?.type != ContentType.audio) fitButton,
-          if (file?.type != ContentType.audio) zoomButton,
-          rateButton,
-          volumeWidget,
+          ...desktopTransportButtons,
+          ...viewButtons,
           Expanded(child: sliderWidget),
-          audioTrackButton,
-          playQueueButton,
-          storageButton,
-          if (hasVideos) shortVideoButton,
-          if (isDesktop) fullscreenButton,
-          moreMenuButton,
+          ...panelButtons,
         ],
       );
     }

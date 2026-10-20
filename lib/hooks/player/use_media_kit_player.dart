@@ -1,61 +1,44 @@
 import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
-import 'package:iris/globals.dart' as globals;
+import 'package:iris/hooks/player/use_auto_next.dart';
+import 'package:iris/hooks/player/use_player_engine.dart';
+import 'package:iris/hooks/player/use_player_progress.dart';
+import 'package:iris/hooks/player/use_player_stats.dart';
+import 'package:iris/hooks/player/use_player_streams.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
-import 'package:iris/models/progress.dart';
 import 'package:iris/models/store/app_state.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_history_store.dart';
-import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
-import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/logger.dart';
-import 'package:iris/utils/platform.dart';
-import 'package:iris/utils/queue_navigation.dart';
-import 'package:iris/utils/wait_for_first_frame.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 
+/// 普通模式的 Media Kit 播放器。
+///
+/// 只做组装与"用户操作"（播放 / 暂停 / seek / 逐帧 / 截图）；
+/// 具体职责拆在：
+/// - `use_player_engine.dart`   生命周期、装载会话、当前文件、open 时序
+/// - `use_player_streams.dart`  media_kit 流 -> 快照
+/// - `use_player_progress.dart` 进度保存 / 恢复
+/// - `use_player_stats.dart`    统计轮询
+/// - `use_auto_next.dart`       播完连播
+// 注意: MediaPlayer 是"本帧快照", position / duration 每次变化都会重建。
+// 下面依赖表里的回调是每帧新建的闭包, 所以这不是跨帧缓存, 而是"跟着快照
+// 刷新"的显式依赖表; 不要把它当成可复用对象去优化。
 MediaKitPlayer useMediaKitPlayer(BuildContext context) {
-  final player = useMemoized(
-    () => Player(
-      // 字幕功能已移除: 关闭 libass 渲染 (Android 上 libass 依赖内置字体,
-      // 没有字体时内嵌字幕会渲染成方块)。画面上的字幕层另外也已关闭,
-      // 见 video_view.dart 的 SubtitleViewConfiguration。
-      configuration: const PlayerConfiguration(
-        libass: false,
-      ),
-    ),
-  );
+  final engine = usePlayerEngine(context);
+  final player = engine.player;
+  final file = engine.file;
 
-  final controller = useMemoized(() => VideoController(player));
+  final streams = usePlayerStreams(player);
 
   final rate = useAppStore().select(context, (state) => state.rate);
   final volume = useAppStore().select(context, (state) => state.volume);
   final isMuted = useAppStore().select(context, (state) => state.isMuted);
-
-  useEffect(() {
-    void applyInitialSettings() {
-      player.setRate(rate);
-      player.setVolume(isMuted ? 0 : volume.toDouble());
-    }
-
-    applyInitialSettings();
-    return () {
-      // 先立即静音再异步销毁: dispose 内部要等播放器初始化 / 视频输出就绪,
-      // 可能明显滞后 (切换模式时旧播放器继续出声的根因之一)
-      unawaited(player.stop().catchError((_) {}));
-      unawaited(player.dispose().catchError((_) {}));
-    };
-  }, []);
-
-  final List<PlayQueueItem> playQueue =
-      usePlayQueueStore().select(context, (state) => state.playQueue);
-  final int currentIndex =
-      usePlayQueueStore().select(context, (state) => state.currentIndex);
   final bool autoPlay =
       useAppStore().select(context, (state) => state.autoPlay);
   final Repeat repeat = useAppStore().select(context, (state) => state.repeat);
@@ -64,234 +47,27 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
   final history = useHistoryStore().select(context, (state) => state.history);
 
-  final int currentPlayIndex = useMemoized(
-      () => playQueue.indexWhere((element) => element.index == currentIndex),
-      [playQueue, currentIndex]);
-
-  final FileItem? file = useMemoized(
-      () => playQueue.isEmpty || currentPlayIndex < 0
-          ? null
-          : playQueue[currentPlayIndex].file,
-      [playQueue, currentPlayIndex]);
-
-  final playingStream = useMemoized(() => player.stream.playing, []);
-  bool playing = useStream(playingStream).data ?? false;
-
-  final videoParamsStream = useMemoized(() => player.stream.videoParams, []);
-  VideoParams? videoParams = useStream(videoParamsStream).data;
-
-  // AudioParams? audioParams = useStream(player.stream.audioParams).data;
-
-  final positionStream = useMemoized(() => player.stream.position, []);
-  final position = useStream(positionStream).data ?? Duration.zero;
-
-  final durationStream = useMemoized(() => player.stream.duration, []);
-  Duration duration = useStream(durationStream).data ?? Duration.zero;
-
-  final bufferStream = useMemoized(() => player.stream.buffer, []);
-  Duration buffer = useStream(bufferStream).data ?? Duration.zero;
-
-  final completedStream = useMemoized(() => player.stream.completed, []);
-  bool completed = useStream(completedStream).data ?? false;
-
-  // double rate = useStream(player.stream.rate).data ?? 1.0;
-
-  final trackStream = useMemoized(() => player.stream.track, []);
-  Track? track = useStream(trackStream).data;
-  AudioTrack audio =
-      useMemoized(() => track?.audio ?? AudioTrack.no(), [track?.audio]);
-
-  final tracksStream = useMemoized(() => player.stream.tracks, []);
-  Tracks? tracks = useStream(tracksStream).data;
-  List<AudioTrack> audios =
-      useMemoized(() => (tracks?.audio ?? []), [tracks?.audio]);
-
-  final isInitializing = useState(false);
-
-  /// 已恢复过播放进度的文件 ID (duration 会多次变化, 只恢复一次)
-  final restoredProgressKey = useRef<String?>(null);
-
-  /// 装载会话: 每次 init 递增, 用于丢弃过期的异步结果
-  final openSession = useRef(0);
-
-  // 播放统计 (由定时器异步刷新, 供 UI 同步读取)
-  final mediaKitStats = useRef<Map<String, String>?>(null);
-  final statsTimer = useRef<Timer?>(null);
   final isShowStats =
       usePlayerUiStore().select(context, (state) => state.isShowStats);
+  // 统计轮询独立成 hook (帧率 / 丢帧 / 解码器 / 缓存), 返回同步读取函数
+  final getStats = usePlayerStats(player, isShowStats: isShowStats);
 
-  useEffect(() {
-    Future<void> refreshStats() async {
-      try {
-        final nativePlayer = player.platform;
-        if (nativePlayer is! NativePlayer) return;
+  final saveProgress = usePlayerProgress(
+    player: player,
+    file: file,
+    duration: streams.duration,
+    alwaysPlayFromBeginning: alwaysPlayFromBeginning,
+    history: history,
+  );
 
-        final results = <String, String>{};
-
-        Future<void> read(String key, String property) async {
-          try {
-            final value =
-                await nativePlayer.getProperty(property, waitForInitialization: false);
-            if (value.isNotEmpty && value != 'no') {
-              results[key] = value;
-            }
-          } catch (_) {}
-        }
-
-        await read('fps', 'estimated-vf-fps');
-        await read('drops', 'frame-drop-count');
-        await read('decoder', 'hwdec-current');
-        await read('pixfmt', 'video-format');
-        await read('cache', 'cache-speed');
-
-        if (results.isNotEmpty) {
-          mediaKitStats.value = results;
-        }
-      } catch (_) {}
-    }
-
-    void start() {
-      statsTimer.value?.cancel();
-      // 仅在需要时启用, 每秒刷新一次
-      if (isShowStats) {
-        statsTimer.value = Timer.periodic(
-          const Duration(seconds: 1),
-          (_) => refreshStats(),
-        );
-        refreshStats();
-      }
-    }
-
-    start();
-    return () {
-      statsTimer.value?.cancel();
-    };
-  }, [isShowStats]);
-
-  Future<void> init(FileItem file) async {
-    if (file.uri == '') return;
-    final session = ++openSession.value;
-    isInitializing.value = true;
-
-    try {
-      // 视频输出先于 open 就绪: 二者并行初始化时, 若视频先打开, 包内基于
-      // videoParams 的画面尺寸同步会丢失, 画面会一直按初始的 1x1 比例显示
-      // (带超时兜底, 视频输出不可用时也不能把 open 卡死)
-      try {
-        await controller.platform.future.timeout(const Duration(seconds: 2));
-      } catch (e) {
-        logger('Video output not ready: $e');
-      }
-
-      final storage = useStorageStore().findById(file.storageId);
-      final auth = storage?.getAuth();
-      logger('Open file: $file');
-      // 视频: 先以暂停方式打开, 等首帧渲染出来再开始播放 —— 否则音频会先出声,
-      // 画面还黑着 (视频输出 / 首帧解码比音频慢)
-      final waitFirstFrame = autoPlay && file.type == ContentType.video;
-      await player.open(
-        Media(
-          file.uri,
-          httpHeaders: auth != null ? {'authorization': auth} : {},
-        ),
-        play: autoPlay && !waitFirstFrame,
-      );
-      if (waitFirstFrame) {
-        await waitForFirstFrame(controller);
-        // 等待期间用户可能已暂停 / 已切换文件: 这时不要抢回播放
-        final stillCurrent = session == openSession.value;
-        if (stillCurrent && useAppStore().state.autoPlay) {
-          await player.play();
-        }
-      }
-    } catch (e) {
-      logger('Error initializing player: $e');
-    }
-
-    // 已有更新的装载在进行时, 由它负责收尾 (避免提前熄灭加载指示)
-    if (session == openSession.value) {
-      isInitializing.value = false;
-    }
-  }
-
-  useEffect(() {
-    // 换了文件 (或停止) 就重新允许恢复一次进度
-    restoredProgressKey.value = null;
-    if (file == null || playQueue.isEmpty) {
-      player.stop();
-    } else {
-      init(file);
-    }
-    return () {
-      if (isAndroid &&
-          globals.initUri == file?.uri &&
-          globals.initUri != null &&
-          globals.initUri!.startsWith('content://')) {
-        return;
-      }
-
-      if (file != null && player.state.duration != Duration.zero) {
-        logger(
-            'Save progress: ${file.name}, position: ${player.state.position}, duration: ${player.state.duration}');
-        useHistoryStore().add(Progress(
-          dateTime: DateTime.now().toUtc(),
-          position: player.state.position,
-          duration: player.state.duration,
-          file: file,
-        ));
-      }
-    };
-  }, [file]);
-
-  useEffect(() {
-    () async {
-      if (duration == Duration.zero) return;
-      // 查询播放进度 (每个文件只恢复一次)
-      if (file != null && file.type == ContentType.video) {
-        Progress? progress = history[file.getID()];
-        if (progress != null) {
-          if (!alwaysPlayFromBeginning &&
-              (progress.duration.inMilliseconds -
-                      progress.position.inMilliseconds) >
-                  5000) {
-            // duration 在播放中会多次变化 (探测 / 变分辨率), 这个 effect 会跟着
-            // 反复执行; 每次都 seek 会把已经看到一半的用户拽回旧进度。
-            if (restoredProgressKey.value != file.getID()) {
-              restoredProgressKey.value = file.getID();
-              logger(
-                  'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
-              await player.seek(progress.position);
-            }
-          } else {
-            // 不恢复也要记一笔, 避免中途 duration 变化后突然又去 seek
-            restoredProgressKey.value = file.getID();
-          }
-        }
-      }
-    }();
-    return;
-  }, [duration]);
-
-  useEffect(() {
-    () async {
-      if (!completed) return;
-      // 队列可能已经被清空 / 当前项已被删除: 交给共用逻辑判空, 不要直接取下标
-      final next = nextIndexOnCompleted(
-        playQueue: playQueue,
-        currentPlayIndex: currentPlayIndex,
-        repeat: repeat,
-      );
-      if (next == null) return;
-      if (next == currentPlayIndex) {
-        // 单条队列 + 列表循环: 下标没变, 不会再触发装载, 手动回到开头重播
-        await player.seek(Duration.zero);
-        await player.play();
-        return;
-      }
-      await usePlayQueueStore().updateCurrentIndex(playQueue[next].index);
-    }();
-    return null;
-  }, [completed, repeat]);
+  // 播完自动连播（“下一条是谁”的规则见 queue_navigation.dart）
+  useAutoNext(
+    player: player,
+    playQueue: engine.playQueue,
+    currentPlayIndex: engine.currentPlayIndex,
+    repeat: repeat,
+    completed: streams.completed,
+  );
 
   useEffect(() {
     player.setRate(rate);
@@ -302,6 +78,22 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
     player.setVolume(isMuted ? 0 : volume.toDouble());
     return;
   }, [volume, isMuted]);
+
+  // AppState 比队列晚加载完时, init 可能已经在 autoPlay=false 的状态下把
+  // 文件打开了 (表现为"双击文件打开了, 却停在开头不播")。autoPlay 翻转成
+  // true (或装载刚结束时) 补一次, 但只在"停在开头"时接管 ——
+  // 用户中途暂停不会被抢回播放。
+  useEffect(() {
+    if (!autoPlay) return null;
+    if (file == null || engine.isInitializing) return null;
+    if (player.state.playing) return null;
+    if (player.state.duration == Duration.zero) return null;
+    if (player.state.position > const Duration(seconds: 1)) return null;
+    unawaited(player.play().catchError((_) {}));
+    return null;
+    // isInitializing 也要进依赖: autoPlay 若在"装载中"翻转, 只靠 autoPlay
+    // 变化会错过补播, 装载结束这一刻还需要再看一眼。
+  }, [autoPlay, engine.isInitializing]);
 
   useEffect(() {
     logger('$repeat');
@@ -319,41 +111,21 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       return;
     }
 
-    final width = videoParams?.w ?? 0;
-    final height = videoParams?.h ?? 0;
+    final width = streams.videoParams?.w ?? 0;
+    final height = streams.videoParams?.h ?? 0;
     if (width == 0 || height == 0) {
       usePlayerUiStore().updateAspectRatio(0);
     } else {
       usePlayerUiStore().updateAspectRatio(width / height);
     }
     return;
-  }, [file?.type, videoParams?.w, videoParams?.h]);
-
-  Future<void> saveProgress() async {
-    if (isAndroid &&
-        globals.initUri == file?.uri &&
-        globals.initUri != null &&
-        globals.initUri!.startsWith('content://')) {
-      return;
-    }
-
-    if (file != null && player.state.duration != Duration.zero) {
-      logger(
-          'Save progress: ${file.name}, position: ${player.state.position}, duration: ${player.state.duration}');
-      useHistoryStore().add(Progress(
-        dateTime: DateTime.now().toUtc(),
-        position: player.state.position,
-        duration: player.state.duration,
-        file: file,
-      ));
-    }
-  }
-
-  useEffect(() => saveProgress, []);
+  }, [file?.type, streams.videoParams?.w, streams.videoParams?.h]);
 
   Future<void> play() async {
-    if (duration == Duration.zero && file != null && !isInitializing.value) {
-      await init(file);
+    if (streams.duration == Duration.zero &&
+        file != null &&
+        !engine.isInitializing) {
+      await engine.init(file);
     }
     await player.play();
   }
@@ -365,16 +137,16 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   Future<void> seek(Duration newPosition) async =>
       newPosition.inMilliseconds < 0
           ? await player.seek(Duration.zero)
-          : newPosition.inMilliseconds > duration.inMilliseconds
-              ? await player.seek(duration)
+          : newPosition.inMilliseconds > streams.duration.inMilliseconds
+              ? await player.seek(streams.duration)
               : await player.seek(newPosition);
 
   Future<void> backward(int seconds) async {
-    await seek(Duration(seconds: position.inSeconds - seconds));
+    await seek(Duration(seconds: streams.position.inSeconds - seconds));
   }
 
   Future<void> forward(int seconds) async {
-    await seek(Duration(seconds: position.inSeconds + seconds));
+    await seek(Duration(seconds: streams.position.inSeconds + seconds));
   }
 
   Future<void> stepBackward() async {
@@ -396,16 +168,20 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   final mediaKitPlayer = useMemoized(
     () => MediaKitPlayer(
       player: player,
-      controller: controller,
-      audio: audio,
-      audios: audios,
-      isInitializing: isInitializing.value,
-      isPlaying: playing,
-      position: duration == Duration.zero ? Duration.zero : position,
-      duration: duration,
-      buffer: duration == Duration.zero ? Duration.zero : buffer,
-      width: videoParams?.w?.toDouble() ?? 0,
-      height: videoParams?.h?.toDouble() ?? 0,
+      controller: engine.controller,
+      audio: streams.audio,
+      audios: streams.audios,
+      isInitializing: engine.isInitializing,
+      isPlaying: streams.playing,
+      position: streams.duration == Duration.zero
+          ? Duration.zero
+          : streams.position,
+      duration: streams.duration,
+      buffer:
+          streams.duration == Duration.zero ? Duration.zero : streams.buffer,
+      width: streams.videoParams?.w?.toDouble() ?? 0,
+      height: streams.videoParams?.h?.toDouble() ?? 0,
+      error: engine.error,
       saveProgress: saveProgress,
       play: play,
       pause: pause,
@@ -422,21 +198,22 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
           return null;
         }
       },
-      // 同步读取缓存值, 由定时器异步刷新
-      getStats: () => mediaKitStats.value ?? const {},
+      // 同步读取缓存值, 由统计 hook 的定时器异步刷新
+      getStats: getStats,
     ),
     [
       player,
-      controller,
-      audio,
-      audios,
-      isInitializing.value,
-      playing,
-      position,
-      duration,
-      buffer,
-      videoParams?.w,
-      videoParams?.h,
+      engine.controller,
+      streams.audio,
+      streams.audios,
+      engine.isInitializing,
+      streams.playing,
+      streams.position,
+      streams.duration,
+      streams.buffer,
+      streams.videoParams?.w,
+      streams.videoParams?.h,
+      engine.error,
       saveProgress,
       play,
       pause,

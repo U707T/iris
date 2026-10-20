@@ -11,6 +11,7 @@ import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/throttled_seek.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -92,6 +93,14 @@ Gesture useGesture({
 
   final brightness = useBrightness(isLeftGesture.value);
   final volume = useVolume(isRightGesture.value);
+
+  /// 横向拖动 seek 节流: 不在每个 pointer move 上发 seek
+  final seekThrottle = useMemoized(
+    () => ThrottledSeek(
+      seekTo: (target) => context.read<MediaPlayer>().seek(target),
+    ),
+    const [],
+  );
 
   // 缩放 (Pinch to zoom)
   final activePointers = useRef<Map<int, Offset>>({});
@@ -283,7 +292,9 @@ Gesture useGesture({
       targetSeconds = targetSeconds.clamp(
           0, context.read<MediaPlayer>().duration.inSeconds);
 
-      context.read<MediaPlayer>().seek(Duration(seconds: targetSeconds));
+      // 拖动中节流发送, 松手时由 _resetPanState 补发最终位置
+      seekThrottle.begin();
+      seekThrottle.seek(Duration(seconds: targetSeconds));
       showProgress();
     }
 
@@ -316,6 +327,8 @@ Gesture useGesture({
 
   // ignore: no_leading_underscores_for_local_identifiers
   void _resetPanState() {
+    // 补发横向拖动的最终位置, 再清状态
+    seekThrottle.end();
     if (usePlayerUiStore().state.isSeeking) {
       usePlayerUiStore().updateIsSeeking(false);
     }
@@ -335,7 +348,8 @@ Gesture useGesture({
 
   void onHover(PointerHoverEvent event) {
     if (event.kind != PointerDeviceKind.touch) {
-      usePlayerUiStore().updateIsHovering(true);
+      // isHovering 由控制栏 / 标题栏自己的 MouseRegion.onEnter/onExit 维护:
+      // 在这里置 true 会让"鼠标划过画面"把控制栏永久钉住。
       showControl();
     }
   }
@@ -353,6 +367,7 @@ Gesture useGesture({
       // 取消可能已经开始的其他手势, 避免冲突
       gestureState.value['isDragging'] = false;
       gestureState.value['panDirection'] = null;
+      seekThrottle.end();
       if (usePlayerUiStore().state.isSeeking) {
         usePlayerUiStore().updateIsSeeking(false);
       }

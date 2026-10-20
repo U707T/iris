@@ -4,11 +4,12 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/short_video/short_video_feed_widgets.dart';
-import 'package:iris/pages/player/short_video/short_video_pool.dart';
+import 'package:iris/pages/player/short_video/short_video_player.dart';
 import 'package:iris/pages/player/short_video/short_video_scrub.dart';
 import 'package:iris/pages/player/short_video/short_video_seek_feedback.dart';
 import 'package:iris/pages/player/short_video/short_video_volume.dart';
 import 'package:iris/pages/player/short_video/short_video_wheel.dart';
+import 'package:iris/pages/player/overlays/playback_error_overlay.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/utils/get_localizations.dart';
@@ -70,6 +71,12 @@ class ShortVideoView extends HookWidget {
 
     final isInitializing =
         context.select<MediaPlayer, bool>((player) => player.isInitializing);
+    final playbackError =
+        context.select<MediaPlayer, String?>((player) => player.error);
+
+    // 程序化翻页期间忽略 onPageChanged: 跨多页时会依次回调每个中间页,
+    // 每次 commitPage 都会把 currentIndex 改到中间页, 形成来回打架。
+    final isSyncingPage = useRef(false);
 
     // 队列索引被外部改变时 (快捷键切换等) 同步 PageView
     useEffect(() {
@@ -77,13 +84,18 @@ class ShortVideoView extends HookWidget {
       final page = pageController.page?.round() ?? pageController.initialPage;
       if (page == currentFeedIndex) return;
       if (page < 0 || page >= items.length) {
+        isSyncingPage.value = true;
         pageController.jumpToPage(currentFeedIndex);
+        isSyncingPage.value = false;
       } else {
-        pageController.animateToPage(
-          currentFeedIndex,
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOutCubic,
-        );
+        isSyncingPage.value = true;
+        pageController
+            .animateToPage(
+              currentFeedIndex,
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+            )
+            .whenComplete(() => isSyncingPage.value = false);
       }
       return;
     }, [currentFeedIndex]);
@@ -287,8 +299,10 @@ class ShortVideoView extends HookWidget {
                     controller: pageController,
                     scrollDirection: Axis.vertical,
                     onPageChanged: (page) {
-                      // 仅在非拖动阶段提交, 避免拖动途中切换播放
-                      if (!isDragging.value) commitPage(page);
+                      // 仅在非拖动 / 非程序化翻页阶段提交, 避免中途切换播放
+                      if (!isDragging.value && !isSyncingPage.value) {
+                        commitPage(page);
+                      }
                     },
                     itemCount: items.length,
                     itemBuilder: buildPage,
@@ -312,6 +326,14 @@ class ShortVideoView extends HookWidget {
               ),
               // 长按倍速动效 (与主播放界面共用)
               SpeedBoostEffect(visible: isLongPress.value),
+              // 播放失败提示: 点重试 = 让当前槽位重新 open
+              if (playbackError != null && currentFeedIndex >= 0)
+                Positioned.fill(
+                  child: PlaybackErrorOverlay(
+                    fileName: items[currentFeedIndex].file.name,
+                    onRetry: () => context.read<MediaPlayer>().play(),
+                  ),
+                ),
               // 双击快进 / 快退提示 (方向 + 步长)
               Positioned.fill(
                 child: ShortVideoSeekFeedbackOverlay(controller: seekFeedback),

@@ -138,13 +138,16 @@ Future<List<LocalStorage>> getLocalStorages(
 }
 
 Future<PlayQueueState?> getLocalPlayQueue(String filePath) async {
-  final type = checkContentType(filePath);
+  // 相对路径（终端里 `iris movie.mp4`）先解析成绝对路径:
+  // 否则 dirPath 为空, Directory('') 不存在 -> 队列为空 -> 什么都不播。
+  final resolvedPath = p.normalize(p.absolute(filePath));
+  final type = checkContentType(resolvedPath);
 
   if (type != ContentType.video && type != ContentType.audio) {
     return null;
   }
 
-  final convedPath = pathConv(filePath);
+  final convedPath = pathConv(resolvedPath);
 
   final dirPath = convedPath.sublist(0, convedPath.length - 1);
   final files = await LocalStorage(
@@ -152,7 +155,14 @@ Future<PlayQueueState?> getLocalPlayQueue(String filePath) async {
     name: convedPath.last,
     basePath: dirPath,
   ).getFiles(dirPath);
-  final List<FileItem> sortedFiles = filesSort(files: files);
+  final List<FileItem> sortedFiles = filesSort(
+    files: files,
+    // 跟文件浏览器用同一套排序: 否则"按修改时间/大小"排序的目录,
+    // 从 picker / 拖放 / 命令行打开后, 下一条会按文件名跳。
+    sortBy: useAppStore().state.sortBy,
+    sortOrder: useAppStore().state.sortOrder,
+    folderFirst: useAppStore().state.folderFirst,
+  );
   final List<FileItem> filteredFiles = sortedFiles
       .where(
           (file) => [ContentType.video, ContentType.audio].contains(file.type))
@@ -164,7 +174,8 @@ Future<PlayQueueState?> getLocalPlayQueue(String filePath) async {
       .map((entry) => PlayQueueItem(file: entry.value, index: entry.key))
       .toList();
 
-  final clickedIndex = filteredFiles.indexWhere((file) => file.uri == filePath);
+  final clickedIndex =
+      filteredFiles.indexWhere((file) => file.uri == resolvedPath);
 
   final index = clickedIndex < 0 ? 0 : clickedIndex;
   return PlayQueueState(

@@ -36,6 +36,8 @@ void enterShortVideoMode() {
   useAppStore().updateAutoPlay(true);
   usePlayerUiStore().updateIsShowControl(false);
   usePlayerUiStore().updateIsShowProgress(false);
+  // 统计 OSD 在短视频模式没有数据源, 进模式时关掉, 免得退出后突然冒出来
+  usePlayerUiStore().updateIsShowStats(false);
   // 交接: 普通模式的播放器是异步销毁的 (要等内部初始化 / 锁), 先显式静音,
   // 否则操作过快时它会和短视频池同时出声。
   // 仅在"确实是从普通模式进入"时静音 —— 重复调用 (连点 / 双击) 时当前

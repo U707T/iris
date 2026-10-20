@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:iris/models/storages/storage.dart';
 import 'package:iris/models/storages/webdav.dart';
 import 'package:iris/store/use_storage_store.dart';
+import 'package:iris/utils/default_gateway.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:uuid/uuid.dart';
 
@@ -36,6 +37,11 @@ class WebDAVDialog extends HookWidget {
     final username = useState(storage?.username ?? '');
     final password = useState(storage?.password ?? '');
     final https = useState(storage?.https ?? false);
+
+    final hostController =
+        useTextEditingController(text: storage?.host ?? '');
+    final isGatewayLoading = useState(false);
+    final gatewayError = useState(false);
 
     final isTested = useState(false);
 
@@ -87,6 +93,25 @@ class WebDAVDialog extends HookWidget {
       isTested.value = isConnected;
     }
 
+    /// 读取默认网关（一般是路由器地址）填到主机框，省得手动查 IP
+    Future<void> fillDefaultGateway() async {
+      if (isGatewayLoading.value) return;
+      isGatewayLoading.value = true;
+      final gateway = await getDefaultGateway();
+      if (!context.mounted) return;
+      isGatewayLoading.value = false;
+
+      if (gateway == null) {
+        gatewayError.value = true;
+        return;
+      }
+
+      hostController.text = gateway;
+      host.value = gateway;
+      gatewayError.value = false;
+      isTested.value = false;
+    }
+
     return AlertDialog(
       title: Text(isEdit ? t.edit_webdav_storage : t.add_webdav_storage),
       content: SingleChildScrollView(
@@ -109,16 +134,44 @@ class WebDAVDialog extends HookWidget {
                 ),
                 const SizedBox(height: 16.0),
                 TextFormField(
+                  controller: hostController,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     labelText: t.host,
+                    suffixIcon: IconButton(
+                      tooltip: t.default_gateway,
+                      visualDensity: VisualDensity.compact,
+                      onPressed:
+                          isGatewayLoading.value ? null : fillDefaultGateway,
+                      icon: isGatewayLoading.value
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.bolt_rounded, size: 20),
+                    ),
                   ),
-                  initialValue: host.value,
                   onChanged: (value) {
+                    gatewayError.value = false;
                     host.value = value.trim().split('//').last;
                     isTested.value = false;
                   },
                 ),
+                if (gatewayError.value)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, left: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        t.default_gateway_failed,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 16.0),
                 TextFormField(
                     decoration: InputDecoration(

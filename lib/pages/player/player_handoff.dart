@@ -1,5 +1,5 @@
 import 'package:iris/models/player.dart';
-import 'package:iris/pages/player/short_video/short_video_pool.dart';
+import 'package:iris/pages/player/short_video/short_video_player.dart';
 import 'package:iris/utils/logger.dart';
 
 /// 模式切换时的播放器交接 (防"两路声音")。
