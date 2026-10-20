@@ -99,22 +99,30 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
   }
 
   Future<void> previous() async {
-    final int currentPlayIndex = state.playQueue
-        .indexWhere((element) => element.index == state.currentIndex);
+    // 空队列时 `.last` 会抛 StateError, 而这里是从按键回调 / 媒体键进来的,
+    // 异常会直接冒到 UI 层 (删光队列后按 Ctrl + ← 就崩)。
+    final playQueue = state.playQueue;
+    if (playQueue.isEmpty) return;
+
+    final int currentPlayIndex =
+        playQueue.indexWhere((element) => element.index == state.currentIndex);
     if (currentPlayIndex <= 0) {
-      await updateCurrentIndex(state.playQueue.last.index);
+      await updateCurrentIndex(playQueue.last.index);
     } else {
-      await updateCurrentIndex(state.playQueue[currentPlayIndex - 1].index);
+      await updateCurrentIndex(playQueue[currentPlayIndex - 1].index);
     }
   }
 
   Future<void> next() async {
-    final int currentPlayIndex = state.playQueue
-        .indexWhere((element) => element.index == state.currentIndex);
-    if (currentPlayIndex >= state.playQueue.length - 1) {
-      await updateCurrentIndex(state.playQueue.first.index);
+    final playQueue = state.playQueue;
+    if (playQueue.isEmpty) return;
+
+    final int currentPlayIndex =
+        playQueue.indexWhere((element) => element.index == state.currentIndex);
+    if (currentPlayIndex >= playQueue.length - 1) {
+      await updateCurrentIndex(playQueue.first.index);
     } else {
-      await updateCurrentIndex(state.playQueue[currentPlayIndex + 1].index);
+      await updateCurrentIndex(playQueue[currentPlayIndex + 1].index);
     }
   }
 
@@ -150,7 +158,7 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
             currentIndex: 0,
           );
           await useAppStore().updateAutoPlay(true);
-          save(state);
+          await save(state);
           return state;
         }
 
@@ -160,7 +168,7 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
           final state = await getLocalPlayQueue(filePath);
           if (state != null && state.playQueue.isNotEmpty) {
             await useAppStore().updateAutoPlay(true);
-            save(state);
+            await save(state);
             return state;
           }
         }

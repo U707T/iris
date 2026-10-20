@@ -1,3 +1,31 @@
+## v2.3.2
+
+### Changelog
+
+* **Queue navigation no longer crashes on an empty queue**: pressing Ctrl + ← / → , the media keys, or the previous / next buttons after the queue has been emptied used to throw a `StateError` (`.first` / `.last` on an empty list) straight out of the key handler. It now does nothing
+* **Auto-play after a video ends can no longer run off the end of the queue**: if the last entry was deleted while it was playing, finishing it read `playQueue[0]` on an empty list. The "what plays next" rule (single-item repeat / loop all / stop at the end) now lives in one shared helper used by both the Media Kit and the FVP backend, so the two cannot drift apart again. One behaviour fix comes with it: with "repeat all" and a single-file queue the video now really replays (it used to stay stopped on the last frame)
+* **Playback progress is restored only once per file**: `duration` can change several times while a video is opening (probing, resolution changes), and each change re-ran the resume logic, dragging you back to the old position. Resuming now happens on the first known duration only; switching files / stopping re-arms it
+* **Update check has a timeout and tolerates odd version tags**: the request used to hang forever on a broken network (the row stayed on "check update"), and a tag such as `v2.3.0-rc.1` threw a `FormatException`. The request now times out after 10 s, and version parsing accepts a `v` prefix, a `-rc.1` pre-release suffix and a `+25` build number. A pre-release is never reported as newer than the same release, and a release without a build for your platform is no longer an error
+* **Storage permission is requested only once**: on Android 10 and older, choosing "don't ask again" made the old code call itself recursively forever (hang / stack overflow). The result is now returned to the caller so the file panel can offer the "go to settings" path
+* **FTP: 10 s connection timeout, and a failure is no longer an empty folder**: an unreachable server used to leave the file panel spinning for 30 s, then show an empty directory. It now times out quickly and surfaces as "unable to fetch files"; the connection is also closed on failure instead of leaking the socket
+* **Mute state is now written to disk**: `toggleMute` fired the save without awaiting it, so the state was occasionally lost
+* **CI now runs `flutter analyze` and `flutter test`** before building (it used to build only), and the removed `--delete-conflicting-outputs` flag is gone from the workflow
+* No startup / launch-path changes in this release: it is pure logic, permissions and networking
+* No other changes.
+
+### 更新日志
+
+* **空队列时上一条 / 下一条不再崩溃**：队列被清空后按 Ctrl + ←/→、媒体键或控制栏的上一条 / 下一条，会在按键回调里直接抛 `StateError`（对空列表取 `.first` / `.last`）。现在什么都不做
+* **视频播完自动连播不再越界**：播放中把最后一条删掉，播完时会对空列表取 `playQueue[0]`。连播规则（单条循环 / 列表循环 / 播到末尾停下）现在收进一个公共函数，Media Kit 与 FVP 两个后端共用，不会再改一边漏一边。顺带修一个行为：列表循环 + 队列只剩一条时现在会真正重播（以前会停在最后一帧）
+* **播放进度每个文件只恢复一次**：打开视频期间 `duration` 会变化多次（探测、变分辨率），每次变化都会重跑恢复逻辑，把已经看到一半的你拽回旧进度。现在只在首次拿到时长时恢复；切歌 / 停止后会重新允许恢复
+* **检查更新加超时，版本号容错**：网络异常时请求以前会一直挂着（界面停在「检查更新」），`v2.3.0-rc.1` 这类 tag 会抛 `FormatException`。现在请求 10 秒超时；版本解析兼容 `v` 前缀、`-rc.1` 预发布后缀与 `+25` 构建号。预发布不会被当成比同号正式版更新，发布里没有对应平台的安装包也不再算错误
+* **存储权限只申请一次**：Android 10 及以下选择「不再询问」时，旧实现会无限递归调用自己（卡死 / 爆栈）。现在把结果返回给调用方，由文件面板引导去系统设置
+* **FTP：连接超时 10 秒，失败不再伪装成空文件夹**：服务器不可达时以前会转圈 30 秒再显示一个空目录。现在很快超时并显示「无法获取文件」；失败时也会断开连接，不再泄漏 socket
+* **静音状态会落盘**：`toggleMute` 调用 `save` 时没有 await，导致静音状态偶尔丢失
+* **CI 增加 `flutter analyze` + `flutter test`**（此前只构建不测试），并清掉了工作流里已被移除的 `--delete-conflicting-outputs` 参数
+* 本版**不含任何启动链路改动**：只有纯逻辑、权限与网络
+* 本版无其他变化。
+
 ## v2.3.1
 
 ### Changelog

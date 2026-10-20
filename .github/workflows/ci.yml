@@ -16,7 +16,36 @@ on:
   workflow_dispatch:
 
 jobs:
+  # 静态检查 + 单元测试: 以前 CI 只构建不测试, 编译得过就等于"通过",
+  # 逻辑错误 (空队列越界 / 版本号解析抛异常) 只有发版后才会被发现。
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.5
+          cache: true
+      - name: Provide legacy flutter version file
+        run: |
+          FT=$(command -v flutter)
+          FLUTTER_ROOT_DIR="$(cd "$(dirname "$FT")/.." && pwd)"
+          echo "FLUTTER_ROOT_DIR=$FLUTTER_ROOT_DIR"
+          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.5" > "$FLUTTER_ROOT_DIR/version"; fi
+          cat "$FLUTTER_ROOT_DIR/version"
+      - name: Generate code
+        run: flutter pub get && dart run build_runner build
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test --no-pub
+
   build-windows:
+    needs:
+      - analyze-and-test
     runs-on: windows-2022
     steps:
       - name: Clone repository
@@ -36,7 +65,7 @@ jobs:
           if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.5" > "$FLUTTER_ROOT_DIR/version"; fi
           cat "$FLUTTER_ROOT_DIR/version"
       - name: Generate code
-        run: flutter pub get && flutter pub run build_runner build --delete-conflicting-outputs
+        run: flutter pub get && dart run build_runner build
       - name: Build Flutter application for Windows
         run: flutter build windows
       - name: Create ZIP archive
@@ -76,6 +105,8 @@ jobs:
           path: build\windows\x64\runner\Release\IRIS-windows-store.msix
 
   build-android:
+    needs:
+      - analyze-and-test
     runs-on: ubuntu-latest
     steps:
       - name: Clone repository
@@ -94,7 +125,7 @@ jobs:
           if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.5" > "$FLUTTER_ROOT_DIR/version"; fi
           cat "$FLUTTER_ROOT_DIR/version"
       - name: Generate code
-        run: flutter pub get && flutter pub run build_runner build --delete-conflicting-outputs
+        run: flutter pub get && dart run build_runner build
       - name: Set up Java
         uses: actions/setup-java@v4
         with:

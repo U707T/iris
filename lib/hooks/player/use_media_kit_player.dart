@@ -17,6 +17,7 @@ import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/queue_navigation.dart';
 import 'package:iris/utils/wait_for_first_frame.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -145,6 +146,9 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
   final isInitializing = useState(false);
 
+  /// 已恢复过播放进度的文件 ID (duration 会多次变化, 只恢复一次)
+  final restoredProgressKey = useRef<String?>(null);
+
   /// 装载会话: 每次 init 递增, 用于丢弃过期的异步结果
   final openSession = useRef(0);
 
@@ -253,6 +257,8 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   }
 
   useEffect(() {
+    // 换了文件 (或停止) 就重新允许恢复一次进度
+    restoredProgressKey.value = null;
     if (file == null || playQueue.isEmpty) {
       player.stop();
     } else {
@@ -285,7 +291,7 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
         await player.setSubtitleTrack(SubtitleTrack.no());
         return;
       }
-      // 查询播放进度
+      // 查询播放进度 (每个文件只恢复一次)
       if (file != null && file.type == ContentType.video) {
         Progress? progress = history[file.getID()];
         if (progress != null) {
@@ -293,9 +299,17 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
               (progress.duration.inMilliseconds -
                       progress.position.inMilliseconds) >
                   5000) {
-            logger(
-                'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
-            await player.seek(progress.position);
+            // duration 在播放中会多次变化 (探测 / 变分辨率), 这个 effect 会跟着
+            // 反复执行; 每次都 seek 会把已经看到一半的用户拽回旧进度。
+            if (restoredProgressKey.value != file.getID()) {
+              restoredProgressKey.value = file.getID();
+              logger(
+                  'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
+              await player.seek(progress.position);
+            }
+          } else {
+            // 不恢复也要记一笔, 避免中途 duration 变化后突然又去 seek
+            restoredProgressKey.value = file.getID();
           }
         }
       }
@@ -325,17 +339,21 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
   useEffect(() {
     () async {
-      if (completed) {
-        if (repeat == Repeat.one) return;
-        if (currentPlayIndex == playQueue.length - 1) {
-          if (repeat == Repeat.all) {
-            await usePlayQueueStore().updateCurrentIndex(playQueue[0].index);
-          }
-        } else {
-          await usePlayQueueStore()
-              .updateCurrentIndex(playQueue[currentPlayIndex + 1].index);
-        }
+      if (!completed) return;
+      // 队列可能已经被清空 / 当前项已被删除: 交给共用逻辑判空, 不要直接取下标
+      final next = nextIndexOnCompleted(
+        playQueue: playQueue,
+        currentPlayIndex: currentPlayIndex,
+        repeat: repeat,
+      );
+      if (next == null) return;
+      if (next == currentPlayIndex) {
+        // 单条队列 + 列表循环: 下标没变, 不会再触发装载, 手动回到开头重播
+        await player.seek(Duration.zero);
+        await player.play();
+        return;
       }
+      await usePlayQueueStore().updateCurrentIndex(playQueue[next].index);
     }();
     return null;
   }, [completed, repeat]);

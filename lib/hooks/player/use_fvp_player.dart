@@ -19,6 +19,7 @@ import 'package:iris/utils/check_data_source_type.dart';
 import 'package:iris/utils/image_encode.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/queue_navigation.dart';
 import 'package:media_stream/media_stream.dart';
 import 'package:saf_util/saf_util.dart';
 import 'package:video_player/video_player.dart';
@@ -62,6 +63,9 @@ FvpPlayer useFvpPlayer(BuildContext context) {
       useMemoized(() => file?.subtitles ?? [], [file?.subtitles]);
 
   final isInitializing = useState(false);
+
+  /// 已恢复过播放进度的文件 ID (duration 会多次变化, 只恢复一次)
+  final restoredProgressKey = useRef<String?>(null);
 
   MediaStream mediaStream = useMemoized(() => MediaStream());
   final streamUrl = useMemoized(() => mediaStream.url);
@@ -199,6 +203,8 @@ FvpPlayer useFvpPlayer(BuildContext context) {
   }
 
   useEffect(() {
+    // 换了文件就重新允许恢复一次进度
+    restoredProgressKey.value = null;
     init(file);
     return;
   }, [file?.uri]);
@@ -251,14 +257,20 @@ FvpPlayer useFvpPlayer(BuildContext context) {
           controller.value.value.duration != Duration.zero) {
         logger('Completed: ${file.name}');
         if (looping) return;
-        if (currentPlayIndex == playQueue.length - 1) {
-          if (repeat == Repeat.all) {
-            await usePlayQueueStore().updateCurrentIndex(playQueue[0].index);
-          }
-        } else {
-          await usePlayQueueStore()
-              .updateCurrentIndex(playQueue[currentPlayIndex + 1].index);
+        // 队列可能已被清空 / 当前项已被删除: 交给共用逻辑判空
+        final next = nextIndexOnCompleted(
+          playQueue: playQueue,
+          currentPlayIndex: currentPlayIndex,
+          repeat: repeat,
+        );
+        if (next == null) return;
+        if (next == currentPlayIndex) {
+          // 单条队列 + 列表循环: 下标没变, 不会再触发装载, 手动回到开头重播
+          await controller.value.seekTo(Duration.zero);
+          await controller.value.play();
+          return;
         }
+        await usePlayQueueStore().updateCurrentIndex(playQueue[next].index);
       }
     }();
     return;
@@ -298,9 +310,16 @@ FvpPlayer useFvpPlayer(BuildContext context) {
               (progress.duration.inMilliseconds -
                       progress.position.inMilliseconds) >
                   5000) {
-            logger(
-                'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
-            await controller.value.seekTo(progress.position);
+            // duration 在播放中会多次变化, 这个 effect 会跟着反复执行;
+            // 每次都 seek 会把已经看到一半的用户拽回旧进度。
+            if (restoredProgressKey.value != file.getID()) {
+              restoredProgressKey.value = file.getID();
+              logger(
+                  'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
+              await controller.value.seekTo(progress.position);
+            }
+          } else {
+            restoredProgressKey.value = file.getID();
           }
         }
       }
