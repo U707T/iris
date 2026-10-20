@@ -6,7 +6,6 @@ import 'package:iris/models/store/player_ui_state.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
-import 'package:video_player/video_player.dart';
 
 class VideoView extends HookWidget {
   const VideoView({
@@ -28,14 +27,6 @@ class VideoView extends HookWidget {
           controller: player.controller,
           controls: NoVideoControls,
           fit: fit == BoxFit.none ? BoxFit.contain : fit,
-        ),
-      FvpPlayer player => FittedBox(
-          fit: fit,
-          child: SizedBox(
-            width: player.width,
-            height: player.height,
-            child: VideoPlayer(player.controller),
-          ),
         ),
       _ => const SizedBox.shrink(),
     };

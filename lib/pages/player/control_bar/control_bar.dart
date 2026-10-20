@@ -2,14 +2,12 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/file.dart';
-import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/control_bar/control_bar_buttons.dart';
 import 'package:iris/pages/player/control_bar/control_bar_more_menu.dart';
 import 'package:iris/pages/player/control_bar/control_bar_slider.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/short_video.dart';
-import 'package:provider/provider.dart';
 
 /// 播放器底部控制栏: 按窗口宽度组合传输 / 视图 / 面板按钮 (移动 / 平板 / 桌面三档)。
 ///
@@ -49,19 +47,10 @@ class ControlBar extends HookWidget {
         [playQueue]);
 
     void enterShortVideo() {
-      final player = context.read<MediaPlayer>();
-      final queue = usePlayQueueStore().state.playQueue;
-      final current = queue.indexWhere(
-          (e) => e.index == usePlayQueueStore().state.currentIndex);
-      final isVideoCurrent =
-          current >= 0 && queue[current].file.type == ContentType.video;
-
       enterShortVideoMode();
-      // Media Kit 后端进入模式后由预载池接管播放: enterShortVideoMode 已先
-      // 静音旧播放器 (随后它会被异步销毁), 这里不要再把它拉起来, 否则与静音
-      // 交接互相打架 (操作过快时的双声窗口)。
-      // FVP 后端两种模式共用同一个播放器, 用 play() 保持"进入即播放"的语义。
-      if (isVideoCurrent && player is FvpPlayer) player.play();
+      // 进入模式后由预载池接管播放: enterShortVideoMode 已先静音旧播放器
+      // (随后它会被异步销毁), 这里不要再把它拉起来, 否则与静音交接互相打架
+      // (操作过快时的双声窗口)。
     }
 
     final playPauseButton = PlayPauseButton(

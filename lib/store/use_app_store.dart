@@ -114,11 +114,6 @@ class AppStore extends PersistentStore<AppState> {
     await save(state);
   }
 
-  Future<void> updatePlayerBackend(PlayerBackend backend) async {
-    set(state.copyWith(playerBackend: backend));
-    await save(state);
-  }
-
   Future<void> updateSortBy(SortBy sortBy) async {
     set(state.copyWith(sortBy: sortBy));
     await save(state);

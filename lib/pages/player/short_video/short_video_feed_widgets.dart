@@ -8,7 +8,6 @@ import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/take_screenshot.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:provider/provider.dart';
-import 'package:video_player/video_player.dart';
 
 /// 播放 / 暂停。
 /// 播放器可能正在销毁 (例如刚好退出模式), 失败时忽略。
@@ -21,7 +20,7 @@ void toggleShortVideoPlay(BuildContext context) {
   }
 }
 
-/// 当前页视频画面 (无预载池时的回退路径, 也用于 FVP 后端)
+/// 当前页视频画面 (无预载池时的回退路径)
 class ShortVideoFeedVideo extends StatelessWidget {
   const ShortVideoFeedVideo({super.key});
 
@@ -32,16 +31,6 @@ class ShortVideoFeedVideo extends StatelessWidget {
       child: switch (player) {
         MediaKitPlayer player =>
           ShortVideoMediaKitSurface(controller: player.controller),
-        FvpPlayer player => player.width == 0 || player.height == 0
-            ? const SizedBox.shrink()
-            : FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(
-                  width: player.width,
-                  height: player.height,
-                  child: VideoPlayer(player.controller),
-                ),
-              ),
         _ => const SizedBox.shrink(),
       },
     );

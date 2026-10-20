@@ -12,7 +12,7 @@ IRIS 是一款基于 Flutter 的轻量级视频播放器。本仓库是 [nini22P
 
 ## 特性
 
-- [X] 基于 [Media Kit](https://github.com/media-kit/media-kit) | [FVP](https://github.com/wang-bin/fvp)，可播放多种视频格式
+- [X] 基于 [Media Kit](https://github.com/media-kit/media-kit)（libmpv / FFmpeg 内核），可播放多种视频格式
 - [X] 本地存储与 WebDAV
 - [X] **短视频模式**：竖滑无缝切换、单条循环、进度条拖拽、双击快进 / 快退反馈、长按倍速光效、音量按钮
 - [X] 可切换音轨
@@ -32,7 +32,7 @@ IRIS 是一款基于 Flutter 的轻量级视频播放器。本仓库是 [nini22P
 - **短视频模式**：控制栏按钮进入，预载播放器池带来竖滑无缝切换；进度条可拖拽 / 点击定位；双击画面左 / 右侧快退 / 快进并显示「±Ns」提示；长按倍速带呼吸光效；音量按钮长按后上下滑动调节设备音量（桌面端悬停滚轮微调）
 - **播放启动更稳**：视频先以暂停方式打开、等首帧就绪后再播放，避免「有声音但画面黑着」；预载的相邻视频也会先解出首帧
 - **随机播放重做**：每次开启随机都会重新洗牌（当前视频排最前），启动时随机开着也会重洗一次；关闭后恢复原始顺序
-- **Windows 修复**：内嵌 fvp 修复版解决启动崩溃；内置 Flutter 引擎无障碍崩溃（[flutter/flutter#175041](https://github.com/flutter/flutter/issues/175041)）的兼容规避，默认生效（详见「故障排查」）
+- **Windows 修复**：内置 Flutter 引擎无障碍崩溃（[flutter/flutter#175041](https://github.com/flutter/flutter/issues/175041)）的兼容规避，默认生效（详见「故障排查」）
 - **一批稳定性修复**：播放历史上限、全屏开关、音量浮层、搜索对话框、短视频边界情况等（详见 [CHANGELOG.md](./CHANGELOG.md)）
 
 ## 下载

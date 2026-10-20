@@ -1,3 +1,23 @@
+## v2.3.3-rc.2
+
+### Changelog
+
+* **The FVP backend is gone; Media Kit is now the only player.** FVP (mdk-sdk) was an optional second backend, but short video mode never used it (no player pool there — it fell back to a stripped-down single-video path), it required a patched in-tree copy to avoid a Windows start-up crash, and it pulled in `video_player` + `wakelock_plus`. Videos that used to need "switch to FVP" can be played from the Media Kit (libmpv/FFmpeg) backend; if a rare file still fails, FVP can be brought back as an optional build later
+* Removed together with it: `libffmpeg` (8.3 MB) / `libmdk` (2.3 MB) / `libass` (1.5 MB) on Android, `ffmpeg-9.dll` / `mdk.dll` / `libass.dll` (8.3 MB) on Windows, the "player backend" setting, `wp`-style per-backend branches in the video view / short video fallback / audio track list, and the `video_player` / `wakelock_plus` dependencies
+* Windows also loses the in-tree `third_party/fvp` patch, so there is no longer a patched C++ dependency to maintain
+* Everything you asked to keep is untouched: video playback and resume, short video mode (pool / preload / swipe / double-tap seek / volume button), WebDAV, queue, history, screenshots, rotation and stats
+* Expected APK size: about 49.9 MB → 37.7 MB on arm64 (65.6 MB before v2.3.3)
+* No other changes.
+
+### 更新日志
+
+* **移除 FVP 后端，只保留 Media Kit。** FVP（mdk-sdk）原本是可选第二后端，但短视频模式从来没用上它（没有预载池，只能回退到残缺的单条模式），还得在仓库里维护一份打补丁的副本才能避开 Windows 启动崩溃，并且额外拖着 `video_player` + `wakelock_plus` 两个依赖。以前"切到 FVP 才能播"的文件请用 Media Kit（libmpv/FFmpeg）；真遇到极少数播不了的文件，以后可以作为可选构建再加回来
+* 一并移除：Android 的 `libffmpeg`（8.3MB）/ `libmdk`（2.3MB）/ `libass`（1.5MB），Windows 的 `ffmpeg-9.dll` / `mdk.dll` / `libass.dll`（8.3MB），"播放器后端"设置项，视频画面 / 短视频回退 / 音轨列表里的分支代码，以及 `video_player` / `wakelock_plus` 依赖
+* Windows 侧也不再需要 `third_party/fvp` 那份 C++ 补丁，少一个需要跟上游同步的维护点
+* 你要保留的部分一律未动：视频播放与续播、短视频模式（池 / 预载 / 滑动 / 双击快进 / 音量按钮）、WebDAV、播放队列、历史、截图、旋转、播放统计
+* 预期包体：arm64 约 49.9MB → 37.7MB（v2.3.3 之前是 65.6MB）
+* 本版无其他变化。
+
 ## v2.3.3-rc.1
 
 ### Changelog

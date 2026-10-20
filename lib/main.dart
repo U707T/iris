@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/services.dart';
-import 'package:fvp/fvp.dart' as fvp;
-import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
@@ -51,18 +49,6 @@ void main(List<String> arguments) async {
 
   MediaKit.ensureInitialized();
 
-  fvp.registerWith(options: {
-    // 'fastSeek': true,
-    'player': {
-      if (Platform.isAndroid) 'audio.renderer': 'AudioTrack',
-      'avio.reconnect': '1',
-      'avio.reconnect_delay_max': '7',
-      'buffer': '2000+80000',
-      'demux.buffer.ranges': '8',
-    },
-    // 仅在调试构建中开启详细日志, 减少 release 版性能开销
-    'global': {'log': kDebugMode ? 'debug' : 'off'},
-  });
 
   final appLinks = AppLinks();
   final initUri = await appLinks.getInitialLinkString();

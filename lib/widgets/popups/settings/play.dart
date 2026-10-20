@@ -21,8 +21,6 @@ class Play extends HookWidget {
         useAppStore().select(context, (state) => state.autoResize);
     final bool alwaysPlayFromBeginning =
         useAppStore().select(context, (state) => state.alwaysPlayFromBeginning);
-    final playerBackend =
-        useAppStore().select(context, (state) => state.playerBackend);
     final orientation =
         useAppStore().select(context, (state) => state.orientation);
     final longPressSpeed =
@@ -43,23 +41,6 @@ class Play extends HookWidget {
     return SingleChildScrollView(
       child: Column(
         children: [
-          ListTile(
-              leading: const Icon(Icons.settings_input_component_rounded),
-              title: Text(t.player_backend),
-              trailing: DropdownButton<PlayerBackend>(
-                borderRadius: BorderRadius.circular(12),
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                value: playerBackend,
-                onChanged: (value) {
-                  if (value != null) useAppStore().updatePlayerBackend(value);
-                },
-                items: [
-                  DropdownMenuItem<PlayerBackend>(
-                      value: PlayerBackend.mediaKit, child: Text('Media Kit')),
-                  DropdownMenuItem<PlayerBackend>(
-                      value: PlayerBackend.fvp, child: Text('FVP')),
-                ],
-              )),
           ListTile(
             leading: const Icon(Icons.touch_app_rounded),
             title: Text(t.long_press_speed),

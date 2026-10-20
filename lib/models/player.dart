@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'package:media_kit/media_kit.dart' as media_kit;
 import 'package:media_kit_video/media_kit_video.dart' as media_kit_video;
-import 'package:video_player/video_player.dart';
 
 class MediaPlayer {
   final bool isInitializing;
@@ -58,31 +57,6 @@ class MediaKitPlayer extends MediaPlayer {
     required this.controller,
     required this.audio,
     required this.audios,
-    required super.isInitializing,
-    required super.isPlaying,
-    required super.position,
-    required super.duration,
-    required super.buffer,
-    required super.width,
-    required super.height,
-    required super.saveProgress,
-    required super.play,
-    required super.pause,
-    required super.backward,
-    required super.forward,
-    required super.stepBackward,
-    required super.stepForward,
-    required super.seek,
-    super.screenshot,
-    super.getStats,
-  });
-}
-
-class FvpPlayer extends MediaPlayer {
-  final VideoPlayerController controller;
-
-  FvpPlayer({
-    required this.controller,
     required super.isInitializing,
     required super.isPlaying,
     required super.position,

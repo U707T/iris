@@ -12,7 +12,7 @@ IRIS is a lightweight video player built with Flutter. This repository is an enh
 
 ## Features
 
-- [X] Base on [Media Kit](https://github.com/media-kit/media-kit) | [FVP](https://github.com/wang-bin/fvp), supports multiple video formats
+- [X] Based on [Media Kit](https://github.com/media-kit/media-kit) (libmpv / FFmpeg), supports multiple video formats
 - [X] Local storage and WebDAV support
 - [X] **Short video mode**: seamless vertical swipe, single-item loop, draggable progress bar, double-tap seek feedback, long-press speed effect, volume button
 - [X] Switchable audio track
@@ -32,7 +32,7 @@ IRIS is a lightweight video player built with Flutter. This repository is an enh
 - **Short video mode**: enter it from the control bar button; a preloaded player pool makes vertical swiping seamless; the progress bar can be tapped / dragged; double-tapping the left / right side seeks with a brief "±Ns" pill; long-press speed-up shows a breathing light effect; hold the volume button and slide to adjust the device volume (hover + wheel to fine-tune on desktop)
 - **More reliable playback start**: videos open paused and wait for the first frame before playing, so sound and picture appear together instead of starting with a black screen; preloaded neighbours decode their first frame too
 - **Shuffle rework**: switching shuffle on reshuffles the queue (the current video stays first), and the queue is reshuffled on launch while shuffle is on; switching it off restores the original file order
-- **Windows fixes**: a patched fvp is bundled to fix the start-up crash; the workaround for the Flutter engine accessibility crash ([flutter/flutter#175041](https://github.com/flutter/flutter/issues/175041)) is built in and enabled by default (see "Troubleshooting")
+- **Windows fixes**: the workaround for the Flutter engine accessibility crash ([flutter/flutter#175041](https://github.com/flutter/flutter/issues/175041)) is built in and enabled by default (see "Troubleshooting")
 - **A batch of stability fixes** across the player and short video mode (playback-history cap, fullscreen toggle, volume popover, search dialog, edge cases; see [CHANGELOG.md](./CHANGELOG.md))
 
 ## Download
