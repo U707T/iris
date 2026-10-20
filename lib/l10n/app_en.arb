@@ -172,8 +172,6 @@
   "retry": "Retry",
   "default_gateway": "Default gateway",
   "default_gateway_failed": "Could not read the default gateway. Enter it manually",
-  "use_default_webdav": "Default Dav profile",
-  "use_default_webdav_description": "Name, path, port and credentials are filled in and locked; turn off to edit them",
   "auto_hide_controls": "Auto-hide controls",
   "auto_hide_controls_description": "Hide the title bar and control bar after playback starts",
   "auto_hide_delay": "Hide after"

@@ -172,8 +172,6 @@
   "retry": "重试",
   "default_gateway": "默认网关",
   "default_gateway_failed": "无法读取默认网关，请手动填写",
-  "use_default_webdav": "默认 Dav 配置",
-  "use_default_webdav_description": "名称、路径、端口和账号密码已填好并锁定；关闭后可手动修改",
   "auto_hide_controls": "自动隐藏控制栏",
   "auto_hide_controls_description": "播放时延迟收起标题栏与控制栏",
   "auto_hide_delay": "隐藏延迟"

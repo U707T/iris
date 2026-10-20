@@ -1,3 +1,15 @@
+## v2.5.1
+
+### Changelog
+
+* **The Dav defaults are prefilled, not read-only.** A new WebDAV connection still starts with `Dav` / `/dav` / `5244` / `admin` / `123456`, but every field is now editable right away — no switch to unlock. An existing connection keeps its saved values
+* No other changes.
+
+### 更新日志
+
+* **Dav 默认值改成预填，不再只读。** 新建 WebDAV 时仍会带出 `Dav` / `/dav` / `5244` / `admin` / `123456`，但所有字段一开始就能直接修改，不需要先解锁开关；编辑已有连接仍按保存的值展示
+* 本版无其他变化。
+
 ## v2.5.0
 
 ### Changelog

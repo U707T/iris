@@ -15,20 +15,18 @@ const String _defaultPort = '5244';
 const String _defaultUsername = 'admin';
 const String _defaultPassword = '123456';
 
-Future<void> showWebDAVDialog(BuildContext context,
-        {WebDAVStorage? storage}) async =>
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return WebDAVDialog(storage: storage);
-      },
-    );
+Future<void> showWebDAVDialog(
+  BuildContext context, {
+  WebDAVStorage? storage,
+}) async => await showDialog<void>(
+  context: context,
+  builder: (BuildContext context) {
+    return WebDAVDialog(storage: storage);
+  },
+);
 
 class WebDAVDialog extends HookWidget {
-  const WebDAVDialog({
-    super.key,
-    this.storage,
-  });
+  const WebDAVDialog({super.key, this.storage});
   final WebDAVStorage? storage;
 
   @override
@@ -37,10 +35,8 @@ class WebDAVDialog extends HookWidget {
     final bool isEdit =
         storage != null && (useStorageStore().state.storages.contains(storage));
 
-    // 新建: 默认套用固定的 Dav 配置并锁定; 关闭开关才允许手动改
-    // 编辑已有连接: 按保存的值展示, 正常可编辑
-    final useDefaults = useState(!isEdit);
-    final bool locked = !isEdit && useDefaults.value;
+    // 新建: 预填默认 Dav 配置（预填值，可直接修改）
+    // 编辑已有连接: 按保存的值展示
 
     final id = useMemoized(() => storage?.id ?? const Uuid().v4());
     final name = useState(storage?.name ?? _defaultName);
@@ -52,35 +48,19 @@ class WebDAVDialog extends HookWidget {
 
     final nameController = useTextEditingController(text: name.value);
     final hostController = useTextEditingController(text: host.value);
-    final pathController =
-        useTextEditingController(text: basePath.value.join('/'));
+    final pathController = useTextEditingController(
+      text: basePath.value.join('/'),
+    );
     final usernameController = useTextEditingController(text: username.value);
     final passwordController = useTextEditingController(text: password.value);
-    final portController =
-        useTextEditingController(text: storage?.port ?? _defaultPort);
+    final portController = useTextEditingController(
+      text: storage?.port ?? _defaultPort,
+    );
 
     final isGatewayLoading = useState(false);
     final gatewayError = useState(false);
 
     final isTested = useState(false);
-
-    void setUseDefaults(bool value) {
-      useDefaults.value = value;
-      isTested.value = false;
-      if (!value) return;
-
-      // 重新套用默认值（覆盖手动改过的内容）
-      name.value = _defaultName;
-      nameController.text = _defaultName;
-      pathController.text = _defaultPath;
-      basePath.value = const [_defaultPath];
-      username.value = _defaultUsername;
-      usernameController.text = _defaultUsername;
-      password.value = _defaultPassword;
-      passwordController.text = _defaultPassword;
-      portController.text = _defaultPort;
-      https.value = false;
-    }
 
     void add() {
       useStorageStore().addStorage(
@@ -114,16 +94,18 @@ class WebDAVDialog extends HookWidget {
     }
 
     void testConnection() async {
-      final bool isConnected = await testWebDAV(WebDAVStorage(
-        id: id,
-        name: name.value,
-        host: host.value,
-        basePath: basePath.value,
-        port: portController.text,
-        username: username.value,
-        password: password.value,
-        https: https.value,
-      ));
+      final bool isConnected = await testWebDAV(
+        WebDAVStorage(
+          id: id,
+          name: name.value,
+          host: host.value,
+          basePath: basePath.value,
+          port: portController.text,
+          username: username.value,
+          password: password.value,
+          https: https.value,
+        ),
+      );
       isTested.value = isConnected;
     }
 
@@ -155,17 +137,8 @@ class WebDAVDialog extends HookWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (!isEdit)
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(t.use_default_webdav),
-                    subtitle: Text(t.use_default_webdav_description),
-                    value: useDefaults.value,
-                    onChanged: setUseDefaults,
-                  ),
                 TextFormField(
                   controller: nameController,
-                  readOnly: locked,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     labelText: t.name,
@@ -184,8 +157,9 @@ class WebDAVDialog extends HookWidget {
                     suffixIcon: IconButton(
                       tooltip: t.default_gateway,
                       visualDensity: VisualDensity.compact,
-                      onPressed:
-                          isGatewayLoading.value ? null : fillDefaultGateway,
+                      onPressed: isGatewayLoading.value
+                          ? null
+                          : fillDefaultGateway,
                       icon: isGatewayLoading.value
                           ? const SizedBox(
                               width: 18,
@@ -217,26 +191,27 @@ class WebDAVDialog extends HookWidget {
                   ),
                 const SizedBox(height: 16.0),
                 TextFormField(
-                    controller: pathController,
-                    readOnly: locked,
-                    decoration: InputDecoration(
-                      border: const OutlineInputBorder(),
-                      labelText: t.path,
-                    ),
-                    onChanged: (value) {
-                      final trimmedValue =
-                          value.trim().replaceAll(RegExp(r'^\/+|\/+$'), '');
-                      final finalPath = '/$trimmedValue';
-                      basePath.value = [finalPath];
-                      isTested.value = false;
-                    }),
+                  controller: pathController,
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    labelText: t.path,
+                  ),
+                  onChanged: (value) {
+                    final trimmedValue = value.trim().replaceAll(
+                      RegExp(r'^\/+|\/+$'),
+                      '',
+                    );
+                    final finalPath = '/$trimmedValue';
+                    basePath.value = [finalPath];
+                    isTested.value = false;
+                  },
+                ),
                 const SizedBox(height: 16.0),
                 Row(
                   children: [
                     Expanded(
                       child: TextFormField(
                         controller: portController,
-                        readOnly: locked,
                         decoration: InputDecoration(
                           border: const OutlineInputBorder(),
                           labelText: t.port,
@@ -258,46 +233,44 @@ class WebDAVDialog extends HookWidget {
                       width: 96,
                       child: ListTile(
                         contentPadding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-                        visualDensity:
-                            const VisualDensity(horizontal: -4, vertical: 0),
+                        visualDensity: const VisualDensity(
+                          horizontal: -4,
+                          vertical: 0,
+                        ),
                         title: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              const Text('https'),
-                              Focus(
-                                descendantsAreFocusable: false,
-                                canRequestFocus: false,
-                                child: Checkbox(
-                                  value: https.value,
-                                  onChanged: locked
-                                      ? null
-                                      : (_) {
-                                          isTested.value = false;
-                                          if (portController.text == '80' &&
-                                              https.value == false) {
-                                            portController.text = '443';
-                                          } else if (portController.text ==
-                                                  '443' &&
-                                              https.value == true) {
-                                            portController.text = '80';
-                                          }
-                                          https.value = !https.value;
-                                        },
-                                ),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Text('https'),
+                            Focus(
+                              descendantsAreFocusable: false,
+                              canRequestFocus: false,
+                              child: Checkbox(
+                                value: https.value,
+                                onChanged: (_) {
+                                  isTested.value = false;
+                                  if (portController.text == '80' &&
+                                      https.value == false) {
+                                    portController.text = '443';
+                                  } else if (portController.text == '443' &&
+                                      https.value == true) {
+                                    portController.text = '80';
+                                  }
+                                  https.value = !https.value;
+                                },
                               ),
-                            ]),
-                        onTap: locked
-                            ? null
-                            : () {
-                                isTested.value = false;
-                                if (!https.value) {
-                                  portController.text = '443';
-                                } else {
-                                  portController.text = '80';
-                                }
-                                https.value = !https.value;
-                              },
+                            ),
+                          ],
+                        ),
+                        onTap: () {
+                          isTested.value = false;
+                          if (!https.value) {
+                            portController.text = '443';
+                          } else {
+                            portController.text = '80';
+                          }
+                          https.value = !https.value;
+                        },
                       ),
                     ),
                   ],
@@ -305,7 +278,6 @@ class WebDAVDialog extends HookWidget {
                 const SizedBox(height: 16.0),
                 TextFormField(
                   controller: usernameController,
-                  readOnly: locked,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     labelText: t.username,
@@ -318,7 +290,6 @@ class WebDAVDialog extends HookWidget {
                 const SizedBox(height: 16.0),
                 TextFormField(
                   controller: passwordController,
-                  readOnly: locked,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     labelText: t.password,
@@ -340,10 +311,7 @@ class WebDAVDialog extends HookWidget {
           onPressed: () => Navigator.pop(context, 'Cancel'),
           child: Text(t.cancel),
         ),
-        TextButton(
-          onPressed: testConnection,
-          child: Text(t.test_connection),
-        ),
+        TextButton(onPressed: testConnection, child: Text(t.test_connection)),
         TextButton(
           onPressed: isTested.value
               ? () {
