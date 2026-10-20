@@ -1,7 +1,7 @@
 name: iris
 description: A lightweight video player
 publish_to: none
-version: 2.4.0+23
+version: 2.4.1+24
 
 environment:
   sdk: ^3.10.0
@@ -72,6 +72,11 @@ dependency_overrides:
   # 使用 third_party/fvp 内嵌的修复版 (见该目录 PATCHES.md); 上游发版后可移除本项。
   fvp:
     path: third_party/fvp
+  # media_stream 的 startServer() 原是无退出的 while(true) 重试循环, 绑定失败时
+  # 调用方永远 await 不返回 (v2.4.0 启动黑屏的根因); 使用内嵌修复版,
+  # 上游改成有界重试后可移除本项。
+  media_stream:
+    path: third_party/media_stream
 
 dev_dependencies:
   flutter_test:
@@ -96,7 +101,7 @@ msix_config:
   identity_name: 22P.IRISplayer
   publisher_display_name: 22P
   publisher: CN=9740B6B2-E777-4F52-8ECD-C4A577A73010
-  msix_version: 2.4.0.0
+  msix_version: 2.4.1.0
   logo_path: assets/images/logo.png
   trim_logo: false
   languages: en-us, zh-cn

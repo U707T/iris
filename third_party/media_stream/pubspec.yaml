@@ -1,0 +1,23 @@
+name: media_stream
+description: "A server to stream media from FTP and SMB via HTTP."
+version: 0.0.1
+homepage: https://github.com/nini22P/media_stream
+repository: https://github.com/nini22P/media_stream
+issue_tracker: https://github.com/nini22P/media_stream/issues
+
+environment:
+  sdk: ^3.7.0
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  pure_ftp: ^0.7.5
+  smb_connect: ^0.0.9
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

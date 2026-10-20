@@ -44,8 +44,10 @@ class Files extends HookWidget {
       wentBackground.value = false;
       if (Platform.isAndroid) {
         () async {
-          await getStoragePermissionStatus();
-          refresh();
+          // 只有权限状态真的变了才刷新, 避免每次回到前台都多请求一次网络存储
+          final before = globals.storagePermissionStatus;
+          final after = await getStoragePermissionStatus();
+          if (after != before) refresh();
         }();
       }
       return null;

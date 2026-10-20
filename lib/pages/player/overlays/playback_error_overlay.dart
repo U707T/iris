@@ -20,8 +20,8 @@ class PlaybackErrorOverlay extends HookWidget {
 
     final error =
         context.select<MediaPlayer, String?>((player) => player.error);
-    final retry = context
-        .select<MediaPlayer, Future<void> Function()?>((player) => player.retry);
+    final canRetry =
+        context.select<MediaPlayer, bool>((player) => player.retry != null);
     final queueLength = usePlayQueueStore()
         .select(context, (state) => state.playQueue.length);
 
@@ -73,9 +73,13 @@ class PlaybackErrorOverlay extends HookWidget {
                     runSpacing: 8,
                     alignment: WrapAlignment.center,
                     children: [
-                      if (retry != null)
+                      if (canRetry)
                         FilledButton.icon(
-                          onPressed: () => retry(),
+                          onPressed: () async {
+                            // 用 read 取最新实例: 不要 select 函数本身,
+                            // 否则每次进度更新 (新闭包) 都会让本组件重建
+                            await context.read<MediaPlayer>().retry?.call();
+                          },
                           icon: const Icon(Icons.refresh_rounded),
                           label: Text(t.retry),
                         ),

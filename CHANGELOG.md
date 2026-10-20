@@ -1,3 +1,23 @@
+## v2.4.1
+
+### Changelog
+
+* **Fixed the black screen on launch introduced in 2.4.0**: the FTP / SMB streaming server was awaited before the first frame, and its start routine retried forever when the local port could not be bound — so the UI never appeared. The window / first frame now comes first, the server starts afterwards in the background, and a failure only disables FTP / SMB playback
+* The bundled `media_stream` server now gives up after 20 port attempts and reports an error instead of looping forever (patched copy in `third_party/media_stream`)
+* The rest of the startup path is bounded as well: the "open with" link and the desktop window setup now time out after 3 s, so a misbehaving plugin cannot keep the app on a blank window
+* Release builds now show a readable message (with the exception text) instead of an almost-black box if a widget fails
+* Playback error overlay: no longer rebuilds on every position update; the file browser only re-checks the storage permission when you come back from the system settings and something actually changed
+* No other changes.
+
+### 更新日志
+
+* **修复 2.4.0 引入的启动黑屏**：FTP / SMB 串流服务在首帧之前被 `await`，而它的启动逻辑在本地端口绑定失败时会无限重试，导致界面永远出不来。现在先出首帧，串流服务随后在后台启动，失败也只影响 FTP / SMB 播放
+* 内嵌的 `media_stream` 改为**最多尝试 20 个端口后报错**，不再无限循环（补丁版见 `third_party/media_stream`）
+* 启动链路的其余步骤也加了上限：「打开方式」链接、桌面窗口初始化都带 3 秒超时，插件不回调也不会把应用卡在空白窗口
+* release 版组件出错时改为显示可读提示（含异常信息），不再是一块近乎全黑的方块
+* 播放失败浮层不再随每次进度更新重建；文件面板只在权限状态真的变化时才刷新
+* 本版无其他变化。
+
 ## v2.4.0
 
 ### Changelog

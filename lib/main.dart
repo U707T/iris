@@ -63,7 +63,7 @@ void main(List<String> arguments) async {
     return true;
   };
   if (kReleaseMode) {
-    ErrorWidget.builder = (details) => const _UnexpectedErrorView();
+    ErrorWidget.builder = (details) => _UnexpectedErrorView(details: details);
   }
 
   MediaKit.ensureInitialized();
@@ -88,22 +88,23 @@ void main(List<String> arguments) async {
     logger('Failed to register FVP backend: $e');
   }
 
-  // 冷启动的 "打开方式" 链接: 失败时照常启动, 不能卡在启动页
-  try {
-    final appLinks = AppLinks();
-    final initUri = await appLinks.getInitialLinkString();
+  // 冷启动的 "打开方式" 链接: 失败 / 插件不回调时照常启动, 不能卡在启动页
+  final initUri = await _startupStep(
+    AppLinks().getInitialLinkString(),
+    const Duration(seconds: 3),
+    'initial link',
+  );
 
-    if (initUri != null) {
-      logger('initUri: $initUri');
-      globals.initUri = initUri;
-    }
-  } catch (e) {
-    logger('Failed to read initial link: $e');
+  if (initUri != null) {
+    logger('initUri: $initUri');
+    globals.initUri = initUri;
   }
 
   if (isDesktop) {
     try {
-      await windowManager.ensureInitialized();
+      await windowManager
+          .ensureInitialized()
+          .timeout(const Duration(seconds: 3));
 
       WindowOptions windowOptions = const WindowOptions(
         size: Size(1280, 720),
@@ -131,15 +132,41 @@ void main(List<String> arguments) async {
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
+  runApp(const StoreScope(child: MyApp()));
+
+  // FTP / SMB 串流服务只用于网络播放。必须放在 runApp 之后:
+  // media_stream 的 startServer() 内部是 `while (true)` 的重试循环,
+  // 绑定失败 (端口被占 / 防火墙 / IPv6 不可用) 时永远不返回。
+  // v2.4.0 把它 await 在 runApp 之前, 首帧因此一直出不来 —— 表现就是黑屏。
+  unawaited(_startMediaStreamServer());
+}
+
+/// 启动阶段的异步步骤统一加超时: 插件不回调时宁可降级, 也不能卡住首帧。
+Future<String?> _startupStep(
+  Future<String?> future,
+  Duration timeout,
+  String label,
+) async {
   try {
-    MediaStream mediaStream = MediaStream();
-    await mediaStream.startServer();
+    return await future.timeout(timeout);
   } catch (e) {
-    // FTP 串流服务起不来时只影响 FTP 播放, 本地 / 直链播放不受影响
+    logger('Startup step "$label" failed: $e');
+    return null;
+  }
+}
+
+/// 启动串流服务 (失败只影响 FTP / SMB 播放, 不影响本地与直链)。
+Future<void> _startMediaStreamServer() async {
+  try {
+    final mediaStream = MediaStream();
+    // 再兜一层超时: 循环本身不会结束, 但这里不能拖住其他初始化
+    await mediaStream.startServer().timeout(const Duration(seconds: 15));
+    logger('MediaStream server: ${mediaStream.url}');
+  } on TimeoutException {
+    logger('MediaStream server did not start within 15s');
+  } catch (e) {
     logger('Failed to start MediaStream server: $e');
   }
-
-  runApp(const StoreScope(child: MyApp()));
 }
 
 class MyApp extends HookWidget {
@@ -259,35 +286,56 @@ class MyApp extends HookWidget {
 /// Flutter 默认在 release 里只画一个灰色方块, 用户看不出发生了什么。
 /// 这里给一个可读的提示 (不依赖 Material / 本地化, 组件树出问题时也能画出来)。
 class _UnexpectedErrorView extends StatelessWidget {
-  const _UnexpectedErrorView();
+  const _UnexpectedErrorView({this.details});
+
+  /// 出错的组件信息 (release 下也能给出一点线索, 便于用户反馈)
+  final FlutterErrorDetails? details;
 
   @override
   Widget build(BuildContext context) {
-    return const Directionality(
+    final message = details?.exceptionAsString() ?? '';
+
+    return Directionality(
       textDirection: TextDirection.ltr,
       child: ColoredBox(
-        color: Color(0xFF101012),
+        color: const Color(0xFF161618),
         child: Center(
           child: Padding(
-            padding: EdgeInsets.all(24),
+            padding: const EdgeInsets.all(24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   Icons.error_outline_rounded,
-                  size: 40,
-                  color: Colors.white54,
+                  size: 44,
+                  color: Colors.white.withValues(alpha: 0.7),
                 ),
-                SizedBox(height: 12),
-                Text(
-                  'Something went wrong',
+                const SizedBox(height: 12),
+                const Text(
+                  '界面出现异常 / Something went wrong',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
                     decoration: TextDecoration.none,
                   ),
                 ),
+                if (message.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 11,
+                      height: 1.4,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

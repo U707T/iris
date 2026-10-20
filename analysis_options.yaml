@@ -36,3 +36,5 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    # 内嵌的第三方包不参与本项目的 lint (上游用 print / 隐式类型)
+    - third_party/media_stream/**
