@@ -1,3 +1,19 @@
+## v2.3.5
+
+### Changelog
+
+* **The WebDAV "default gateway" button actually works now.** Android 10+ blocks apps from reading `/proc/net/route`, and `ip route` is usually blocked by SELinux as well, so on Android the button could never fill in the host. It now asks the system through `ConnectivityManager` (the same source the OS uses for the active network's default route), with `/proc/net/route` / `ip route` kept as fallbacks. The added `ACCESS_NETWORK_STATE` is a normal install-time permission: no prompt, no user action
+* Windows: `route print` now gets 8 seconds (large routing tables with a VPN, Docker or several NICs could exceed the old 3-second timeout), and a PowerShell `Get-NetRoute` fallback was added
+* If the gateway still cannot be read, the dialog now says "enter it manually" instead of just failing silently
+* No other changes.
+
+### 更新日志
+
+* **WebDAV 的“读取默认网关”按钮真的能用了。** Android 10+ 禁止应用读 `/proc/net/route`，`ip route` 也基本被 SELinux 拦掉，所以之前 Android 上这个按钮必然失败。现在改为通过系统 `ConnectivityManager` 查询当前网络的默认路由（和系统自己用的是同一份数据），`/proc/net/route` / `ip route` 保留为兜底。新增的 `ACCESS_NETWORK_STATE` 是安装时普通权限，不弹窗、不需要用户操作
+* Windows：`route print` 超时从 3 秒放宽到 8 秒（开了 VPN / Docker / 多网卡时路由表大，旧超时可能不够），并增加 PowerShell `Get-NetRoute` 兜底
+* 如果仍然读不到，对话框会明确提示“请手动填写”，不再只是静默失败
+* 本版无其他变化。
+
 ## v2.3.4
 
 ### Changelog

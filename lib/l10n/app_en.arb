@@ -171,5 +171,5 @@
   "playback_failed": "Unable to play this file",
   "retry": "Retry",
   "default_gateway": "Default gateway",
-  "default_gateway_failed": "Could not read the default gateway"
+  "default_gateway_failed": "Could not read the default gateway. Enter it manually"
 }

@@ -171,5 +171,5 @@
   "playback_failed": "无法播放此文件",
   "retry": "重试",
   "default_gateway": "默认网关",
-  "default_gateway_failed": "无法读取默认网关"
+  "default_gateway_failed": "无法读取默认网关，请手动填写"
 }

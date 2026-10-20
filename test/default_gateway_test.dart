@@ -60,6 +60,15 @@ destination: default
     expect(parseMacOSRouteGetDefault('route: bad address: default'), isNull);
   });
 
+  test('PowerShell Get-NetRoute: NextHop 单行输出', () {
+    expect(parsePlainIPv4('192.168.31.1\r\n'), '192.168.31.1');
+  });
+
+  test('PowerShell 报错 / 空输出: 返回 null', () {
+    expect(parsePlainIPv4(''), isNull);
+    expect(parsePlainIPv4('Get-NetRoute : Access is denied.'), isNull);
+  });
+
   test('非法 IPv4 不会被当成网关', () {
     expect(
       parseWindowsRoutePrint('0.0.0.0 0.0.0.0 999.1.1.1 10.0.0.2 25'),

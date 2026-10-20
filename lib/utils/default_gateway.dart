@@ -1,29 +1,50 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+
+const MethodChannel _networkChannel = MethodChannel('iris/network');
+
 /// 读取本机默认网关地址（路由器 IP），失败返回 null。
 ///
-/// 各平台数据源：
-/// - Android: `/proc/net/route`（无需权限，但新系统可能被 SELinux 拦）→ `ip route` 兜底
-/// - Linux: `ip route show default` → `/proc/net/route` 兜底
-/// - Windows: `route print -4`（只解析数字行，不受系统语言影响）
+/// 各平台数据源（按可靠性排序）：
+/// - Android: 原生 `ConnectivityManager`（**首选**；Android 10+ 已禁止应用读
+///   `/proc/net/route`，`ip route` 也常被 SELinux 拦）→ `/proc/net/route` → `ip route`
+/// - Linux: `ip route show default` → `/proc/net/route`
+/// - Windows: `route print -4`（路由表大时可能较慢，给 8 秒）→ PowerShell
+///   `Get-NetRoute`（`NextHop`）
 /// - macOS: `route -n get default`
 ///
-/// 只做"尽力而为"：拿不到就返回 null，由界面提示，不要猜（例如按 /24 推 x.x.x.1
-/// 在多层路由 / 热点共享下经常是错的）。
+/// 只做"尽力而为"：拿不到就返回 null，由界面提示手动填写，不要猜
+/// （例如按 /24 推 x.x.x.1 在多层路由 / 热点共享下经常是错的）。
 Future<String?> getDefaultGateway() async {
   try {
     if (Platform.isAndroid) {
-      return _readProcNetRoute() ?? await _runIpRoute();
+      return await _androidGateway() ??
+          _readProcNetRoute() ??
+          await _runIpRoute();
     }
     if (Platform.isLinux) {
       return await _runIpRoute() ?? _readProcNetRoute();
     }
     if (Platform.isWindows) {
+      // 路由表很大（VPN / Docker / 多网卡）时 route print 会超过 3 秒
       return await _run(
-        'route',
-        const ['print', '-4'],
-        parseWindowsRoutePrint,
-      );
+            'route',
+            const ['print', '-4'],
+            parseWindowsRoutePrint,
+            timeout: const Duration(seconds: 8),
+          ) ??
+          await _run(
+            'powershell',
+            const [
+              '-NoProfile',
+              '-NonInteractive',
+              '-Command',
+              r'(Get-NetRoute -DestinationPrefix 0.0.0.0/0 | Sort-Object RouteMetric | Select-Object -First 1).NextHop',
+            ],
+            parsePlainIPv4,
+            timeout: const Duration(seconds: 10),
+          );
     }
     if (Platform.isMacOS) {
       return await _run(
@@ -36,17 +57,28 @@ Future<String?> getDefaultGateway() async {
   return null;
 }
 
+/// Android 原生通道：ConnectivityManager 当前网络的默认路由网关
+Future<String?> _androidGateway() async {
+  try {
+    final gateway =
+        await _networkChannel.invokeMethod<String>('getDefaultGateway');
+    if (gateway != null && _isIPv4(gateway)) return gateway;
+  } catch (_) {}
+  return null;
+}
+
 Future<String?> _runIpRoute() =>
     _run('ip', const ['route', 'show', 'default'], parseIpRouteDefault);
 
 Future<String?> _run(
   String executable,
   List<String> arguments,
-  String? Function(String output) parse,
-) async {
+  String? Function(String output) parse, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
   try {
-    final result = await Process.run(executable, arguments)
-        .timeout(const Duration(seconds: 3));
+    final result =
+        await Process.run(executable, arguments).timeout(timeout);
     if (result.exitCode != 0) return null;
     return parse(result.stdout.toString());
   } catch (_) {
@@ -113,6 +145,13 @@ String? parseWindowsRoutePrint(String output) {
     if (_isIPv4(fields[2])) return fields[2];
   }
   return null;
+}
+
+/// 解析 PowerShell `Get-NetRoute` 的 `NextHop` 输出（通常只有一行 IP）。
+String? parsePlainIPv4(String output) {
+  final match = RegExp(r'\b(\d{1,3}(?:\.\d{1,3}){3})\b').firstMatch(output);
+  final gateway = match?.group(1);
+  return gateway != null && _isIPv4(gateway) ? gateway : null;
 }
 
 /// 解析 `route -n get default`：`gateway: 192.168.1.1`
