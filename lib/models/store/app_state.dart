@@ -51,7 +51,6 @@ abstract class AppState with _$AppState {
     @Default(80) int volume,
     @Default(false) bool isMuted,
     @Default(ThemeMode.system) ThemeMode themeMode,
-    @Default('none') String preferedSubtitleLanguage,
     @Default('system') String language,
     @Default(false) bool autoCheckUpdate,
     @Default(false) bool autoResize,

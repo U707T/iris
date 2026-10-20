@@ -105,26 +105,6 @@ class History extends HookWidget {
                         return const SizedBox();
                       }
                     }(),
-                    ...historyList[index]
-                        .value
-                        .file
-                        .subtitles
-                        .map((subtitle) =>
-                            subtitle.uri.split('.').last.toUpperCase())
-                        .toSet()
-                        .toList()
-                        .map(
-                          (subtitleType) => Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(width: 4),
-                              Chip(
-                                text: subtitleType,
-                                primary: true,
-                              ),
-                            ],
-                          ),
-                        ),
                   ],
                 ),
                 trailing: PopupMenuButton<FileOptions>(

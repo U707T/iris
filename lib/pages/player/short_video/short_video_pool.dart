@@ -7,7 +7,6 @@ import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/models/progress.dart';
-import 'package:iris/models/storages/storage.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_history_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
@@ -17,7 +16,6 @@ import 'package:iris/utils/short_video.dart';
 import 'package:iris/utils/wait_for_first_frame.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:media_stream/media_stream.dart';
 
 /// 播放器池大小: 上一条 / 当前 / 下一条
 const int _shortVideoPoolSize = 3;
@@ -264,7 +262,6 @@ class ShortVideoPool extends ChangeNotifier {
       final appState = useAppStore().state;
       await slot.player.setPlaylistMode(PlaylistMode.loop);
       // 短视频流不显示字幕: 显式关闭, 省去字幕解码 / 渲染开销
-      await slot.player.setSubtitleTrack(SubtitleTrack.no());
       await slot.player.setRate(appState.rate);
       await slot.player.setVolume(
           appState.isMuted ? 0 : appState.volume.toDouble());
@@ -455,9 +452,6 @@ class ShortVideoMediaKitPlayer extends MediaKitPlayer {
     required this.pool,
     required super.player,
     required super.controller,
-    required super.subtitle,
-    required super.subtitles,
-    required super.externalSubtitles,
     required super.audio,
     required super.audios,
     required super.isInitializing,
@@ -493,7 +487,6 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
     [items, currentIndex],
   );
 
-  final mediaStream = useMemoized(() => MediaStream(), []);
 
   final pool = useMemoized(
     () => ShortVideoPool(
@@ -501,9 +494,7 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
         final storage = useStorageStore().findById(file.storageId);
         final auth = storage?.getAuth();
         return Media(
-          file.storageType == StorageType.ftp
-              ? '${mediaStream.url}/${file.uri}'
-              : file.uri,
+          file.uri,
           httpHeaders: auth != null ? {'authorization': auth} : {},
         );
       },
@@ -641,9 +632,6 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
     pool: pool,
     player: activePlayer,
     controller: active.controller,
-    subtitle: SubtitleTrack.no(),
-    subtitles: const [],
-    externalSubtitles: const [],
     audio: AudioTrack.no(),
     audios: const [],
     isInitializing: active.initializing,
@@ -661,11 +649,10 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
     stepForward: stepForward,
     seek: seek,
     saveProgress: saveProgress,
-    screenshot: ({bool includeSubtitles = false}) async {
+    screenshot: () async {
       try {
         return await activePlayer.screenshot(
           format: 'image/jpeg',
-          includeLibassSubtitles: includeSubtitles,
         );
       } catch (e) {
         logger('Error taking screenshot: $e');

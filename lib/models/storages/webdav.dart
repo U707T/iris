@@ -1,9 +1,7 @@
 import 'dart:convert';
 import 'package:iris/models/storages/storage.dart';
 import 'package:iris/utils/check_content_type.dart';
-import 'package:iris/utils/get_subtitle_map.dart';
 import 'package:iris/utils/logger.dart';
-import 'package:path/path.dart' as p;
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:iris/models/file.dart';
 
@@ -82,12 +80,6 @@ Future<List<FileItem>> getWebDAVFiles(
     }
   }
 
-  final subtitleMap = getSubtitleMap<webdav.File>(
-    files: files,
-    getName: (file) => file.name ?? '',
-    getUri: (file) => getUri(file.name ?? ''),
-  );
-
   List<FileItem> fileItems = [];
 
   for (final file in files) {
@@ -96,7 +88,6 @@ Future<List<FileItem>> getWebDAVFiles(
     if (fileName == null) continue;
 
     final isDir = file.isDir;
-    final basename = p.basenameWithoutExtension(fileName).split('.').first;
     fileItems.add(FileItem(
       storageId: id,
       storageType: StorageType.webdav,
@@ -107,7 +98,6 @@ Future<List<FileItem>> getWebDAVFiles(
       size: file.size ?? 0,
       lastModified: file.mTime,
       type: isDir ?? false ? ContentType.other : checkContentType(fileName),
-      subtitles: isVideoFile(fileName) ? subtitleMap[basename] ?? [] : [],
     ));
   }
 

@@ -13,7 +13,6 @@ import 'package:iris/utils/short_video.dart';
 MediaPlayer _fakePlayer({void Function()? onPause}) => MediaPlayer(
       isInitializing: false,
       isPlaying: true,
-      externalSubtitles: const [],
       position: Duration.zero,
       duration: const Duration(minutes: 5),
       buffer: Duration.zero,

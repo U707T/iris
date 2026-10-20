@@ -13,9 +13,9 @@ IRIS 是一款基于 Flutter 的轻量级视频播放器。本仓库是 [nini22P
 ## 特性
 
 - [X] 基于 [Media Kit](https://github.com/media-kit/media-kit) | [FVP](https://github.com/wang-bin/fvp)，可播放多种视频格式
-- [X] 本地存储、WebDAV 与 FTP
+- [X] 本地存储与 WebDAV
 - [X] **短视频模式**：竖滑无缝切换、单条循环、进度条拖拽、双击快进 / 快退反馈、长按倍速光效、音量按钮
-- [X] 可切换字幕和音轨
+- [X] 可切换音轨
 - [X] 播放队列支持随机和重复
 - [X] 完善的手势支持
 - [X] 长按加速播放（倍速可自定义）
@@ -64,7 +64,7 @@ IRIS 是一款基于 Flutter 的轻量级视频播放器。本仓库是 [nini22P
 | `Ctrl + R`           | 重复                                 |
 | `Ctrl + V`           | 视频缩放                             |
 | `Ctrl + M`           | 静音                                 |
-| `S`                  | 字幕和音轨                           |
+| `S`                  | 音轨                                 |
 | `P`                  | 播放队列                             |
 | `F`                  | 存储                                 |
 | `Ctrl + O`           | 打开文件                             |

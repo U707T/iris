@@ -21,7 +21,6 @@ MediaPlayer _fakePlayer({
     MediaPlayer(
       isInitializing: false,
       isPlaying: isPlaying,
-      externalSubtitles: const [],
       position: position,
       duration: const Duration(minutes: 5),
       buffer: Duration.zero,

@@ -2,7 +2,6 @@ import 'package:collection/collection.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:iris/models/file.dart';
-import 'package:iris/models/storages/ftp.dart';
 import 'package:iris/models/storages/local.dart';
 import 'package:iris/models/storages/webdav.dart';
 import 'package:iris/utils/platform.dart';
@@ -22,7 +21,6 @@ enum StorageType {
   usb,
   sdcard,
   webdav,
-  ftp,
 }
 
 enum StorageOptions {
@@ -66,17 +64,6 @@ sealed class Storage with _$Storage implements _Storage {
     required bool https,
   }) = WebDAVStorage;
 
-  factory Storage.ftp({
-    required String id,
-    @Default(StorageType.ftp) StorageType type,
-    required String name,
-    required String host,
-    required List<String> basePath,
-    required String port,
-    required String username,
-    required String password,
-  }) = FTPStorage;
-
   factory Storage.fromJson(Map<String, dynamic> json) =>
       _$StorageFromJson(json);
 
@@ -94,8 +81,6 @@ sealed class Storage with _$Storage implements _Storage {
         }
       case StorageType.webdav:
         return await getWebDAVFiles(this as WebDAVStorage, path);
-      case StorageType.ftp:
-        return await getFTPFiles(this as FTPStorage, path);
       case StorageType.none:
         return [];
     }
@@ -106,8 +91,6 @@ sealed class Storage with _$Storage implements _Storage {
     switch (type) {
       case StorageType.webdav:
         return getWebDAVAuth(this as WebDAVStorage);
-      case StorageType.ftp:
-        return getFTPAuth(this as FTPStorage);
       default:
         return null;
     }

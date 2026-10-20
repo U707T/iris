@@ -31,24 +31,12 @@ abstract class FileItem with _$FileItem {
     @Default(0) int size,
     DateTime? lastModified,
     @Default(ContentType.video) ContentType type,
-    @Default([]) List<Subtitle> subtitles,
   }) = _FileItem;
 
   factory FileItem.fromJson(Map<String, dynamic> json) =>
       _$FileItemFromJson(json);
 
   String getID() => '$storageId:$uri';
-}
-
-@freezed
-abstract class Subtitle with _$Subtitle {
-  const factory Subtitle({
-    required String name,
-    required String uri,
-  }) = _Subtitle;
-
-  factory Subtitle.fromJson(Map<String, dynamic> json) =>
-      _$SubtitleFromJson(json);
 }
 
 @freezed

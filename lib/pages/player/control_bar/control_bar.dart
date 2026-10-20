@@ -116,7 +116,7 @@ class ControlBar extends HookWidget {
       color: color,
       overlayColor: overlayColor,
     );
-    final subtitleButton = SubtitleButton(
+    final audioTrackButton = AudioTrackButton(
       showControlForHover: showControlForHover,
       color: color,
       overlayColor: overlayColor,
@@ -184,7 +184,7 @@ class ControlBar extends HookWidget {
               if (file?.type != ContentType.audio) fitButton,
               if (file?.type != ContentType.audio) zoomButton,
               volumeWidget,
-              subtitleButton,
+              audioTrackButton,
               playQueueButton,
               storageButton,
               if (hasVideos) shortVideoButton,
@@ -214,7 +214,7 @@ class ControlBar extends HookWidget {
               rateButton,
               volumeWidget,
               const Spacer(),
-              subtitleButton,
+              audioTrackButton,
               playQueueButton,
               storageButton,
               if (hasVideos) shortVideoButton,
@@ -239,7 +239,7 @@ class ControlBar extends HookWidget {
           rateButton,
           volumeWidget,
           Expanded(child: sliderWidget),
-          subtitleButton,
+          audioTrackButton,
           playQueueButton,
           storageButton,
           if (hasVideos) shortVideoButton,

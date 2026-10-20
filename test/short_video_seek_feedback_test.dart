@@ -21,7 +21,6 @@ final List<int> backwards = [];
 MediaPlayer _fakePlayer() => MediaPlayer(
       isInitializing: false,
       isPlaying: true,
-      externalSubtitles: const [],
       position: const Duration(seconds: 10),
       duration: const Duration(minutes: 5),
       buffer: Duration.zero,

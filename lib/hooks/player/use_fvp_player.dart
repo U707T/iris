@@ -8,7 +8,6 @@ import 'package:iris/globals.dart' as globals;
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/models/progress.dart';
-import 'package:iris/models/storages/storage.dart';
 import 'package:iris/models/store/app_state.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_history_store.dart';
@@ -20,7 +19,6 @@ import 'package:iris/utils/image_encode.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/queue_navigation.dart';
-import 'package:media_stream/media_stream.dart';
 import 'package:saf_util/saf_util.dart';
 import 'package:video_player/video_player.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -57,18 +55,10 @@ FvpPlayer useFvpPlayer(BuildContext context) {
           : playQueue[currentPlayIndex].file,
       [playQueue, currentPlayIndex]);
 
-  final externalSubtitle = useState<int?>(null);
-
-  final List<Subtitle> externalSubtitles =
-      useMemoized(() => file?.subtitles ?? [], [file?.subtitles]);
-
   final isInitializing = useState(false);
 
   /// 已恢复过播放进度的文件 ID (duration 会多次变化, 只恢复一次)
   final restoredProgressKey = useRef<String?>(null);
-
-  MediaStream mediaStream = useMemoized(() => MediaStream());
-  final streamUrl = useMemoized(() => mediaStream.url);
 
   final controller = useState(VideoPlayerController.networkUrl(Uri.parse('')));
 
@@ -184,9 +174,7 @@ FvpPlayer useFvpPlayer(BuildContext context) {
             );
           default:
             controller.value = VideoPlayerController.networkUrl(
-              Uri.parse(file.storageType == StorageType.ftp
-                  ? '$streamUrl/${file.uri}'
-                  : file.uri),
+              Uri.parse(file.uri),
               httpHeaders: auth != null ? {'authorization': auth} : {},
             );
         }
@@ -217,37 +205,6 @@ FvpPlayer useFvpPlayer(BuildContext context) {
     };
   }, []);
 
-  useEffect(() {
-    () async {
-      final currentExternalSubtitle = externalSubtitle.value;
-      if (currentExternalSubtitle == null || externalSubtitles.isEmpty) {
-        controller.value.setExternalSubtitle('');
-      } else if (externalSubtitle.value! < externalSubtitles.length) {
-        bool isExists = true;
-
-        final uri = file?.storageType == StorageType.ftp
-            ? '$streamUrl/${externalSubtitles[currentExternalSubtitle].uri}'
-            : externalSubtitles[currentExternalSubtitle].uri;
-
-        logger('External subtitle uri: $uri');
-
-        if (Platform.isAndroid &&
-            externalSubtitles[currentExternalSubtitle]
-                .uri
-                .startsWith('content://')) {
-          isExists = await SafUtil().exists(uri, false);
-        }
-
-        if (isExists) {
-          controller.value.setExternalSubtitle(uri);
-        } else {
-          externalSubtitle.value = null;
-        }
-      }
-    }();
-
-    return;
-  }, [externalSubtitles, externalSubtitle.value]);
 
   useEffect(() {
     () async {
@@ -326,10 +283,6 @@ FvpPlayer useFvpPlayer(BuildContext context) {
 
       if (autoPlay) {
         controller.value.play();
-      }
-
-      if (externalSubtitles.isNotEmpty) {
-        externalSubtitle.value = 0;
       }
     }();
     return;
@@ -440,8 +393,6 @@ FvpPlayer useFvpPlayer(BuildContext context) {
       controller: controller.value,
       isInitializing: isInitializing.value,
       isPlaying: isPlaying,
-      externalSubtitle: externalSubtitle,
-      externalSubtitles: externalSubtitles,
       position:
           !controller.value.value.isInitialized || duration == Duration.zero
               ? Duration.zero
@@ -460,7 +411,7 @@ FvpPlayer useFvpPlayer(BuildContext context) {
       stepForward: stepForward,
       seek: seek,
       saveProgress: saveProgress,
-      screenshot: ({bool includeSubtitles = false}) async {
+      screenshot: () async {
         try {
           // FVP snapshot 返回 RGBA 原始数据, 需要编码为图片
           final raw = await controller.value.snapshot();
@@ -482,8 +433,6 @@ FvpPlayer useFvpPlayer(BuildContext context) {
       controller.value.value.isInitialized,
       isInitializing.value,
       isPlaying,
-      externalSubtitle.value,
-      externalSubtitles,
       position,
       duration,
       buffered,

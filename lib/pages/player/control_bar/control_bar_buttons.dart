@@ -14,7 +14,7 @@ import 'package:iris/widgets/dialogs/show_zoom_dialog.dart';
 import 'package:iris/widgets/popup.dart';
 import 'package:iris/widgets/popups/play_queue.dart';
 import 'package:iris/widgets/popups/storages/storages.dart';
-import 'package:iris/widgets/popups/track/subtitle_and_audio_track.dart';
+import 'package:iris/widgets/popups/track/track_panel.dart';
 import 'package:provider/provider.dart';
 
 /// 播放 / 暂停按钮 (含初始化指示与拖动保护)
@@ -454,9 +454,9 @@ class VolumeWidget extends HookWidget {
   }
 }
 
-/// 字幕与音轨
-class SubtitleButton extends HookWidget {
-  const SubtitleButton({
+/// 音轨
+class AudioTrackButton extends HookWidget {
+  const AudioTrackButton({
     super.key,
     required this.showControlForHover,
     this.color,
@@ -472,9 +472,9 @@ class SubtitleButton extends HookWidget {
     final t = getLocalizations(context);
 
     return IconButton(
-      tooltip: '${t.subtitle_and_audio_track} ( S )',
+      tooltip: '${t.audio_track} ( S )',
       icon: Icon(
-        Icons.subtitles_rounded,
+        Icons.graphic_eq_rounded,
         size: 20,
         color: color,
       ),
@@ -484,7 +484,7 @@ class SubtitleButton extends HookWidget {
             context: context,
             child: Provider<MediaPlayer>.value(
               value: context.read<MediaPlayer>(),
-              child: const SubtitleAndAudioTrack(),
+              child: const TrackPanel(),
             ),
             direction: PopupDirection.right,
           ),

@@ -9,7 +9,6 @@ import 'package:iris/models/store/play_queue_state.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/utils/files_sort.dart';
-import 'package:iris/utils/get_subtitle_map.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/path_conv.dart';
@@ -18,7 +17,6 @@ import 'package:path/path.dart' as p;
 import 'package:iris/models/file.dart';
 import 'package:iris/utils/check_content_type.dart';
 import 'package:saf_util/saf_util.dart';
-import 'package:saf_util/saf_util_platform_interface.dart';
 
 Future<List<LocalStorage>> getLocalStorages(
   BuildContext context,
@@ -215,49 +213,9 @@ Future<List<FileItem>> getLocalFiles(
   }
 
   final List<FileItem> fileItems = [];
-  final subtitleExtensions = {'ass', 'srt', 'vtt', 'sub'};
 
   for (final group in groupedEntities.values) {
-    final videos = group
-        .where((e) =>
-            e is! Directory && checkContentType(e.path) == ContentType.video)
-        .toList();
-    final subtitles = group.where((e) {
-      final ext = p.extension(e.path).replaceFirst('.', '');
-      return e is! Directory && subtitleExtensions.contains(ext);
-    }).toList();
-    final others = group
-        .where((e) => !videos.contains(e) && !subtitles.contains(e))
-        .toList();
-
-    for (final video in videos) {
-      final videoStat = await video.stat();
-      final associatedSubtitles = subtitles.map((sub) {
-        final baseName = p.basenameWithoutExtension(video.path);
-        String subTitleName = p.basename(sub.path);
-        final regex = RegExp(r'^' + RegExp.escape(baseName) + r'\.(.+?)\.');
-        final match = regex.firstMatch(subTitleName);
-        if (match != null) {
-          subTitleName = match.group(1) ?? subTitleName;
-        }
-        return Subtitle(name: subTitleName, uri: sub.path);
-      }).toList();
-
-      fileItems.add(FileItem(
-        storageId: storage.id,
-        storageType: storage.type,
-        name: p.basename(video.path),
-        uri: video.path,
-        path: [...path, p.basename(video.path)],
-        isDir: false,
-        size: videoStat.size,
-        lastModified: videoStat.modified,
-        type: ContentType.video,
-        subtitles: associatedSubtitles,
-      ));
-    }
-
-    for (final entity in others) {
+    for (final entity in group) {
       final stat = await entity.stat();
       final isDir = entity is Directory;
       fileItems.add(FileItem(
@@ -270,7 +228,6 @@ Future<List<FileItem>> getLocalFiles(
         size: isDir ? 0 : stat.size,
         lastModified: stat.modified,
         type: isDir ? ContentType.other : checkContentType(entity.path),
-        subtitles: [],
       ));
     }
   }
@@ -301,16 +258,9 @@ Future<void> pickContentFile() async {
 Future<List<FileItem>> getContentFiles(String uri) async {
   final files = await SafUtil().list(uri);
 
-  final subtitleMap = getSubtitleMap<SafDocumentFile>(
-    files: files,
-    getName: (file) => file.name,
-    getUri: (file) => file.uri,
-  );
-
   List<FileItem> fileItems = [];
 
   for (final file in files) {
-    final basename = p.basenameWithoutExtension(file.name).split('.').first;
     fileItems.add(FileItem(
       name: file.name,
       uri: file.uri,
@@ -319,7 +269,6 @@ Future<List<FileItem>> getContentFiles(String uri) async {
       size: file.isDir ? 0 : file.length,
       lastModified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
       type: file.isDir ? ContentType.other : checkContentType(file.name),
-      subtitles: isVideoFile(file.name) ? subtitleMap[basename] ?? [] : [],
     ));
   }
 

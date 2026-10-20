@@ -113,25 +113,6 @@ class PlayQueue extends HookWidget {
                         return const SizedBox();
                       }
                     }(),
-                    ...playQueue[index]
-                        .file
-                        .subtitles
-                        .map((subtitle) =>
-                            subtitle.uri.split('.').last.toUpperCase())
-                        .toSet()
-                        .toList()
-                        .map(
-                          (subtitleType) => Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const SizedBox(width: 4),
-                              Chip(
-                                text: subtitleType,
-                                primary: true,
-                              ),
-                            ],
-                          ),
-                        ),
                   ],
                 ),
                 trailing: PopupMenuButton<FileOptions>(

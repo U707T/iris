@@ -52,7 +52,6 @@ void _mockVolumeController({double volume = 0.5, Completer<String>? readGate}) {
 MediaPlayer _fakePlayer() => MediaPlayer(
       isInitializing: false,
       isPlaying: true,
-      externalSubtitles: const [],
       position: Duration.zero,
       duration: const Duration(minutes: 5),
       buffer: Duration.zero,

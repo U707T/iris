@@ -1,3 +1,27 @@
+## v2.3.3-rc.1
+
+### Changelog
+
+* **The APK is a lot smaller: subtitles are gone.** IRIS used to bundle a 16.5 MB CJK font (21% of the APK) purely so libass could draw Chinese/Japanese subtitles, and copied it to the app directory on first launch. Subtitle support (embedded and sidecar) has been removed together with that font, the subtitle picker, the sidecar `.srt/.ass` scanning, the "burn subtitles into screenshot" option and the preferred-subtitle-language setting. Videos now always play without a subtitle track (no more auto-selecting an embedded track). The `S` shortcut and the control-bar button now open audio tracks only
+* **FTP support has been removed** (WebDAV is unchanged). This also drops the bundled `media_stream` local HTTP server, so the app no longer starts a background streaming server at launch, plus the patched `pure_ftp` copy. A previously saved FTP storage is dropped from the saved list on first launch; local / WebDAV storages and favourites are unaffected
+* Licence page now comes from Flutter's own `LicenseRegistry` (the same NOTICES that were already shipped): the 619 KB, 12k-line `oss_licenses.dart` is gone
+* UI text uses the system font again: `google_fonts` used to download Noto Sans SC from the network at runtime, which was a hidden startup request; the font now follows the system (Noto Sans CJK on Android, Microsoft YaHei on Windows)
+* Removed the unused `cupertino_icons` package (its font was shipped but never referenced) and the build-time font download step in Gradle
+* Unchanged: video playback (Media Kit + FVP backends), short video mode, gestures, play queue, history/resume, screenshots, rotation, stats, search and WebDAV streaming
+* Expected APK size: about 62.6 MiB → 48 MiB on arm64
+* No other changes.
+
+### 更新日志
+
+* **安装包明显变小：字幕功能已移除。** 以前为了让 libass 能画中日文字幕，包里内置了一份 16.5MB 的中日韩字体（占 APK 21%），首次启动还会复制到应用目录。现在字幕支持（内嵌 + 外挂）连同这份字体一起移除：字幕选择面板、同目录 `.srt/.ass` 扫描、"截图烧入字幕"选项、首选字幕语言设置都已删除，视频一律不带字幕轨播放（不再自动选中内嵌字幕）。`S` 快捷键与控制栏按钮现在只打开音轨
+* **移除 FTP 支持**（WebDAV 保持不变）。顺带移除了内置的 `media_stream` 本地 HTTP 服务——应用启动时不再起后台推流服务器，也去掉了打补丁的 `pure_ftp`。之前保存过的 FTP 存储在首次启动时会从列表里自动丢弃；本地存储、WebDAV 与收藏不受影响
+* 许可页改用 Flutter 自带的 `LicenseRegistry`（就是构建时本来就打包的 NOTICES）：删掉了 619KB、1.2 万行的 `oss_licenses.dart`
+* 界面文字改回系统字体：`google_fonts` 以前会在运行时从网络下载 Noto Sans SC（一个隐藏的启动请求），现在跟随系统（Android 是 Noto Sans CJK，Windows 是微软雅黑）
+* 移除未被引用的 `cupertino_icons`（字体一直在包里但代码从未使用），以及 Gradle 里构建期下载字体的步骤
+* 保持不变：视频播放（Media Kit + FVP 双后端）、短视频模式、手势、播放队列、历史/续播、截图、旋转、播放统计、搜索、WebDAV 播放
+* 预期包体：arm64 约 62.6 MiB → 48 MiB
+* 本版无其他变化。
+
 ## v2.3.2
 
 ### Changelog

@@ -18,7 +18,6 @@ import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/request_storage_permission.dart';
 import 'package:iris/utils/windows_a11y_compat.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:media_stream/media_stream.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:saf_util/saf_util.dart';
 import 'package:window_manager/window_manager.dart';
@@ -61,8 +60,6 @@ void main(List<String> arguments) async {
       'buffer': '2000+80000',
       'demux.buffer.ranges': '8',
     },
-    if (Platform.isAndroid)
-      'subtitleFontFile': 'assets/fonts/NotoSansCJKsc-Medium.otf',
     // 仅在调试构建中开启详细日志, 减少 release 版性能开销
     'global': {'log': kDebugMode ? 'debug' : 'off'},
   });
@@ -94,9 +91,6 @@ void main(List<String> arguments) async {
   }
 
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-
-  MediaStream mediaStream = MediaStream();
-  mediaStream.startServer();
 
   runApp(const StoreScope(child: MyApp()));
 }

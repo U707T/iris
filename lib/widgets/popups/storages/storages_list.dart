@@ -6,7 +6,6 @@ import 'package:iris/models/storages/storage.dart';
 import 'package:iris/widgets/dialogs/show_folder_dialog.dart';
 import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/get_localizations.dart';
-import 'package:iris/widgets/dialogs/show_ftp_dialog.dart';
 import 'package:iris/widgets/dialogs/show_webdav_dialog.dart';
 import 'package:path/path.dart' as p;
 
@@ -56,11 +55,6 @@ class StoragesList extends HookWidget {
                         subtitle =
                             'http${storage.https ? 's' : ''}://${storage.host}${storage.port.isNotEmpty && storage.port != '80' && storage.port != '443' ? ':${storage.port}' : ''}${storage.basePath.join('/')}';
                         break;
-                      case StorageType.ftp:
-                        final storage = allStorages[index] as FTPStorage;
-                        subtitle =
-                            'ftp://${storage.username.isNotEmpty ? '${storage.username}@' : ''}${storage.host}:${storage.port}${storage.basePath.join('/')}';
-                        break;
                       case StorageType.none:
                         break;
                     }
@@ -96,10 +90,6 @@ class StoragesList extends HookWidget {
                         case StorageType.webdav:
                           showWebDAVDialog(context,
                               storage: allStorages[index] as WebDAVStorage);
-                          break;
-                        case StorageType.ftp:
-                          showFTPDialog(context,
-                              storage: allStorages[index] as FTPStorage);
                           break;
                         case StorageType.none:
                           break;

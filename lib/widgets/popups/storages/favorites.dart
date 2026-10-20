@@ -48,9 +48,6 @@ class Favorites extends HookWidget {
           } else if (storage is WebDAVStorage) {
             return Text(
                 'http${storage.https ? 's' : ''}://${storage.host}${storage.port.isNotEmpty && storage.port != '80' && storage.port != '443' ? ':${storage.port}' : ''}${favorites[index].path.join('/')}');
-          } else if (storage is FTPStorage) {
-            return Text(
-                'ftp://${storage.username.isNotEmpty ? '${storage.username}@' : ''}${storage.host}:${storage.port}${favorites[index].path.join('/').replaceFirst('//', '/')}');
           } else {
             return null;
           }

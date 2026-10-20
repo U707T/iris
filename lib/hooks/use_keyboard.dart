@@ -6,7 +6,7 @@ import 'package:iris/models/player.dart';
 import 'package:iris/models/storages/local.dart';
 import 'package:iris/widgets/popups/history.dart';
 import 'package:iris/widgets/popups/play_queue.dart';
-import 'package:iris/widgets/popups/track/subtitle_and_audio_track.dart';
+import 'package:iris/widgets/popups/track/track_panel.dart';
 import 'package:iris/widgets/popups/settings/settings.dart';
 import 'package:iris/widgets/popups/storages/storages.dart';
 import 'package:iris/store/use_app_store.dart';
@@ -219,7 +219,7 @@ KeyboardEvent useKeyboard({
               context: context,
               child: Provider<MediaPlayer>.value(
                 value: context.read<MediaPlayer>(),
-                child: const SubtitleAndAudioTrack(),
+                child: const TrackPanel(),
               ),
               direction: PopupDirection.right,
             ),

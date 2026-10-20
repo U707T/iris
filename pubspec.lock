@@ -89,14 +89,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.7.0"
-  asn1lib:
-    dependency: transitive
-    description:
-      name: asn1lib
-      sha256: "9a8f69025044eb466b9b60ef3bc3ac99b4dc6c158ae9c56d25eeccf5bc56d024"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.6.5"
   async:
     dependency: transitive
     description:
@@ -169,14 +161,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
-  charset:
-    dependency: transitive
-    description:
-      name: charset
-      sha256: "27802032a581e01ac565904ece8c8962564b1070690794f0072f6865958ce8b9"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.1"
   checked_yaml:
     dependency: transitive
     description:
@@ -249,14 +233,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
-  cryptography:
-    dependency: transitive
-    description:
-      name: cryptography
-      sha256: "3eda3029d34ec9095a27a198ac9785630fe525c0eb6a49f3d575272f8e792ef0"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.9.0"
   csslib:
     dependency: transitive
     description:
@@ -265,14 +241,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.2"
-  cupertino_icons:
-    dependency: "direct main"
-    description:
-      name: cupertino_icons
-      sha256: "41e005c33bd814be4d3096aff55b1908d419fde52ca656c8c47719ec745873cd"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.9"
   cupertino_ui:
     dependency: transitive
     description:
@@ -281,14 +249,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.1.1"
-  dart_pubspec_licenses:
-    dependency: "direct dev"
-    description:
-      name: dart_pubspec_licenses
-      sha256: fafb90d50c182dd3d4f441c6aea75baff1e5311aab2f6430d3f40f6e3a1f5885
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.0.12"
   dart_style:
     dependency: transitive
     description:
@@ -621,14 +581,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.2.0"
-  google_fonts:
-    dependency: "direct main"
-    description:
-      name: google_fonts
-      sha256: e3cb3ee6b47fd2472c23de6da5744796a4da195137759ddb3fbcc9467b7b3c7d
-      url: "https://pub.dev"
-    source: hosted
-    version: "8.2.1"
   graphs:
     dependency: transitive
     description:
@@ -669,14 +621,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.6.0"
-  http_methods:
-    dependency: transitive
-    description:
-      name: http_methods
-      sha256: "6bccce8f1ec7b5d701e7921dca35e202d425b57e317ba1a37f2638590e29e566"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.1"
   http_multi_server:
     dependency: transitive
     description:
@@ -741,14 +685,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
-  js:
-    dependency: transitive
-    description:
-      name: js
-      sha256: "53385261521cc4a0c4658fd0ad07a7d14591cf8fc33abbceae306ddb974888dc"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.7.2"
   json_annotation:
     dependency: "direct main"
     description:
@@ -901,15 +837,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.1"
-  media_stream:
-    dependency: "direct main"
-    description:
-      path: "."
-      ref: main
-      resolved-ref: "0abae44bddaa9befe16a90acd23ac544a9fe9325"
-      url: "https://github.com/nini22P/media_stream"
-    source: git
-    version: "0.0.1"
   meta:
     dependency: transitive
     description:
@@ -934,14 +861,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.18.0"
-  mutex:
-    dependency: transitive
-    description:
-      name: mutex
-      sha256: "8827da25de792088eb33e572115a5eb0d61d61a3c01acbc8bcbe76ed78f1a1f2"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.1.0"
   nested:
     dependency: transitive
     description:
@@ -1118,14 +1037,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
-  pointycastle:
-    dependency: transitive
-    description:
-      name: pointycastle
-      sha256: "4be0097fcf3fd3e8449e53730c631200ebc7b88016acecab2b0da2f0149222fe"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.9.1"
   pool:
     dependency: transitive
     description:
@@ -1174,13 +1085,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.6.0"
-  pure_ftp:
-    dependency: "direct main"
-    description:
-      path: "third_party/pure_ftp"
-      relative: true
-    source: path
-    version: "0.7.5"
   record_use:
     dependency: transitive
     description:
@@ -1317,14 +1221,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.2"
-  shelf_router:
-    dependency: transitive
-    description:
-      name: shelf_router
-      sha256: f5e5d492440a7fb165fe1e2e1a623f31f734d3370900070b2b1e0d0428d59864
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.4"
   shelf_web_socket:
     dependency: transitive
     description:
@@ -1338,14 +1234,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  smb_connect:
-    dependency: transitive
-    description:
-      name: smb_connect
-      sha256: "8d82b701f8ff8a736070f6eb5393fe983da1a0f4747a56c3a04bda68765b5e66"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.9"
   source_gen:
     dependency: transitive
     description:

@@ -13,9 +13,9 @@ IRIS is a lightweight video player built with Flutter. This repository is an enh
 ## Features
 
 - [X] Base on [Media Kit](https://github.com/media-kit/media-kit) | [FVP](https://github.com/wang-bin/fvp), supports multiple video formats
-- [X] Local storage, WebDAV and FTP support
+- [X] Local storage and WebDAV support
 - [X] **Short video mode**: seamless vertical swipe, single-item loop, draggable progress bar, double-tap seek feedback, long-press speed effect, volume button
-- [X] Switchable subtitle and audio track
+- [X] Switchable audio track
 - [X] Playback queue support for random and repeat
 - [X] Comprehensive gesture support
 - [X] Long press to speed up playback (configurable)
@@ -64,7 +64,7 @@ IRIS is a lightweight video player built with Flutter. This repository is an enh
 | `Ctrl + R`           | Repeat                                             |
 | `Ctrl + V`           | Video zoom                                         |
 | `Ctrl + M`           | Volume mute                                        |
-| `S`                  | Subtitles and audio tracks                         |
+| `S`                  | Audio tracks                                      |
 | `P`                  | Play queue                                         |
 | `F`                  | Storages                                           |
 | `Ctrl + O`           | Open file                                          |

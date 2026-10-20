@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/globals.dart' as globals;
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/models/progress.dart';
-import 'package:iris/models/storages/storage.dart';
 import 'package:iris/models/store/app_state.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_history_store.dart';
@@ -21,8 +18,6 @@ import 'package:iris/utils/queue_navigation.dart';
 import 'package:iris/utils/wait_for_first_frame.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:media_stream/media_stream.dart';
-import 'package:path_provider/path_provider.dart';
 
 MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   final player = useMemoized(
@@ -40,37 +35,12 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   final isMuted = useAppStore().select(context, (state) => state.isMuted);
 
   useEffect(() {
-    () async {
-      player.setSubtitleTrack(SubtitleTrack.no());
+    void applyInitialSettings() {
       player.setRate(rate);
       player.setVolume(isMuted ? 0 : volume.toDouble());
+    }
 
-      if (Platform.isAndroid) {
-        NativePlayer nativePlayer = player.platform as NativePlayer;
-
-        final appSupportDir = await getApplicationSupportDirectory();
-        final String fontsDir = "${appSupportDir.path}/fonts";
-
-        final Directory fontsDirectory = Directory(fontsDir);
-        if (!await fontsDirectory.exists()) {
-          await fontsDirectory.create(recursive: true);
-          logger('fonts directory created');
-        }
-
-        final File file = File("$fontsDir/NotoSansCJKsc-Medium.otf");
-        if (!await file.exists()) {
-          final ByteData data =
-              await rootBundle.load("assets/fonts/NotoSansCJKsc-Medium.otf");
-          final Uint8List buffer = data.buffer.asUint8List();
-          await file.create(recursive: true);
-          await file.writeAsBytes(buffer);
-          logger('NotoSansCJKsc-Medium.otf copied');
-        }
-
-        await nativePlayer.setProperty("sub-fonts-dir", fontsDir);
-        await nativePlayer.setProperty("sub-font", "NotoSansCJKsc-Medium");
-      }
-    }();
+    applyInitialSettings();
     return () {
       // 先立即静音再异步销毁: dispose 内部要等播放器初始化 / 视频输出就绪,
       // 可能明显滞后 (切换模式时旧播放器继续出声的根因之一)
@@ -127,22 +97,11 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   Track? track = useStream(trackStream).data;
   AudioTrack audio =
       useMemoized(() => track?.audio ?? AudioTrack.no(), [track?.audio]);
-  SubtitleTrack subtitle = useMemoized(
-      () => track?.subtitle ?? SubtitleTrack.no(), [track?.subtitle]);
 
   final tracksStream = useMemoized(() => player.stream.tracks, []);
   Tracks? tracks = useStream(tracksStream).data;
   List<AudioTrack> audios =
       useMemoized(() => (tracks?.audio ?? []), [tracks?.audio]);
-  List<SubtitleTrack> subtitles = useMemoized(
-      () => [...(tracks?.subtitle ?? [])]
-        ..removeWhere((subtitle) => subtitle == SubtitleTrack.auto()),
-      [tracks?.subtitle]);
-
-  final List<Subtitle>? externalSubtitles = useMemoized(
-      () => [...file?.subtitles ?? []]..removeWhere(
-          (subtitle) => subtitles.any((item) => item.title == subtitle.name)),
-      [file?.subtitles, subtitles]);
 
   final isInitializing = useState(false);
 
@@ -206,8 +165,6 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
     };
   }, [isShowStats]);
 
-  MediaStream mediaStream = useMemoized(() => MediaStream(), []);
-
   Future<void> init(FileItem file) async {
     if (file.uri == '') return;
     final session = ++openSession.value;
@@ -231,9 +188,7 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       final waitFirstFrame = autoPlay && file.type == ContentType.video;
       await player.open(
         Media(
-          file.storageType == StorageType.ftp
-              ? '${mediaStream.url}/${file.uri}'
-              : file.uri,
+          file.uri,
           httpHeaders: auth != null ? {'authorization': auth} : {},
         ),
         play: autoPlay && !waitFirstFrame,
@@ -287,10 +242,7 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
   useEffect(() {
     () async {
-      if (duration == Duration.zero) {
-        await player.setSubtitleTrack(SubtitleTrack.no());
-        return;
-      }
+      if (duration == Duration.zero) return;
       // 查询播放进度 (每个文件只恢复一次)
       if (file != null && file.type == ContentType.video) {
         Progress? progress = history[file.getID()];
@@ -312,26 +264,6 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
             restoredProgressKey.value = file.getID();
           }
         }
-      }
-      // 设置字幕
-      if (externalSubtitles!.isNotEmpty) {
-        logger('Set external subtitle: ${externalSubtitles[0]}');
-        final uri = file?.storageType == StorageType.ftp
-            ? '${mediaStream.url}/${externalSubtitles[0].uri}'
-            : externalSubtitles[0].uri;
-        logger('External subtitle uri: $uri');
-        await player.setSubtitleTrack(
-          SubtitleTrack.uri(
-            uri,
-            title: externalSubtitles[0].name,
-          ),
-        );
-      } else if (subtitles.length > 1) {
-        logger(
-            'Set subtitle: ${subtitles[1].title ?? subtitles[1].language ?? subtitles[1].id}');
-        await player.setSubtitleTrack(subtitles[1]);
-      } else {
-        await player.setSubtitleTrack(SubtitleTrack.no());
       }
     }();
     return;
@@ -462,9 +394,6 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
     () => MediaKitPlayer(
       player: player,
       controller: controller,
-      subtitle: subtitle,
-      subtitles: subtitles,
-      externalSubtitles: externalSubtitles ?? [],
       audio: audio,
       audios: audios,
       isInitializing: isInitializing.value,
@@ -482,12 +411,9 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
       stepBackward: stepBackward,
       stepForward: stepForward,
       seek: seek,
-      screenshot: ({bool includeSubtitles = false}) async {
+      screenshot: () async {
         try {
-          return await player.screenshot(
-            format: 'image/jpeg',
-            includeLibassSubtitles: includeSubtitles,
-          );
+          return await player.screenshot(format: 'image/jpeg');
         } catch (e) {
           logger('Error taking screenshot: $e');
           return null;
@@ -499,9 +425,6 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
     [
       player,
       controller,
-      subtitle,
-      subtitles,
-      externalSubtitles,
       audio,
       audios,
       isInitializing.value,

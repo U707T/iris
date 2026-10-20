@@ -21,7 +21,7 @@ class ShortcutsDialog extends StatelessWidget {
           ('Space', t.play_pause),
           ('← / →', '${t.backward} / ${t.forward} (${t.shift_for_large_step})'),
           ('Ctrl + ← / →', '${t.previous} / ${t.next}'),
-          ('S', t.subtitle_and_audio_track),
+          ('S', t.audio_track),
           ('+ / -', '${t.step_forward} / ${t.step_backward}'),
           ('Ctrl + S', t.screenshot),
           ('Ctrl + T', t.rotate),

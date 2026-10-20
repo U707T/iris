@@ -63,12 +63,46 @@ class StorageStore extends PersistentStore<StorageState> {
 
       String? storageState = await storage.read(key: 'storage_state');
       if (storageState != null) {
-        return StorageState.fromJson(json.decode(storageState));
+        final data = json.decode(storageState);
+        if (data is Map<String, dynamic>) {
+          _dropRemovedStorageTypes(data);
+          return StorageState.fromJson(data);
+        }
       }
     } catch (e) {
       logger('Error loading StorageState: $e');
     }
     return null;
+  }
+
+  /// 旧版本可能存过已移除的存储类型 (FTP): 直接读会解析失败并丢掉全部存储,
+  /// 所以在反序列化前把它们从 JSON 里剔掉 (连同指向它们的收藏 / 当前目录)。
+  void _dropRemovedStorageTypes(Map<String, dynamic> data) {
+    const removedTypes = {'ftp'};
+    final removedIds = <String>{};
+
+    final storages = data['storages'];
+    if (storages is List) {
+      storages.removeWhere((item) {
+        if (item is Map && removedTypes.contains('${item['type']}')) {
+          removedIds.add('${item['id']}');
+          return true;
+        }
+        return false;
+      });
+    }
+
+    final favorites = data['favorites'];
+    if (favorites is List) {
+      favorites.removeWhere((item) =>
+          item is Map && removedIds.contains('${item['storageId']}'));
+    }
+
+    final current = data['currentStorage'];
+    if (current is Map && removedTypes.contains('${current['type']}')) {
+      data['currentStorage'] = null;
+      data['currentPath'] = <String>[];
+    }
   }
 
   @override

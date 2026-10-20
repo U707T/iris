@@ -9,14 +9,8 @@ import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/screenshot.dart';
 
 /// 截取当前播放画面并保存, 同时给出提示。
-///
-/// [includeSubtitles] 为 true 时会把字幕一起截入 (仅 Media Kit 后端支持)。
 /// 保存前会按当前画面的旋转/镜像状态处理截图方向。
-Future<void> takeScreenshot(
-  BuildContext context,
-  MediaPlayer player, {
-  bool includeSubtitles = true,
-}) async {
+Future<void> takeScreenshot(BuildContext context, MediaPlayer player) async {
   final t = getLocalizations(context);
   final messenger = ScaffoldMessenger.maybeOf(context);
 
@@ -29,7 +23,7 @@ Future<void> takeScreenshot(
   }
 
   try {
-    var bytes = await screenshotFn(includeSubtitles: includeSubtitles);
+    var bytes = await screenshotFn();
     if (bytes == null || bytes.isEmpty) {
       messenger?.showSnackBar(
         SnackBar(content: Text(t.screenshot_failed)),
