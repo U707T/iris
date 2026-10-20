@@ -13,6 +13,7 @@ import 'package:iris/utils/check_content_type.dart';
 import 'package:iris/utils/get_shuffle_play_queue.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/purge_legacy_storage_types.dart';
 import 'package:saf_util/saf_util.dart';
 
 class PlayQueueStore extends PersistentStore<PlayQueueState> {
@@ -201,7 +202,8 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
 
       String? appState = await storage.read(key: 'playQueue_state');
       if (appState != null) {
-        return PlayQueueState.fromJson(json.decode(appState));
+        final data = sanitizePlayQueueJson(json.decode(appState));
+        if (data != null) return PlayQueueState.fromJson(data);
       }
     } catch (e) {
       logger('Error loading PlayQueueState: $e');

@@ -26,6 +26,9 @@ class VideoView extends HookWidget {
       MediaKitPlayer player => Video(
           controller: player.controller,
           controls: NoVideoControls,
+          // 字幕功能已移除: 关闭 Flutter 侧的字幕层, 内嵌字幕不再显示
+          subtitleViewConfiguration:
+              const SubtitleViewConfiguration(visible: false),
           fit: fit == BoxFit.none ? BoxFit.contain : fit,
         ),
       _ => const SizedBox.shrink(),

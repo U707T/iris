@@ -49,7 +49,7 @@ class ShortVideoMediaKitSurface extends StatelessWidget {
       child: Video(
         controller: controller,
         controls: NoVideoControls,
-        // 短视频流不显示字幕 (池内已关闭字幕轨, 这里再关掉字幕层)
+        // 短视频流不显示字幕 (字幕功能已移除, 这里同时关掉字幕层)
         subtitleViewConfiguration: const SubtitleViewConfiguration(
           visible: false,
         ),

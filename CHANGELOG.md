@@ -1,3 +1,29 @@
+## v2.3.3
+
+### Changelog
+
+* **Much smaller APK: 65.6 MB → 35.4 MB (-46%) on arm64.** Three things were carrying the weight: a 16.5 MB CJK subtitle font (21% of the package), a second playback engine (FVP: `libffmpeg` + `libmdk` + `libass`, 12.2 MB) and a duplicated copy of every dependency's licence text. All three are gone; nothing that you asked to keep was touched
+* **Subtitles are removed.** The bundled Noto CJK font, the subtitle panel, sidecar `.srt/.ass` scanning, the "burn subtitles into the screenshot" option, the preferred-subtitle-language setting and the automatic selection of embedded subtitle tracks are gone, and `libass` subtitle rendering plus the Flutter subtitle layer are switched off — so a video with embedded subs no longer paints a row of tofu boxes. The `S` shortcut and the control-bar button now open audio tracks only. Startup also no longer copies 16.5 MB from assets to the app directory on first launch
+* **FTP is removed; WebDAV is unchanged.** This also drops the bundled `media_stream` local HTTP server (the app no longer starts a background streaming server during launch), the patched `pure_ftp` copy, and `shelf`/`shelf_router`. Save-side migration: FTP storages are dropped from the saved storage list, and queue / history entries pointing at FTP files are filtered out on load (so the rest of the queue and history still restore instead of being discarded wholesale)
+* **FVP backend removed; Media Kit (libmpv/FFmpeg) is the only player.** Short video mode never used FVP (no player pool there), and keeping it meant shipping a patched in-tree copy just to dodge a Windows start-up crash. Also removed: the "player backend" setting, the `video_player` / `wakelock_plus` dependencies and the `third_party/fvp` patch. Windows package: 44.3 MB → 35.6 MB (installer 33.1 → 26.6 MB)
+* Licence page now uses Flutter's own `LicenseRegistry` (the same NOTICES that were already shipped): the 619 KB, 12k-line `oss_licenses.dart` is gone
+* UI text uses the system font again (Android: Noto Sans CJK, Windows: Microsoft YaHei): `google_fonts` used to download Noto Sans SC over the network at runtime, a hidden start-up request
+* Removed the unused `cupertino_icons` package and the Gradle task that downloaded the subtitle font at build time
+* Unchanged: video playback and resume, short video mode (pool, preload, swipe, double-tap seek, volume button), WebDAV, play queue / shuffle / repeat, history, screenshots, rotation / flip, playback stats, search
+* No other changes.
+
+### 更新日志
+
+* **安装包小了一半：arm64 从 65.6MB 降到 35.4MB（-46%）。** 重量来自三处：16.5MB 的中日韩字幕字体（占包体 21%）、第二套播放内核（FVP：`libffmpeg` + `libmdk` + `libass`，12.2MB）、以及一份重复打包的依赖许可文本。三处全部移除；你要保留的功能一个没动
+* **移除字幕功能。** 内置 Noto CJK 字体、字幕面板、同目录 `.srt/.ass` 扫描、"截图烧入字幕"选项、首选字幕语言设置、内嵌字幕自动选中全部删除；同时关闭了 libass 字幕渲染与 Flutter 字幕层——带内嵌字幕的视频不会再盖一层方块。`S` 快捷键与控制栏按钮现在只打开音轨。首次启动也不再从 assets 复制 16.5MB 字体到应用目录
+* **移除 FTP（WebDAV 保持不变）。** 顺带移除内置的 `media_stream` 本地 HTTP 服务（启动时不再起后台推流服务器）、打补丁的 `pure_ftp`、`shelf`/`shelf_router`。存档迁移：保存过的 FTP 存储会从列表丢弃；队列 / 历史里指向 FTP 文件的条目在加载时被过滤掉（其余队列和历史照常恢复，不会整份丢掉）
+* **移除 FVP 后端，只保留 Media Kit（libmpv/FFmpeg）。** 短视频模式本来就没用过 FVP（那边没有预载池），留着它还得在仓库里维护一份打补丁的副本才能避开 Windows 启动崩溃。一并移除："播放器后端"设置、`video_player` / `wakelock_plus` 依赖、`third_party/fvp` 补丁。Windows 包：44.3MB → 35.6MB（安装器 33.1 → 26.6MB）
+* 许可页改用 Flutter 自带的 `LicenseRegistry`（就是构建时本来就打包的 NOTICES）：删掉了 619KB、1.2 万行的 `oss_licenses.dart`
+* 界面文字改回系统字体（Android：Noto Sans CJK；Windows：微软雅黑）：`google_fonts` 以前会在运行时从网络下载 Noto Sans SC，是一个隐藏的启动请求
+* 移除未被引用的 `cupertino_icons`，以及 Gradle 里构建期下载字幕字体的步骤
+* 保持不变：视频播放与续播、短视频模式（池 / 预载 / 滑动 / 双击快进 / 音量按钮）、WebDAV、播放队列与随机循环、历史、截图、旋转 / 翻转、播放统计、搜索
+* 本版无其他变化。
+
 ## v2.3.3-rc.2
 
 ### Changelog

@@ -22,8 +22,11 @@ import 'package:media_kit_video/media_kit_video.dart';
 MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   final player = useMemoized(
     () => Player(
+      // 字幕功能已移除: 关闭 libass 渲染 (Android 上 libass 依赖内置字体,
+      // 没有字体时内嵌字幕会渲染成方块)。画面上的字幕层另外也已关闭,
+      // 见 video_view.dart 的 SubtitleViewConfiguration。
       configuration: const PlayerConfiguration(
-        libass: true,
+        libass: false,
       ),
     ),
   );

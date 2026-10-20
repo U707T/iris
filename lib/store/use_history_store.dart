@@ -5,6 +5,7 @@ import 'package:iris/models/progress.dart';
 import 'package:iris/models/store/history_state.dart';
 import 'package:iris/store/persistent_store.dart';
 import 'package:iris/utils/logger.dart';
+import 'package:iris/utils/purge_legacy_storage_types.dart';
 
 class HistoryStore extends PersistentStore<HistoryState> {
   HistoryStore() : super(HistoryState());
@@ -52,7 +53,8 @@ class HistoryStore extends PersistentStore<HistoryState> {
 
       String? historyState = await storage.read(key: 'history_state');
       if (historyState != null) {
-        return HistoryState.fromJson(json.decode(historyState));
+        final data = sanitizeHistoryJson(json.decode(historyState));
+        if (data != null) return HistoryState.fromJson(data);
       }
     } catch (e) {
       logger('Error loading HistoryState: $e');
