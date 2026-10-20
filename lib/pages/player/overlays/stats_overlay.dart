@@ -50,7 +50,7 @@ class StatsOverlay extends HookWidget {
 
     return Positioned(
       left: 12,
-      top: 56,
+      top: 56 + MediaQuery.viewPaddingOf(context).top,
       child: IgnorePointer(
         child: Container(
           padding: const EdgeInsets.fromLTRB(10, 8, 14, 8),

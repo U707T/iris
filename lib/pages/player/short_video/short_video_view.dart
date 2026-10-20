@@ -357,10 +357,10 @@ class ShortVideoView extends HookWidget {
                   ),
                 ),
               ),
-              // 退出按钮
+              // 退出按钮 (让出刘海 / 状态栏安全区)
               Positioned(
                 left: 8,
-                top: 8,
+                top: 8 + MediaQuery.viewPaddingOf(context).top,
                 child: ShortVideoFeedIconButton(
                   icon: Icons.arrow_back_rounded,
                   tooltip: t.exit_short_video_mode,

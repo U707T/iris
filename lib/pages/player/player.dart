@@ -47,6 +47,10 @@ class Player extends HookWidget {
     final progressHideTimer = useRef<Timer?>(null);
 
     final fit = useAppStore().select(context, (state) => state.fit);
+    final bool autoHideControls =
+        useAppStore().select(context, (state) => state.autoHideControls);
+    final int controlHideDelaySeconds =
+        useAppStore().select(context, (state) => state.controlHideDelaySeconds);
     final isShortVideoMode =
         usePlayerUiStore().select(context, (state) => state.isShortVideoMode);
     final playbackError =
@@ -83,8 +87,11 @@ class Player extends HookWidget {
     }, []);
 
     void startControlHideTimer() {
+      controlHideTimer.value?.cancel();
+      // 设置里关掉自动隐藏后, 控制栏只在点击画面时手动收/放
+      if (!autoHideControls) return;
       controlHideTimer.value = Timer(
-        const Duration(seconds: 5),
+        Duration(seconds: controlHideDelaySeconds),
         () {
           if (usePlayerUiStore().state.isShowControl &&
               !usePlayerUiStore().state.isHovering) {
@@ -95,8 +102,10 @@ class Player extends HookWidget {
     }
 
     void startProgressHideTimer() {
+      progressHideTimer.value?.cancel();
+      if (!autoHideControls) return;
       progressHideTimer.value = Timer(
-        const Duration(seconds: 5),
+        Duration(seconds: controlHideDelaySeconds),
         () {
           if (usePlayerUiStore().state.isShowProgress) {
             usePlayerUiStore().updateIsShowProgress(false);
@@ -207,7 +216,7 @@ class Player extends HookWidget {
     useEffect(() {
       startControlHideTimer();
       return () => controlHideTimer.value?.cancel();
-    }, []);
+    }, [autoHideControls, controlHideDelaySeconds]);
 
     useEffect(() {
       return () => progressHideTimer.value?.cancel();

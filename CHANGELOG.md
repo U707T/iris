@@ -1,3 +1,19 @@
+## v2.5.0
+
+### Changelog
+
+* **Notch / edge-to-edge top bar.** The title bar, the minimal progress title, the stats overlay and the short-video back button now sit below the status bar / display cutout (`MediaQuery.viewPadding.top`), and Android is allowed to draw into the cutout area (`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`). The video itself is untouched and stays centred
+* **Control auto-hide is configurable.** Settings → Play now has "Auto-hide controls" (on/off) and "Hide after" (2 / 3 / 5 / 10 / 15 / 30 seconds). Defaults keep the previous behaviour (on, 5 s)
+* **WebDAV: built-in Dav profile.** A new WebDAV connection starts with `Dav` / `/dav` / `5244` / `admin` / `123456` filled in and locked; turn "Default Dav profile" off to edit any of them. The host is still yours to fill (the lightning button reads the default gateway). The default password lives in the app — fine for a self-hosted / LAN device, change it for anything reachable from the internet
+* No other changes.
+
+### 更新日志
+
+* **刘海 / 全面屏顶部适配。** 标题栏、迷你进度标题、统计 OSD 和短视频返回按钮都会让出状态栏 / 刘海安全区（`MediaQuery.viewPadding.top`）；Android 允许内容画进挖孔区域（`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`）。视频画面本身不动，仍然居中
+* **控制栏自动隐藏可配置。** 设置 → 播放里新增“自动隐藏控制栏”开关与“隐藏延迟”（2 / 3 / 5 / 10 / 15 / 30 秒）。默认保持原来的行为（开启，5 秒）
+* **WebDAV 内置 Dav 配置。** 新建 WebDAV 时默认填好 `Dav` / `/dav` / `5244` / `admin` / `123456` 并锁定；关掉“默认 Dav 配置”开关即可修改任意项。主机仍需你填（小闪电可读网关）。默认密码写在客户端里——自建 / 局域网设备没问题，公网可达的 NAS 请务必改掉
+* 本版无其他变化。
+
 ## v2.3.5
 
 ### Changelog

@@ -8,6 +8,13 @@ import 'package:iris/utils/default_gateway.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:uuid/uuid.dart';
 
+/// 新建 WebDAV 时的默认配置（固定值，默认只读；关闭开关后手动修改）
+const String _defaultName = 'Dav';
+const String _defaultPath = '/dav';
+const String _defaultPort = '5244';
+const String _defaultUsername = 'admin';
+const String _defaultPassword = '123456';
+
 Future<void> showWebDAVDialog(BuildContext context,
         {WebDAVStorage? storage}) async =>
     await showDialog<void>(
@@ -30,23 +37,50 @@ class WebDAVDialog extends HookWidget {
     final bool isEdit =
         storage != null && (useStorageStore().state.storages.contains(storage));
 
+    // 新建: 默认套用固定的 Dav 配置并锁定; 关闭开关才允许手动改
+    // 编辑已有连接: 按保存的值展示, 正常可编辑
+    final useDefaults = useState(!isEdit);
+    final bool locked = !isEdit && useDefaults.value;
+
     final id = useMemoized(() => storage?.id ?? const Uuid().v4());
-    final name = useState(storage?.name ?? '');
+    final name = useState(storage?.name ?? _defaultName);
     final host = useState(storage?.host ?? '');
-    final basePath = useState(storage?.basePath ?? ['/']);
-    final username = useState(storage?.username ?? '');
-    final password = useState(storage?.password ?? '');
+    final basePath = useState(storage?.basePath ?? const [_defaultPath]);
+    final username = useState(storage?.username ?? _defaultUsername);
+    final password = useState(storage?.password ?? _defaultPassword);
     final https = useState(storage?.https ?? false);
 
-    final hostController =
-        useTextEditingController(text: storage?.host ?? '');
+    final nameController = useTextEditingController(text: name.value);
+    final hostController = useTextEditingController(text: host.value);
+    final pathController =
+        useTextEditingController(text: basePath.value.join('/'));
+    final usernameController = useTextEditingController(text: username.value);
+    final passwordController = useTextEditingController(text: password.value);
+    final portController =
+        useTextEditingController(text: storage?.port ?? _defaultPort);
+
     final isGatewayLoading = useState(false);
     final gatewayError = useState(false);
 
     final isTested = useState(false);
 
-    final TextEditingController portController =
-        useTextEditingController(text: storage?.port ?? '');
+    void setUseDefaults(bool value) {
+      useDefaults.value = value;
+      isTested.value = false;
+      if (!value) return;
+
+      // 重新套用默认值（覆盖手动改过的内容）
+      name.value = _defaultName;
+      nameController.text = _defaultName;
+      pathController.text = _defaultPath;
+      basePath.value = const [_defaultPath];
+      username.value = _defaultUsername;
+      usernameController.text = _defaultUsername;
+      password.value = _defaultPassword;
+      passwordController.text = _defaultPassword;
+      portController.text = _defaultPort;
+      https.value = false;
+    }
 
     void add() {
       useStorageStore().addStorage(
@@ -121,12 +155,21 @@ class WebDAVDialog extends HookWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (!isEdit)
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(t.use_default_webdav),
+                    subtitle: Text(t.use_default_webdav_description),
+                    value: useDefaults.value,
+                    onChanged: setUseDefaults,
+                  ),
                 TextFormField(
+                  controller: nameController,
+                  readOnly: locked,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     labelText: t.name,
                   ),
-                  initialValue: name.value,
                   onChanged: (value) {
                     name.value = value.trim();
                     isTested.value = false;
@@ -174,11 +217,12 @@ class WebDAVDialog extends HookWidget {
                   ),
                 const SizedBox(height: 16.0),
                 TextFormField(
+                    controller: pathController,
+                    readOnly: locked,
                     decoration: InputDecoration(
                       border: const OutlineInputBorder(),
                       labelText: t.path,
                     ),
-                    initialValue: basePath.value.join('/'),
                     onChanged: (value) {
                       final trimmedValue =
                           value.trim().replaceAll(RegExp(r'^\/+|\/+$'), '');
@@ -191,11 +235,12 @@ class WebDAVDialog extends HookWidget {
                   children: [
                     Expanded(
                       child: TextFormField(
+                        controller: portController,
+                        readOnly: locked,
                         decoration: InputDecoration(
                           border: const OutlineInputBorder(),
                           labelText: t.port,
                         ),
-                        controller: portController,
                         keyboardType: TextInputType.number,
                         inputFormatters: <TextInputFormatter>[
                           FilteringTextInputFormatter.digitsOnly,
@@ -225,40 +270,46 @@ class WebDAVDialog extends HookWidget {
                                 canRequestFocus: false,
                                 child: Checkbox(
                                   value: https.value,
-                                  onChanged: (_) {
-                                    isTested.value = false;
-                                    if (portController.text == '80' &&
-                                        https.value == false) {
-                                      portController.text = '443';
-                                    } else if (portController.text == '443' &&
-                                        https.value == true) {
-                                      portController.text = '80';
-                                    }
-                                    https.value = !https.value;
-                                  },
+                                  onChanged: locked
+                                      ? null
+                                      : (_) {
+                                          isTested.value = false;
+                                          if (portController.text == '80' &&
+                                              https.value == false) {
+                                            portController.text = '443';
+                                          } else if (portController.text ==
+                                                  '443' &&
+                                              https.value == true) {
+                                            portController.text = '80';
+                                          }
+                                          https.value = !https.value;
+                                        },
                                 ),
                               ),
                             ]),
-                        onTap: () {
-                          isTested.value = false;
-                          if (!https.value) {
-                            portController.text = '443';
-                          } else {
-                            portController.text = '80';
-                          }
-                          https.value = !https.value;
-                        },
+                        onTap: locked
+                            ? null
+                            : () {
+                                isTested.value = false;
+                                if (!https.value) {
+                                  portController.text = '443';
+                                } else {
+                                  portController.text = '80';
+                                }
+                                https.value = !https.value;
+                              },
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16.0),
                 TextFormField(
+                  controller: usernameController,
+                  readOnly: locked,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     labelText: t.username,
                   ),
-                  initialValue: username.value,
                   onChanged: (value) {
                     username.value = value.trim();
                     isTested.value = false;
@@ -266,11 +317,12 @@ class WebDAVDialog extends HookWidget {
                 ),
                 const SizedBox(height: 16.0),
                 TextFormField(
+                  controller: passwordController,
+                  readOnly: locked,
                   decoration: InputDecoration(
                     border: const OutlineInputBorder(),
                     labelText: t.password,
                   ),
-                  initialValue: password.value,
                   obscureText: true,
                   onChanged: (value) {
                     password.value = value.trim();

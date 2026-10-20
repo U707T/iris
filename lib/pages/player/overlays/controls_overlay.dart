@@ -61,13 +61,18 @@ class ControlsOverlay extends HookWidget {
       }
     }
 
+    // 全面屏 / 刘海屏: 顶部控件让出系统安全区, 视频画面本身不动 (仍然居中)
+    final double topInset = MediaQuery.viewPaddingOf(context).top;
+
     return Stack(
       children: [
         // 标题栏
         AnimatedPositioned(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOutCubicEmphasized,
-          top: isShowControl || file?.type != ContentType.video ? 0 : -72,
+          top: isShowControl || file?.type != ContentType.video
+              ? topInset
+              : -(72 + topInset),
           left: 0,
           right: 0,
           child: MouseRegion(

@@ -115,6 +115,16 @@ class AppStore extends PersistentStore<AppState> {
     await save(state);
   }
 
+  Future<void> toggleAutoHideControls() async {
+    set(state.copyWith(autoHideControls: !state.autoHideControls));
+    await save(state);
+  }
+
+  Future<void> updateControlHideDelay(int seconds) async {
+    set(state.copyWith(controlHideDelaySeconds: seconds));
+    await save(state);
+  }
+
   Future<void> updateSortBy(SortBy sortBy) async {
     set(state.copyWith(sortBy: sortBy));
     await save(state);

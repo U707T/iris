@@ -46,7 +46,7 @@ class MinimalProgressOverlay extends StatelessWidget {
         children: [
           Positioned(
             left: 12,
-            top: 12,
+            top: 12 + MediaQuery.viewPaddingOf(context).top,
             child: Text(
               title,
               style: overlayTextStyle.copyWith(fontSize: 20, height: 1),

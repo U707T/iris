@@ -31,6 +31,10 @@ class Play extends HookWidget {
         useAppStore().select(context, (state) => state.seekStepSeconds);
     final seekStepLargeSeconds =
         useAppStore().select(context, (state) => state.seekStepLargeSeconds);
+    final bool autoHideControls =
+        useAppStore().select(context, (state) => state.autoHideControls);
+    final int controlHideDelaySeconds =
+        useAppStore().select(context, (state) => state.controlHideDelaySeconds);
 
     final orientationMap = {
       ScreenOrientation.device: t.device,
@@ -78,6 +82,41 @@ class Play extends HookWidget {
                 if (value != null) useAppStore().updateSeekStepLarge(value);
               },
               items: const [10, 15, 30, 60, 120, 300]
+                  .map((e) => DropdownMenuItem<int>(
+                        value: e,
+                        child: Text('${e}s'),
+                      ))
+                  .toList(),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.visibility_off_rounded),
+            title: Text(t.auto_hide_controls),
+            subtitle: Text(t.auto_hide_controls_description),
+            onTap: () => useAppStore().toggleAutoHideControls(),
+            trailing: Checkbox(
+              value: autoHideControls,
+              onChanged: (_) => useAppStore().toggleAutoHideControls(),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.timer_outlined),
+            title: Text(t.auto_hide_delay),
+            trailing: DropdownButton<int>(
+              borderRadius: BorderRadius.circular(12),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              value: const [2, 3, 5, 10, 15, 30]
+                      .contains(controlHideDelaySeconds)
+                  ? controlHideDelaySeconds
+                  : 5,
+              onChanged: autoHideControls
+                  ? (value) {
+                      if (value != null) {
+                        useAppStore().updateControlHideDelay(value);
+                      }
+                    }
+                  : null,
+              items: const [2, 3, 5, 10, 15, 30]
                   .map((e) => DropdownMenuItem<int>(
                         value: e,
                         child: Text('${e}s'),
