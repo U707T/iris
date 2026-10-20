@@ -1,52 +1,14 @@
-## v2.4.1
+## v2.3.1
 
 ### Changelog
 
-* **Fixed the black screen on launch introduced in 2.4.0**: the FTP / SMB streaming server was awaited before the first frame, and its start routine retried forever when the local port could not be bound — so the UI never appeared. The window / first frame now comes first, the server starts afterwards in the background, and a failure only disables FTP / SMB playback
-* The bundled `media_stream` server now gives up after 20 port attempts and reports an error instead of looping forever (patched copy in `third_party/media_stream`)
-* The rest of the startup path is bounded as well: the "open with" link and the desktop window setup now time out after 3 s, so a misbehaving plugin cannot keep the app on a blank window
-* Release builds now show a readable message (with the exception text) instead of an almost-black box if a widget fails
-* Playback error overlay: no longer rebuilds on every position update; the file browser only re-checks the storage permission when you come back from the system settings and something actually changed
-* No other changes.
+* **Rolled back every change from 2.4.0 and 2.4.1**: those releases introduced a launch regression (a black screen) on some devices. This build restores the exact v2.3.0 behaviour — none of the 2.4.x startup, permission, player-UI or networking changes are included
+* Nothing else changed compared with v2.3.0. The version code is higher (25) than 2.4.1's, so this build can be installed directly over 2.4.x
 
 ### 更新日志
 
-* **修复 2.4.0 引入的启动黑屏**：FTP / SMB 串流服务在首帧之前被 `await`，而它的启动逻辑在本地端口绑定失败时会无限重试，导致界面永远出不来。现在先出首帧，串流服务随后在后台启动，失败也只影响 FTP / SMB 播放
-* 内嵌的 `media_stream` 改为**最多尝试 20 个端口后报错**，不再无限循环（补丁版见 `third_party/media_stream`）
-* 启动链路的其余步骤也加了上限：「打开方式」链接、桌面窗口初始化都带 3 秒超时，插件不回调也不会把应用卡在空白窗口
-* release 版组件出错时改为显示可读提示（含异常信息），不再是一块近乎全黑的方块
-* 播放失败浮层不再随每次进度更新重建；文件面板只在权限状态真的变化时才刷新
-* 本版无其他变化。
-
-## v2.4.0
-
-### Changelog
-
-* **Playback failures are no longer a black screen** — when a file cannot be opened (expired `content://` permission, network error, unsupported codec…), the player now shows what went wrong and offers **Retry**, plus **Next** when the queue has more items. Works with both the Media Kit and the FVP backend
-* **Startup is harder to break**: a failing "open with" link, FVP registration, the FTP streaming server or the desktop window setup no longer prevents the app from starting. Uncaught errors go to the log, and release builds replace the grey error box with a readable message
-* **Storage permission fixes (Android)**: after "Don't ask again" on Android 10 and below, requesting the permission could recurse forever. It now asks once, offers to open the system settings when permanently denied, and re-checks the permission when you return to the app
-* **File browser**: an unreachable FTP server no longer looks like an empty folder — connections time out after 10 s and failures show "Unable to fetch files" with a Retry button; empty folders and missing permissions have clear messages instead of a blank panel
-* **Queue navigation is safe when nothing is playing**: Ctrl + ← / → and the media keys no longer throw on an empty queue; auto-advance at the end of a video also handles a queue that became empty
-* **Update check**: requests time out after 10 s instead of hanging forever, and version tags with a `v` prefix or an `-rc` suffix parse correctly
-* The resume position is restored only once per file, so a later duration update cannot pull you back to the old position
-* First launch (empty queue) shows a hint instead of pure black: "Drop a file here, or press Ctrl+O to open" on desktop, "Tap the screen, then Open file" on mobile
-* Muting now persists immediately (the final state used to be written only on the next state change)
-* Tests: queue navigation (empty queue, wrap-around) and version comparison (including `-rc` tags)
-* No other changes.
-
-### 更新日志
-
-* **播放失败不再只是一块黑屏** —— 打不开的文件（`content://` 权限失效、网络异常、编码不支持……）现在会显示原因，并提供「重试」；队列里还有别的条目时还会出现「下一个」。Media Kit 与 FVP 两个后端都支持
-* **启动流程更抗摔**：「打开方式」链接、FVP 注册、FTP 串流服务、桌面窗口初始化任一失败都不再阻止应用启动；未捕获异常统一进日志，release 版用可读提示替代灰色错误块
-* **Android 存储权限修复**：Android 10 及以下选择「不再询问」后，权限申请会无限递归；现在只申请一次，永久拒绝时引导到系统设置，从设置返回应用会自动复查权限
-* **文件面板**：FTP 服务器连不上不再被当成空文件夹——连接超时 10 秒，失败显示「无法获取文件」并提供重试；空目录、权限不足都有明确提示，不再是空白面板
-* **没有播放内容时的队列操作更安全**：空队列按 Ctrl + ← / → 或媒体键不再抛异常；视频播完后的自动连播也处理了「队列已空」的情况
-* **检查更新**：请求 10 秒超时，不再一直挂着；带 `v` 前缀或 `-rc` 后缀的版本号可以正确解析
-* 播放进度每个文件只恢复一次，后续时长更新不会再把进度拉回旧位置
-* 首次启动（空队列）显示引导提示，不再是纯黑：桌面端「拖入文件，或按 Ctrl+O 打开」，手机端「点击画面，再点『打开文件』选择视频」
-* 静音状态现在立即落盘（此前要等下一次状态变化才写入）
-* 测试：队列导航（空队列、回绕）与版本比较（含 `-rc` 标签）
-* 本版无其他变化。
+* **已撤回 2.4.0 / 2.4.1 的全部改动**：这两个版本在部分设备上引入了启动黑屏。本版本恢复到 v2.3.0 的完整行为，不包含任何 2.4.x 的启动、权限、播放器界面或网络改动
+* 与 v2.3.0 相比没有其他变化。版本号（25）高于 2.4.1，可直接覆盖安装 2.4.x
 
 ## v2.3.0
 
@@ -637,4 +599,3 @@
 ### 更新日志
 
 * 支持 WebDAV 和本地存储视频播放
-

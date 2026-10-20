@@ -90,7 +90,7 @@ class AppStore extends PersistentStore<AppState> {
 
   Future<void> toggleMute() async {
     set(state.copyWith(isMuted: !state.isMuted));
-    await save(state);
+    save(state);
   }
 
   Future<void> updateThemeMode(ThemeMode themeMode) async {

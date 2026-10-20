@@ -1,4 +1,3 @@
-# ci: build + release (touch to re-register workflow after GitHub Actions incident)
 name: ci
 on:
   push:

@@ -14,10 +14,8 @@ import 'package:iris/models/player.dart';
 import 'package:iris/models/storages/local.dart';
 import 'package:iris/pages/player/audio.dart';
 import 'package:iris/pages/player/overlays/controls_overlay.dart';
-import 'package:iris/pages/player/overlays/empty_player_hint.dart';
 import 'package:iris/pages/player/overlays/gesture_overlay.dart';
 import 'package:iris/pages/player/overlays/minimal_progress_overlay.dart';
-import 'package:iris/pages/player/overlays/playback_error_overlay.dart';
 import 'package:iris/pages/player/overlays/stats_overlay.dart';
 import 'package:iris/pages/player/short_video/short_video_view.dart';
 import 'package:iris/pages/player/video_view.dart';
@@ -303,8 +301,6 @@ class Player extends HookWidget {
                     file: file,
                   ),
                 ),
-                // 空队列: 给新用户一个下一步提示 (不挡手势)
-                if (file == null) const EmptyPlayerHint(),
                 // Audio
                 if (file?.type == ContentType.audio)
                   Positioned.fill(
@@ -317,8 +313,6 @@ class Player extends HookWidget {
                     showProgress: showProgress,
                   ),
                 ),
-                // 装载失败: 显示原因 + 重试 / 下一个 (不再只是黑屏)
-                const PlaybackErrorOverlay(),
               ],
               // 播放统计 OSD
               if (usePlayerUiStore()

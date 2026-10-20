@@ -15,8 +15,6 @@ Future<List<FileItem>> getFTPFiles(
     socketInitOptions: FtpSocketInitOptions(
       host: storage.host,
       port: int.tryParse(storage.port),
-      // 默认 30s 太久: 服务器不可达时文件面板会一直转圈
-      timeout: const Duration(seconds: 10),
     ),
     authOptions: FtpAuthOptions(
       username: username,
@@ -31,6 +29,8 @@ Future<List<FileItem>> getFTPFiles(
     await client.fs.changeDirectory(path.join('/').replaceAll('//', '/'));
 
     final files = await client.fs.listDirectory();
+
+    await client.disconnect();
 
     final baseUri =
         'ftp?host=${storage.host}&port=${storage.port}&path=${path.join('/').replaceAll('//', '/')}';
@@ -73,15 +73,7 @@ Future<List<FileItem>> getFTPFiles(
     return fileItems;
   } catch (error) {
     logger('Error getting FTP files: $error');
-    // 交给界面显示「无法获取文件 + 重试」: 以前直接返回 [] 会被当成空文件夹,
-    // 用户完全不知道是连不上服务器还是目录真的为空。
-    rethrow;
-  } finally {
-    try {
-      await client.disconnect();
-    } catch (e) {
-      logger('Error disconnecting FTP: $e');
-    }
+    return [];
   }
 }
 
@@ -90,7 +82,6 @@ Future<bool> testFTP(FTPStorage storage) async {
     socketInitOptions: FtpSocketInitOptions(
       host: storage.host,
       port: int.tryParse(storage.port),
-      timeout: const Duration(seconds: 10),
     ),
     authOptions: FtpAuthOptions(
       username: storage.username.isEmpty ? 'anonymous' : storage.username,

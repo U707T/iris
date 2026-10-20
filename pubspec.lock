@@ -904,9 +904,11 @@ packages:
   media_stream:
     dependency: "direct main"
     description:
-      path: "third_party/media_stream"
-      relative: true
-    source: path
+      path: "."
+      ref: main
+      resolved-ref: "0abae44bddaa9befe16a90acd23ac544a9fe9325"
+      url: "https://github.com/nini22P/media_stream"
+    source: git
     version: "0.0.1"
   meta:
     dependency: transitive

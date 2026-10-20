@@ -99,8 +99,6 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
   }
 
   Future<void> previous() async {
-    // 队列为空时没有"上一条" (例如刚启动还没打开文件就按了快捷键)
-    if (state.playQueue.isEmpty) return;
     final int currentPlayIndex = state.playQueue
         .indexWhere((element) => element.index == state.currentIndex);
     if (currentPlayIndex <= 0) {
@@ -111,7 +109,6 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
   }
 
   Future<void> next() async {
-    if (state.playQueue.isEmpty) return;
     final int currentPlayIndex = state.playQueue
         .indexWhere((element) => element.index == state.currentIndex);
     if (currentPlayIndex >= state.playQueue.length - 1) {

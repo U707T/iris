@@ -167,11 +167,5 @@
   "shift_for_large_step": "按住 Shift 步长更大",
   "seek_step_large": "快进/快退时长（按住 Shift）",
   "short_video_mode": "短视频模式",
-  "exit_short_video_mode": "退出短视频模式",
-  "unable_to_play": "无法播放此文件",
-  "open_settings": "打开系统设置",
-  "storage_permission_hint": "需要存储权限才能浏览本地文件",
-  "no_media_files": "此文件夹里没有可播放的音视频",
-  "empty_player_hint": "拖入文件，或按 Ctrl+O 打开",
-  "empty_player_hint_mobile": "点击画面，再点「打开文件」选择视频"
+  "exit_short_video_mode": "退出短视频模式"
 }

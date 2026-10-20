@@ -8,13 +8,6 @@ import 'package:video_player/video_player.dart';
 class MediaPlayer {
   final bool isInitializing;
   final bool isPlaying;
-
-  /// 打开 / 装载当前媒体时的错误信息; null 表示没有错误。
-  /// 由播放器后端在 `init()` 失败时写入, 供界面显示"无法播放"并提供重试。
-  final String? error;
-
-  /// 重新装载当前媒体 (错误界面上的"重试"按钮); null 表示不可重试。
-  final Future<void> Function()? retry;
   final List<Subtitle> externalSubtitles;
   final Duration position;
   final Duration duration;
@@ -39,8 +32,6 @@ class MediaPlayer {
   MediaPlayer({
     required this.isInitializing,
     required this.isPlaying,
-    this.error,
-    this.retry,
     required this.externalSubtitles,
     required this.position,
     required this.duration,
@@ -78,8 +69,6 @@ class MediaKitPlayer extends MediaPlayer {
     required this.audios,
     required super.isInitializing,
     required super.isPlaying,
-    super.error,
-    super.retry,
     required super.position,
     required super.duration,
     required super.buffer,
@@ -106,8 +95,6 @@ class FvpPlayer extends MediaPlayer {
     required this.controller,
     required super.isInitializing,
     required super.isPlaying,
-    super.error,
-    super.retry,
     required this.externalSubtitle,
     required super.externalSubtitles,
     required super.position,
