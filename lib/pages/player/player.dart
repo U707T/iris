@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/hooks/use_app_lifecycle.dart';
@@ -21,6 +19,7 @@ import 'package:iris/pages/player/short_video/short_video_view.dart';
 import 'package:iris/pages/player/video_view.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/drop_queue.dart';
+import 'package:iris/utils/exit_app.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
@@ -139,15 +138,17 @@ class Player extends HookWidget {
 
     Future<void> showControlForHover(Future<void> callback) async {
       try {
-        context.read<MediaPlayer>().saveProgress();
+        await context.read<MediaPlayer>().saveProgress();
         showControl();
         usePlayerUiStore().updateIsHovering(true);
         await callback;
-        // 弹层关闭后没人在鼠标事件里复位, 这里显式收尾
-        usePlayerUiStore().updateIsHovering(false);
-        showControl();
       } catch (e) {
         logger(e.toString());
+      } finally {
+        // 弹层关闭 / 抛异常都要收尾, 否则 isHovering 会永久停在 true,
+        // 自动隐藏计时器再也不会把控制栏收起来。
+        usePlayerUiStore().updateIsHovering(false);
+        showControl();
       }
     }
 
@@ -190,13 +191,7 @@ class Player extends HookWidget {
 
       // 二次确认退出
       if (isExitConfirm.value) {
-        await context.read<MediaPlayer>().saveProgress();
-        if (isDesktop) {
-          windowManager.close();
-        } else {
-          SystemNavigator.pop();
-          exit(0);
-        }
+        await exitApp(context.read<MediaPlayer>());
         return;
       }
 

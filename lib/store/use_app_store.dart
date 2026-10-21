@@ -1,14 +1,29 @@
-import 'dart:convert';
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/globals.dart' as globals;
 import 'package:iris/models/store/app_state.dart';
+import 'package:iris/store/persistence/json_persistence.dart';
+import 'package:iris/store/persistence/key_value_store.dart';
 import 'package:iris/store/persistent_store.dart';
 import 'package:iris/utils/logger.dart';
 
 class AppStore extends PersistentStore<AppState> {
-  AppStore() : super(AppState());
+  AppStore()
+      : super(
+          AppState(),
+          JsonPersistence<AppState>(
+            // 设置体积会随版本增长, 放应用私有文件; 加密存储只留给凭据。
+            store: FileKeyValueStore(),
+            // 旧版本把设置写在 secure storage 里: 首次读取自动迁移。
+            legacyStore: SecureKeyValueStore.instance,
+            legacyKey: 'app_state',
+            key: 'app_state',
+            fromJson: (json) => AppState.fromJson(json).copyWith(
+              autoPlay: globals.autoPlayOnLaunch,
+            ),
+            toJson: (state) => state.toJson(),
+          ),
+        );
 
   Future<void> updateAutoPlay(bool autoPlay) async =>
       set(state.copyWith(autoPlay: autoPlay));
@@ -175,38 +190,7 @@ class AppStore extends PersistentStore<AppState> {
   }
 
   @override
-  Future<AppState?> load() async {
-    logger('Loading AppState');
-    try {
-            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
-
-      String? appState = await storage.read(key: 'app_state');
-
-      if (appState != null) {
-        return AppState.fromJson(json.decode(appState)).copyWith(
-          // 默认不自动播放 (避免启动就出声); 但命令行 / Intent 显式打开
-          // 文件时, 队列那边已经把 globals.autoPlayOnLaunch 置 true。
-          // 读这个标记而不是硬编码 false: 两个 store 的异步加载顺序不定,
-          // 硬编码会把显式打开的 autoPlay 覆盖掉。
-          autoPlay: globals.autoPlayOnLaunch,
-        );
-      }
-    } catch (e) {
-      logger('Error loading AppState: $e');
-    }
-    return null;
-  }
-
-  @override
-  Future<void> save(AppState state) async {
-    try {
-            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
-
-      await storage.write(key: 'app_state', value: json.encode(state.toJson()));
-    } catch (e) {
-      logger('Error saving AppState: $e');
-    }
-  }
+  Future<AppState?> load() => loadPersisted();
 }
 
 AppStore useAppStore() => create(() => AppStore());

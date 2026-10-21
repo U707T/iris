@@ -44,18 +44,19 @@ class ShortVideoScrubSession {
 
   /// 开始拖动: [from] 为拖动起点 (实时播放位置)
   void start(Duration from) {
+    if (!_alive) return;
     _session++;
     _active = true;
     final player = readPlayer();
     _resume = player.isPlaying;
-    if (_resume) player.pause();
+    if (_resume) _pauseSafely();
     _throttle.begin();
     seek(from);
   }
 
   /// 拖动中: 更新预览位置并按节流发送 seek (第一次立即发送)
   void seek(Duration target) {
-    if (!_active) return;
+    if (!_alive || !_active) return;
     preview.value = target;
     _throttle.seek(target);
   }
@@ -63,12 +64,12 @@ class ShortVideoScrubSession {
   /// 结束拖动: 补发最终位置并恢复播放, 预览保留一小段时间后收起
   void end() {
     if (!_active) return;
+    final resume = _resume && _alive;
     _active = false;
-    final resume = _resume;
     _resume = false;
     final session = ++_session;
     _throttle.end();
-    if (resume) readPlayer().play();
+    if (resume) _playSafely();
     Future<void>.delayed(previewHold, () {
       if (_alive && _session == session) {
         preview.value = null;
@@ -76,8 +77,22 @@ class ShortVideoScrubSession {
     });
   }
 
+  void _pauseSafely() {
+    try {
+      unawaited(readPlayer().pause().catchError((_) {}));
+    } catch (_) {}
+  }
+
+  void _playSafely() {
+    try {
+      unawaited(readPlayer().play().catchError((_) {}));
+    } catch (_) {}
+  }
+
   void dispose() {
     _alive = false;
+    _active = false;
+    _resume = false;
     preview.dispose();
   }
 }

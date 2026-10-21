@@ -39,6 +39,7 @@ Future<bool> dataMigration() async {
       }
     }
   } catch (e) {
+    logger('Data migration failed: $e');
     return false;
   }
 

@@ -78,6 +78,22 @@ void main() {
     expect(playCalls, 0);
   });
 
+  test('dispose 后 end 不会向已销毁播放器发 play', () {
+    final player = buildPlayer(playing: true);
+    final scrub = ShortVideoScrubSession(
+      readPlayer: () => player,
+      clock: () => now,
+    );
+
+    scrub.start(const Duration(seconds: 3));
+    expect(pauseCalls, 1);
+
+    scrub.dispose();
+    scrub.end();
+
+    expect(playCalls, 0);
+  });
+
   test('没有 start 时 seek 被忽略', () {
     final player = buildPlayer(playing: true);
     final scrub = ShortVideoScrubSession(

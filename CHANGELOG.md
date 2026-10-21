@@ -1,3 +1,21 @@
+## v2.5.2
+
+### Changelog
+
+* **Storage fixes.** WebDAV subdirectories and file names containing `#` / `?` now get the correct URL; one unreadable entry no longer fails a whole local folder, and directory stats are read in small concurrent batches; clearing the Android path field no longer crashes, and SAF folders are not blocked by the global storage permission.
+* **Responsive control bar.** Controls no longer overflow on narrow phones or tablet-width windows; audio track, storage and fullscreen move into the More menu in the compact layout.
+* **Seeking and window state.** Dragging the main progress bar is throttled (120 ms, exact final position on release); the maximize button follows real window events; closing the window flushes the last position / size / maximized state.
+* **Persistence hardening.** Settings, queue and history now live in private JSON files (credentials stay in encrypted storage); a failed read is no longer treated as empty data and cannot overwrite the old file; writes are serialized and coalesced; startup waits for stores to load; old data is migrated from encrypted storage automatically.
+* **Search, short video and gestures.** Closing search cancels the background scan; short-video page sync, long-press speed restore, scrub lifecycle and touch/mouse detection are fixed; the short-video pool no longer initializes libass.
+
+### 更新日志
+
+* **存储修复。** WebDAV 子目录和含 `#` / `?` 的文件名不再拼错 URL；本地目录里单个坏条目不会让整个文件夹报错，目录信息改为小批量并发读取；Android 清空路径输入不再崩溃，SAF 目录不再被全局存储权限拦住。
+* **响应式控制栏。** 窄屏手机 / 平板宽度下按钮不再溢出；紧凑布局把音轨、存储、全屏收进「更多」菜单。
+* **进度与窗口。** 主进度条拖动按 120ms 节流（松手补发最终位置）；最大化按钮跟随真实窗口事件；关窗前补存最后的窗口位置 / 大小 / 最大化状态。
+* **持久化加固。** 设置、队列、历史迁移到应用私有 JSON 文件（凭据仍在加密存储）；读取失败不再当成空数据覆盖旧文件；写入串行并合并；启动时等待 store 加载完成；旧版数据会自动从加密存储迁移。
+* **搜索、短视频与手势。** 关闭搜索会取消后台扫描；短视频程序化翻页、长按倍速恢复、进度拖动生命周期、触摸 / 鼠标判定均已修复；短视频播放器池不再初始化 libass。
+
 ## v2.5.1
 
 ### Changelog

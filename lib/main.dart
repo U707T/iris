@@ -9,8 +9,11 @@ import 'package:iris/l10n/app_localizations.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/pages/home/home.dart';
 import 'package:iris/store/use_app_store.dart';
+import 'package:iris/store/use_history_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
+import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/theme.dart';
+import 'package:iris/utils/data_migration.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/request_storage_permission.dart';
@@ -47,6 +50,10 @@ void main(List<String> arguments) async {
 
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 从上游目录迁移旧数据, 必须早于任何 store 读取。
+  final migrated = await dataMigration();
+  if (migrated) logger('Legacy data migrated');
+
   MediaKit.ensureInitialized();
 
 
@@ -57,6 +64,10 @@ void main(List<String> arguments) async {
     logger('initUri: $initUri');
     globals.initUri = initUri;
   }
+
+  // 先把持久化状态读完再显示 UI: 避免"打开即操作"被迟到的 load 覆盖,
+  // 也免去各 hook 轮询 3 秒 isLoaded。
+  await _bootstrapPersistentStores();
 
   if (isDesktop) {
     await windowManager.ensureInitialized();
@@ -79,6 +90,35 @@ void main(List<String> arguments) async {
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
 
   runApp(const StoreScope(child: MyApp()));
+}
+
+Future<void> _bootstrapPersistentStores() async {
+  // AppStore 先加载: PlayQueueStore 处理命令行 / Intent 时会写 autoPlay。
+  final appStore = useAppStore();
+  await _waitForStores([appStore.ready], 'AppStore', const Duration(seconds: 3));
+
+  final historyStore = useHistoryStore();
+  final storageStore = useStorageStore();
+  final playQueueStore = usePlayQueueStore();
+  await _waitForStores(
+    [historyStore.ready, storageStore.ready, playQueueStore.ready],
+    'stores',
+    const Duration(seconds: 5),
+  );
+}
+
+Future<void> _waitForStores(
+  List<Future<void>> waiters,
+  String label,
+  Duration timeout,
+) async {
+  try {
+    await Future.wait(waiters).timeout(timeout);
+  } catch (e) {
+    // 超时 / 读失败都已经记录在 store.loadError 里, 这里只保证 UI 能启动;
+    // 加载失败的 store 会拒绝后续覆盖写入。
+    logger('Waiting for $label failed: $e');
+  }
 }
 
 class MyApp extends HookWidget {

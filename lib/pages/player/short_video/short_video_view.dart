@@ -13,6 +13,7 @@ import 'package:iris/pages/player/overlays/playback_error_overlay.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/short_video.dart';
 import 'package:iris/widgets/speed_boost_effect.dart';
 import 'package:provider/provider.dart';
@@ -55,6 +56,9 @@ class ShortVideoView extends HookWidget {
     final int safeIndex = currentFeedIndex < 0 ? 0 : currentFeedIndex;
     final pageController =
         useMemoized(() => PageController(initialPage: safeIndex), []);
+    useEffect(() {
+      return () => pageController.dispose();
+    }, [pageController]);
 
     // 队列为空 / 当前项不是视频时 (如打开了音频), 自动退出短视频模式
     final exitRequested = useRef(false);
@@ -76,31 +80,53 @@ class ShortVideoView extends HookWidget {
 
     // 程序化翻页期间忽略 onPageChanged: 跨多页时会依次回调每个中间页,
     // 每次 commitPage 都会把 currentIndex 改到中间页, 形成来回打架。
+    // 用递增 generation 而不是 bool: 连续快捷键会叠加多个动画, 前一个动画的
+    // 完成回调不能把后一个动画的"同步中"状态提前清掉。
     final isSyncingPage = useRef(false);
+    final pageSyncGeneration = useRef(0);
 
     // 队列索引被外部改变时 (快捷键切换等) 同步 PageView
     useEffect(() {
       if (!pageController.hasClients || currentFeedIndex < 0) return;
       final page = pageController.page?.round() ?? pageController.initialPage;
       if (page == currentFeedIndex) return;
+
+      final generation = ++pageSyncGeneration.value;
+      isSyncingPage.value = true;
+
       if (page < 0 || page >= items.length) {
-        isSyncingPage.value = true;
         pageController.jumpToPage(currentFeedIndex);
-        isSyncingPage.value = false;
+        if (generation == pageSyncGeneration.value) {
+          isSyncingPage.value = false;
+        }
       } else {
-        isSyncingPage.value = true;
         pageController
             .animateToPage(
               currentFeedIndex,
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutCubic,
             )
-            .whenComplete(() => isSyncingPage.value = false);
+            .then(
+          (_) {
+            if (generation == pageSyncGeneration.value) {
+              isSyncingPage.value = false;
+            }
+          },
+          onError: (Object error, StackTrace stack) {
+            logger('Short video page sync failed: $error');
+            if (generation == pageSyncGeneration.value) {
+              isSyncingPage.value = false;
+            }
+          },
+        );
       }
       return;
     }, [currentFeedIndex]);
 
     final isDragging = useRef(false);
+    // 长按回调本身不带 pointer kind, 只能靠按下时记录; 触摸屏笔记本上
+    // 上一次触摸的 kind 不能残留给下一次鼠标长按。
+    final lastPointerKind = useRef<PointerDeviceKind?>(null);
 
     void commitPage(int page) {
       if (page < 0 || page >= items.length) return;
@@ -143,6 +169,7 @@ class ShortVideoView extends HookWidget {
     final isLongPress = useState(false);
 
     void onLongPressStart(LongPressStartDetails details) {
+      if (lastPointerKind.value != PointerDeviceKind.touch) return;
       if (!context.read<MediaPlayer>().isPlaying) return;
       rateBeforeLongPress.value = useAppStore().state.rate;
       useAppStore().updateRate(
@@ -159,6 +186,18 @@ class ShortVideoView extends HookWidget {
       rateBeforeLongPress.value = null;
       isLongPress.value = false;
     }
+
+    // 退出模式 / 组件销毁时必须恢复倍速: onLongPressEnd 不保证一定到达,
+    // 否则 rate 会永久停在 longPressSpeed, 下一条视频也受影响。
+    useEffect(() {
+      return () {
+        final restoreRate = rateBeforeLongPress.value;
+        if (restoreRate != null) {
+          rateBeforeLongPress.value = null;
+          useAppStore().updateRate(restoreRate, persist: false);
+        }
+      };
+    }, const []);
 
     // 进度拖动会话 (画面横向拖动 / 底部进度条共用)
     final scrub = useMemoized(
@@ -256,7 +295,10 @@ class ShortVideoView extends HookWidget {
       builder: (context, opacity, child) =>
           Opacity(opacity: opacity, child: child),
       child: Listener(
-        onPointerDown: (_) => isDragging.value = true,
+        onPointerDown: (event) {
+          isDragging.value = true;
+          lastPointerKind.value = event.kind;
+        },
         onPointerUp: (_) => isDragging.value = false,
         onPointerCancel: (_) => isDragging.value = false,
         // 覆盖层 (底部信息 / 按钮) 挡住页面级滚轮时, 由此处兜底

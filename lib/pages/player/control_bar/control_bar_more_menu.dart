@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/globals.dart' show moreMenuKey;
@@ -10,6 +9,7 @@ import 'package:iris/models/player.dart';
 import 'package:iris/models/storages/local.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
+import 'package:iris/utils/exit_app.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/take_screenshot.dart';
@@ -21,8 +21,9 @@ import 'package:iris/widgets/dialogs/show_shortcuts_dialog.dart';
 import 'package:iris/widgets/popup.dart';
 import 'package:iris/widgets/popups/history.dart';
 import 'package:iris/widgets/popups/settings/settings.dart';
+import 'package:iris/widgets/popups/storages/storages.dart';
+import 'package:iris/widgets/popups/track/track_panel.dart';
 import 'package:provider/provider.dart';
-import 'package:window_manager/window_manager.dart';
 
 /// 控制栏右侧的「更多」菜单 (打开文件 / 链接、截图、旋转、短视频、
 /// 统计、快捷键、历史、设置、退出)
@@ -32,6 +33,7 @@ class MoreMenuButton extends HookWidget {
     required this.file,
     required this.width,
     required this.hasVideos,
+    this.compact = false,
     required this.showControl,
     required this.showControlForHover,
     required this.onEnterShortVideo,
@@ -42,6 +44,9 @@ class MoreMenuButton extends HookWidget {
   final FileItem? file;
   final double width;
   final bool hasVideos;
+
+  /// 控制栏放不下时, 音轨 / 存储 / 全屏入口收进这里
+  final bool compact;
   final void Function() showControl;
   final Future<void> Function(Future<void> callback) showControlForHover;
   final VoidCallback onEnterShortVideo;
@@ -52,6 +57,8 @@ class MoreMenuButton extends HookWidget {
   Widget build(BuildContext context) {
     final t = getLocalizations(context);
     final rate = useAppStore().select(context, (state) => state.rate);
+    final isFullScreen =
+        usePlayerUiStore().select(context, (state) => state.isFullScreen);
 
     return PopupMenuButton(
       key: moreMenuKey,
@@ -113,6 +120,56 @@ class MoreMenuButton extends HookWidget {
             showControl();
           },
         ),
+        if (compact)
+          PopupMenuItem(
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: const Icon(Icons.graphic_eq_rounded, size: 20),
+              title: Text(t.audio_track),
+            ),
+            onTap: () => showControlForHover(
+              showPopup(
+                context: context,
+                child: Provider<MediaPlayer>.value(
+                  value: context.read<MediaPlayer>(),
+                  child: const TrackPanel(),
+                ),
+                direction: PopupDirection.right,
+              ),
+            ),
+          ),
+        if (compact)
+          PopupMenuItem(
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: const Icon(Icons.storage_rounded, size: 20),
+              title: Text(t.storage),
+            ),
+            onTap: () => showControlForHover(
+              showPopup(
+                context: context,
+                child: const Storages(),
+                direction: PopupDirection.right,
+              ),
+            ),
+          ),
+        if (compact && isDesktop)
+          PopupMenuItem(
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: Icon(
+                isFullScreen
+                    ? Icons.close_fullscreen_rounded
+                    : Icons.open_in_full_rounded,
+                size: 20,
+              ),
+              title: Text(
+                isFullScreen ? t.exit_fullscreen : t.enter_fullscreen,
+              ),
+            ),
+            onTap: () =>
+                usePlayerUiStore().updateFullScreen(!isFullScreen),
+          ),
         if (width < 600)
           PopupMenuItem(
             child: ListTile(
@@ -267,13 +324,7 @@ class MoreMenuButton extends HookWidget {
             ),
           ),
           onTap: () async {
-            await context.read<MediaPlayer>().saveProgress();
-            if (isDesktop) {
-              windowManager.close();
-            } else {
-              SystemNavigator.pop();
-              exit(0);
-            }
+            await exitApp(context.read<MediaPlayer>());
           },
         ),
       ],

@@ -215,32 +215,43 @@ Future<List<FileItem>> getLocalFiles(
     return [];
   }
 
-  final Map<String, List<FileSystemEntity>> groupedEntities = {};
   final allEntities = await directory.list().toList();
 
-  for (final entity in allEntities) {
-    final baseName = p.basenameWithoutExtension(entity.path);
-    groupedEntities.putIfAbsent(baseName, () => []).add(entity);
-  }
+  Future<FileItem?> toItem(FileSystemEntity entity) async {
+    final name = p.basename(entity.path);
+    final isDir = entity is Directory;
 
-  final List<FileItem> fileItems = [];
-
-  for (final group in groupedEntities.values) {
-    for (final entity in group) {
+    try {
+      // 单个条目读不到 (坏软链接 / 权限 / 文件被占用) 不应让整个目录失败:
+      // 跳过它, 其余文件照常显示。
       final stat = await entity.stat();
-      final isDir = entity is Directory;
-      fileItems.add(FileItem(
+      return FileItem(
         storageId: storage.id,
         storageType: storage.type,
-        name: p.basename(entity.path),
+        name: name,
         uri: entity.path,
-        path: [...path, p.basename(entity.path)],
+        path: [...path, name],
         isDir: isDir,
         size: isDir ? 0 : stat.size,
         lastModified: stat.modified,
         type: isDir ? ContentType.other : checkContentType(entity.path),
-      ));
+      );
+    } catch (e) {
+      logger('Skipping unreadable directory entry ${entity.path}: $e');
+      return null;
     }
+  }
+
+  // stat 是 I/O: 小批量并发, 既不串行等 N 次, 也不会一次打爆网络盘。
+  const int chunkSize = 16;
+  final List<FileItem> fileItems = [];
+  for (var start = 0; start < allEntities.length; start += chunkSize) {
+    final end = start + chunkSize < allEntities.length
+        ? start + chunkSize
+        : allEntities.length;
+    final chunk = allEntities.sublist(start, end);
+    final items = await Future.wait(chunk.map(toItem));
+    fileItems.addAll(items.whereType<FileItem>());
   }
 
   return fileItems;

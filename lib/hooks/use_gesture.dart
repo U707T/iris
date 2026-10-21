@@ -133,9 +133,9 @@ Gesture useGesture({
   }
 
   void onTapDown(TapDownDetails details) {
-    if (details.kind == PointerDeviceKind.touch) {
-      gestureState.value['isTouch'] = true;
-    }
+    // 每次按下都覆盖: 触摸屏笔记本上先触摸再换鼠标时, 旧的 true 不能残留。
+    gestureState.value['isTouch'] =
+        details.kind == PointerDeviceKind.touch;
   }
 
   void onTap() {
@@ -208,6 +208,21 @@ Gesture useGesture({
     gestureState.value['rateBeforeLongPress'] = null;
   }
 
+  // 长按途中切模式 / 页面销毁时, onLongPressEnd 不保证到达。
+  // 不恢复的话 AppStore.rate 会一直停在 longPressSpeed。
+  useEffect(() {
+    return () {
+      if (!(gestureState.value['isLongPress'] as bool)) return;
+      final restoreRate =
+          gestureState.value['rateBeforeLongPress'] as double?;
+      gestureState.value['isLongPress'] = false;
+      gestureState.value['rateBeforeLongPress'] = null;
+      if (restoreRate != null) {
+        useAppStore().updateRate(restoreRate, persist: false);
+      }
+    };
+  }, const []);
+
   void onLongPressEnd(LongPressEndDetails details) {
     restoreRateAfterLongPress();
     gestureState.value['isLongPress'] = false;
@@ -223,6 +238,8 @@ Gesture useGesture({
   }
 
   void onPanStart(DragStartDetails details) {
+    gestureState.value['isTouch'] =
+        details.kind == PointerDeviceKind.touch;
     if (isDesktop && details.kind != PointerDeviceKind.touch) {
       windowManager.startDragging();
       return;

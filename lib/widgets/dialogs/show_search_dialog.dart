@@ -8,6 +8,7 @@ import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/file_size_convert.dart';
 import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/search_files.dart';
 
 /// 在当前存储的当前目录中递归搜索媒体文件
@@ -38,6 +39,11 @@ class SearchDialog extends HookWidget {
     final hasSearched = useState(false);
     final searchSession = useRef(0);
 
+    useEffect(() {
+      // 关闭对话框时让仍在跑的搜索在下一个目录前退出, 不再扫网络存储
+      return () => searchSession.value++;
+    }, const []);
+
     Future<void> search() async {
       final keyword = controller.text.trim();
       if (keyword.isEmpty) return;
@@ -46,11 +52,19 @@ class SearchDialog extends HookWidget {
       isSearching.value = true;
       hasSearched.value = true;
 
-      final files = await searchFiles(
-        storage: storage,
-        basePath: currentPath,
-        query: keyword,
-      );
+      List<FileItem> files;
+      try {
+        files = await searchFiles(
+          storage: storage,
+          basePath: currentPath,
+          query: keyword,
+          isCancelled: () =>
+              searchSession.value != session || !context.mounted,
+        );
+      } catch (e) {
+        logger('Search failed: $e');
+        files = const [];
+      }
 
       // 期间又发起了新搜索 / 对话框已关闭: 丢弃这次结果
       if (searchSession.value != session || !context.mounted) return;

@@ -111,13 +111,24 @@ class Files extends HookWidget {
 
     /// 列表主体: 依次短路 (权限 → 加载中 → 出错 → 空 → 列表), 避免深层嵌套
     Widget buildFiles() {
-      if (Platform.isAndroid &&
-          globals.storagePermissionStatus != PermissionStatus.granted &&
-          storage is LocalStorage) {
+      // SAF (content://) 目录走 SafUtil, 不需要「所有文件访问」权限。
+      final bool isSafStorage = storage is LocalStorage &&
+          storage.basePath.isNotEmpty &&
+          storage.basePath.first.startsWith('content://');
+      final bool needsStoragePermission = Platform.isAndroid &&
+          storage is LocalStorage &&
+          !isSafStorage &&
+          globals.storagePermissionStatus != PermissionStatus.granted;
+
+      if (needsStoragePermission) {
         return Center(
           child: ElevatedButton(
               onPressed: () async {
-                await requestStoragePermission();
+                final status = await requestStoragePermission();
+                // 永久拒绝后 request() 不会再弹框, 只能把用户送到系统设置。
+                if (status.isPermanentlyDenied || status.isRestricted) {
+                  await openAppSettings();
+                }
                 refresh();
               },
               child: Text(t.grant_storage_permission)),

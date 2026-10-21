@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:iris/pages/player/player_handoff.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/window_state.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// 桌面端关窗: 先保存播放进度, 再真正销毁窗口。
@@ -23,6 +24,8 @@ void useDesktopExitSave() {
     final listener = _WindowCloseListener(() async {
       try {
         await activeHandoffPlayer?.saveProgress();
+        // 防抖保存可能还没触发: 关窗前把最后的位置 / 最大化状态补上
+        await saveCurrentWindowState();
       } catch (e) {
         logger('Save progress before exit failed: $e');
       } finally {

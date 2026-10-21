@@ -1,24 +1,35 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/storages/local.dart';
 import 'package:iris/models/store/play_queue_state.dart';
+import 'package:iris/store/persistence/json_persistence.dart';
+import 'package:iris/store/persistence/key_value_store.dart';
 import 'package:iris/store/persistent_store.dart';
+import 'package:iris/store/state_decoders.dart';
 import 'package:iris/globals.dart' as globals;
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/utils/check_content_type.dart';
 import 'package:iris/utils/get_shuffle_play_queue.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
-import 'package:iris/utils/purge_legacy_storage_types.dart';
 import 'package:iris/utils/queue_persistence.dart';
 import 'package:saf_util/saf_util.dart';
 
 class PlayQueueStore extends PersistentStore<PlayQueueState> {
-  PlayQueueStore() : super(PlayQueueState());
+  PlayQueueStore()
+      : super(
+          PlayQueueState(),
+          JsonPersistence<PlayQueueState>(
+            store: FileKeyValueStore(),
+            legacyStore: SecureKeyValueStore.instance,
+            legacyKey: 'playQueue_state',
+            key: 'playQueue_state',
+            fromJson: decodePlayQueueState,
+            toJson: (state) => state.toJson(),
+          ),
+        );
 
   /// 统一落盘入口: update / updateCurrentIndex / add / remove 必须走同一判定,
   /// 否则会出现"索引被存了、队列却没存"的错位 (重启后索引指向不存在的条目)。
@@ -202,30 +213,12 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
           );
         }
       }
-
-            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
-
-      String? appState = await storage.read(key: 'playQueue_state');
-      if (appState != null) {
-        final data = sanitizePlayQueueJson(json.decode(appState));
-        if (data != null) return PlayQueueState.fromJson(data);
-      }
     } catch (e) {
-      logger('Error loading PlayQueueState: $e');
+      // 外部打开参数损坏时退回上次保存的队列，而不是把队列当成空。
+      logger('Error handling launch target: $e');
     }
-    return null;
-  }
 
-  @override
-  Future<void> save(PlayQueueState state) async {
-    try {
-            final storage = FlutterSecureStorage(aOptions: const AndroidOptions());
-
-      await storage.write(
-          key: 'playQueue_state', value: json.encode(state.toJson()));
-    } catch (e) {
-      logger('Error saving PlayQueueState: $e');
-    }
+    return loadPersisted();
   }
 }
 

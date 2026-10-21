@@ -31,6 +31,9 @@ class LocalDialog extends HookWidget {
 
     final isTested = useState(true);
 
+    final isValid =
+        name.value.trim().isNotEmpty && basePath.value.isNotEmpty;
+
     void add() {
       useStorageStore().addStorage(
         LocalStorage(
@@ -77,8 +80,9 @@ class LocalDialog extends HookWidget {
                   ),
                   initialValue: p.normalize(basePath.value.join('/')),
                   onChanged: (value) => basePath.value = pathConv(value),
-                  readOnly:
-                      isAndroid && basePath.value[0].startsWith('content://'),
+                  readOnly: isAndroid &&
+                      basePath.value.isNotEmpty &&
+                      basePath.value[0].startsWith('content://'),
                 ),
                 const SizedBox(height: 16.0),
               ],
@@ -92,7 +96,7 @@ class LocalDialog extends HookWidget {
           child: Text(t.cancel),
         ),
         TextButton(
-          onPressed: isTested.value
+          onPressed: isTested.value && isValid
               ? () {
                   Navigator.pop(context, 'OK');
                   isEdit ? update() : add();

@@ -5,6 +5,7 @@ import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/utils/window_state.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:window_size/window_size.dart' as window_size;
 
@@ -25,30 +26,8 @@ void useRememberWindow() {
   Future<void> saveWindowState() async {
     if (!isDesktop || !rememberWindowSize) return;
     if (isRestoring.value) return;
-
-    try {
-      if (await windowManager.isFullScreen()) return;
-
-      final bool maximized = await windowManager.isMaximized();
-
-      // 最大化时保留上一次的普通窗口尺寸, 仅更新最大化标记
-      if (maximized) {
-        await useAppStore().updateWindowBounds(
-          useAppStore().state.windowBounds,
-          maximized: true,
-        );
-        return;
-      }
-
-      final bounds = await windowManager.getBounds();
-
-      await useAppStore().updateWindowBounds(
-        [bounds.left, bounds.top, bounds.width, bounds.height],
-        maximized: false,
-      );
-    } catch (e) {
-      logger('Error saving window state: $e');
-    }
+    // 与关窗前的 flush 共用同一份保存逻辑
+    await saveCurrentWindowState();
   }
 
   void scheduleSave() {
@@ -82,11 +61,15 @@ void useRememberWindow() {
         return;
       }
 
-      // 等待持久化状态加载完成
-      var waited = 0;
-      while (!appStore.isLoaded && waited < 3000) {
-        await Future.delayed(const Duration(milliseconds: 100));
-        waited += 100;
+      // bootstrap 已经等过 store; 这里只兜底插件异常 / 极慢的磁盘。
+      try {
+        await appStore.ready.timeout(const Duration(seconds: 3));
+      } catch (e) {
+        logger('Waiting for AppStore before window restore failed: $e');
+      }
+      if (!appStore.isLoaded) {
+        isRestoring.value = false;
+        return;
       }
 
       final bounds = appStore.state.windowBounds;

@@ -19,15 +19,16 @@ void useShuffleOnLaunch() {
       final appStore = useAppStore();
       final playQueueStore = usePlayQueueStore();
 
-      var waited = 0;
-      while (alive &&
-          (!appStore.isLoaded || !playQueueStore.isLoaded) &&
-          waited < 3000) {
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        waited += 50;
+      // bootstrap 已经等过 store; 这里只兜底插件异常 / 极慢的磁盘。
+      try {
+        await Future.wait([appStore.ready, playQueueStore.ready])
+            .timeout(const Duration(seconds: 3));
+      } catch (e) {
+        logger('Waiting for stores before shuffle failed: $e');
       }
       if (!alive || handled.value) return;
       handled.value = true;
+      if (!appStore.isLoaded || !playQueueStore.isLoaded) return;
       // 随机播放没开 / 队列太短就不动它
       if (!appStore.state.shuffle || playQueueStore.state.playQueue.length < 2) {
         return;

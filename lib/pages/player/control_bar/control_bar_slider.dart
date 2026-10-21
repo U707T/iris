@@ -3,6 +3,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/format_duration_to_minutes.dart';
+import 'package:iris/utils/throttled_seek.dart';
 import 'package:provider/provider.dart';
 
 class ControlBarSlider extends HookWidget {
@@ -41,6 +42,16 @@ class ControlBarSlider extends HookWidget {
     final play = context.read<MediaPlayer>().play;
     final pause = context.read<MediaPlayer>().pause;
     final seek = context.read<MediaPlayer>().seek;
+
+    // MediaPlayer 是每次进度变化都会重建的快照, 直接把它塞进
+    // useMemoized(const []) 会一直用挂载时的旧闭包。这里只保留一个
+    // 指向最新 seek 的 ref, 节流器本身仍然只创建一次。
+    final seekRef = useRef(seek);
+    seekRef.value = seek;
+    final seekThrottle = useMemoized(
+      () => ThrottledSeek(seekTo: (target) => seekRef.value(target)),
+      const [],
+    );
 
     final double max = progress.duration.inMilliseconds.toDouble();
     final double positionValue =
@@ -94,7 +105,9 @@ class ControlBarSlider extends HookWidget {
                       ? null
                       : (value) {
                           showControl?.call();
-                          seek(Duration(milliseconds: value.toInt()));
+                          seekThrottle.seek(
+                            Duration(milliseconds: value.toInt()),
+                          );
                         },
                   onChangeStart: disabled
                       ? null
@@ -102,11 +115,17 @@ class ControlBarSlider extends HookWidget {
                           wasPlaying.value =
                               context.read<MediaPlayer>().isPlaying;
                           usePlayerUiStore().updateIsSeeking(true);
+                          seekThrottle.begin();
                           pause();
                         },
                   onChangeEnd: disabled
                       ? null
                       : (value) async {
+                          // 补发最终位置, 再恢复播放
+                          seekThrottle.seek(
+                            Duration(milliseconds: value.toInt()),
+                          );
+                          seekThrottle.end();
                           if (wasPlaying.value) {
                             await play();
                           }

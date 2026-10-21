@@ -130,10 +130,15 @@ class ControlBar extends HookWidget {
       color: color,
       overlayColor: overlayColor,
     );
+    const double compactBreakpoint = 448.0;
+    const double desktopBreakpoint = 1200.0;
+    final bool compact = width < compactBreakpoint;
+
     final moreMenuButton = MoreMenuButton(
       file: file,
       width: width,
       hasVideos: hasVideos,
+      compact: compact,
       showControl: showControl,
       showControlForHover: showControlForHover,
       onEnterShortVideo: enterShortVideo,
@@ -143,9 +148,6 @@ class ControlBar extends HookWidget {
 
     final sliderWidget =
         ControlBarSlider(showControl: showControl, color: color);
-
-    const double mobileBreakpoint = 640.0;
-    const double tabletBreakpoint = 1024.0;
 
     // 按钮只声明一次, 三种布局只决定"怎么摆":
     // 以前三份列表各写一遍, 已经分叉 (mobile 没有 rate), 加按钮要改三处。
@@ -168,21 +170,25 @@ class ControlBar extends HookWidget {
     final List<Widget> viewButtons = [
       if (file?.type != ContentType.audio) fitButton,
       if (file?.type != ContentType.audio) zoomButton,
-      // 手机这一行已经放不下, rate 只保留在平板 / 桌面
-      if (width >= mobileBreakpoint) rateButton,
+      // 手机上这一行放不下, rate 只保留在宽屏
+      if (width >= 640) rateButton,
       volumeWidget,
     ];
+    // 448 以下把音轨 / 存储 / 全屏收进「更多」菜单:
+    // 9 个 48px 按钮加内边距已经超过 360 逻辑宽, 收 3 个后正好放得下。
     final List<Widget> panelButtons = [
-      audioTrackButton,
+      if (!compact) audioTrackButton,
       playQueueButton,
-      storageButton,
+      if (!compact) storageButton,
       if (hasVideos) shortVideoButton,
-      if (isDesktop) fullscreenButton,
+      if (isDesktop && !compact) fullscreenButton,
       moreMenuButton,
     ];
 
     final Widget controlLayout;
-    if (width < mobileBreakpoint) {
+    if (width < desktopBreakpoint) {
+      // 两行布局覆盖手机、平板和窄桌面窗口。
+      // 原来的 640–1023 单行约需 480–768px 固定宽度, 在 640/768 窗口必炸。
       controlLayout = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -196,23 +202,6 @@ class ControlBar extends HookWidget {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [...viewButtons, ...panelButtons],
-          ),
-        ],
-      );
-    } else if (width < tabletBreakpoint) {
-      controlLayout = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          sliderWidget,
-          const SizedBox(height: 4),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              ...desktopTransportButtons,
-              ...viewButtons,
-              const Spacer(),
-              ...panelButtons,
-            ],
           ),
         ],
       );

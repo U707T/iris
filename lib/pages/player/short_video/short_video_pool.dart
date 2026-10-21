@@ -54,7 +54,11 @@ class ShortVideoSlot {
 class ShortVideoPool extends ChangeNotifier {
   ShortVideoPool({required this.buildMedia}) {
     for (var i = 0; i < _shortVideoPoolSize; i++) {
-      final player = Player();
+      // 字幕功能已移除: 和普通模式保持同一份 PlayerConfiguration,
+      // 避免 3 个池实例各自初始化 libass。
+      final player = Player(
+        configuration: const PlayerConfiguration(libass: false),
+      );
       slots.add(
         ShortVideoSlot(player: player, controller: VideoController(player)),
       );
