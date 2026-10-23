@@ -3,10 +3,11 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/player.dart';
+import 'package:iris/pages/player/gesture/player_gesture_layer.dart';
+import 'package:iris/pages/player/gesture/seek_hub.dart';
+import 'package:iris/pages/player/gesture/seek_session.dart';
 import 'package:iris/pages/player/short_video/short_video_feed_widgets.dart';
 import 'package:iris/pages/player/short_video/short_video_player.dart';
-import 'package:iris/pages/player/short_video/short_video_scrub.dart';
-import 'package:iris/pages/player/short_video/short_video_seek_feedback.dart';
 import 'package:iris/pages/player/short_video/short_video_volume.dart';
 import 'package:iris/pages/player/short_video/short_video_wheel.dart';
 import 'package:iris/pages/player/overlays/playback_error_overlay.dart';
@@ -22,13 +23,13 @@ import 'package:provider/provider.dart';
 /// 一屏一条视频, 上滑下一条 / 下滑上一条, 单条循环播放。
 /// Media Kit 后端配合预载播放器池, 滑动切换无缝衔接。
 ///
-/// 本文件只负责编排: 页面 (PageView) 与队列同步、手势接线、覆盖层组合。
-/// 各交互系统的状态与规则在各自文件里:
+/// 手势不再自己实现: 横滑快进 / 双击快进 / 长按倍速全部交给
+/// [PlayerGestureLayer]（与主窗口同一份代码、同一套阈值与提示），
+/// 本文件只负责编排页面 (PageView)、队列同步与覆盖层组合。
+///
 /// - `short_video_wheel.dart`         鼠标滚轮切换上 / 下一条
-/// - `short_video_scrub.dart`         进度拖动会话 (画面拖动 / 进度条共用)
 /// - `short_video_volume.dart`        设备音量调节 (含音量按钮 / 指示器)
 /// - `short_video_feed_widgets.dart`  画面 / 底部信息 / 进度条 / 操作按钮
-/// - `short_video_seek_feedback.dart` 双击快进 / 快退提示
 class ShortVideoView extends HookWidget {
   const ShortVideoView({super.key});
 
@@ -124,9 +125,6 @@ class ShortVideoView extends HookWidget {
     }, [currentFeedIndex]);
 
     final isDragging = useRef(false);
-    // 长按回调本身不带 pointer kind, 只能靠按下时记录; 触摸屏笔记本上
-    // 上一次触摸的 kind 不能残留给下一次鼠标长按。
-    final lastPointerKind = useRef<PointerDeviceKind?>(null);
 
     void commitPage(int page) {
       if (page < 0 || page >= items.length) return;
@@ -136,40 +134,11 @@ class ShortVideoView extends HookWidget {
       }
     }
 
-    // 双击快进 / 快退的瞬时提示 (方向 + 步长)
-    final seekFeedback =
-        useMemoized(() => ShortVideoSeekFeedbackController(), []);
-    useEffect(() {
-      return seekFeedback.dispose;
-    }, [seekFeedback]);
-
-    // 双击快进 / 快退。
-    // 注意: 不能用 build 时捕获的 player —— 短视频模式播放期间本组件不会重建,
-    // 捕获实例里的 position 是过期的 (≈0), 会导致快进总是从视频开头开始;
-    // context.read 取到的是随播放进度持续刷新的当前实例。
-    void onDoubleTapDown(TapDownDetails details) {
-      final seekStep = useAppStore().state.seekStepSeconds;
-      final screenWidth = MediaQuery.sizeOf(context).width;
-      final tapDx = details.globalPosition.dx;
-      final currentPlayer = context.read<MediaPlayer>();
-
-      if (tapDx > screenWidth * 0.75) {
-        currentPlayer.forward(seekStep);
-        seekFeedback.show(forward: true, seconds: seekStep);
-      } else if (tapDx < screenWidth * 0.25) {
-        currentPlayer.backward(seekStep);
-        seekFeedback.show(forward: false, seconds: seekStep);
-      } else {
-        toggleShortVideoPlay(context);
-      }
-    }
-
-    // 长按加速播放
+    // 长按加速播放（倍速的恢复逻辑与主窗口一致）
     final rateBeforeLongPress = useRef<double?>(null);
     final isLongPress = useState(false);
 
-    void onLongPressStart(LongPressStartDetails details) {
-      if (lastPointerKind.value != PointerDeviceKind.touch) return;
+    void onLongPressStart() {
       if (!context.read<MediaPlayer>().isPlaying) return;
       rateBeforeLongPress.value = useAppStore().state.rate;
       useAppStore().updateRate(
@@ -192,62 +161,24 @@ class ShortVideoView extends HookWidget {
     useEffect(() {
       return () {
         final restoreRate = rateBeforeLongPress.value;
-        if (restoreRate != null) {
-          rateBeforeLongPress.value = null;
-          useAppStore().updateRate(restoreRate, persist: false);
-        }
+        if (restoreRate == null) return;
+        rateBeforeLongPress.value = null;
+        useAppStore().updateRate(restoreRate, persist: false);
       };
     }, const []);
 
-    // 进度拖动会话 (画面横向拖动 / 底部进度条共用)
+    // 底部进度条拖动会话：与画面横滑共用同一套规则（暂停 / 预览 / 节流 / 续播），
+    // 预览值也写进同一个 seekHub，所以时间与进度条跟手一致。
     final scrub = useMemoized(
-      () => ShortVideoScrubSession(
+      () => SeekSession(
         readPlayer: () => context.read<MediaPlayer>(),
+        preview: seekHub.preview,
       ),
       [],
     );
     useEffect(() {
       return scrub.dispose;
     }, [scrub]);
-
-    // 水平拖动调节进度 (相对拖动, 任意位置可用)
-    final scrubState =
-        useRef((active: false, start: Duration.zero, startDx: 0.0));
-
-    void onHorizontalDragStart(DragStartDetails details) {
-      if (details.kind == PointerDeviceKind.touch) {
-        // 左右边缘留给系统返回手势
-        const double edgeDeadZone = 48.0;
-        final screenWidth = MediaQuery.sizeOf(context).width;
-        final startDx = details.globalPosition.dx;
-        if (startDx < edgeDeadZone || startDx > screenWidth - edgeDeadZone) {
-          return;
-        }
-      }
-      // 同 onDoubleTapDown: 取当前实例的实时位置, 避免从过期位置 (≈0) 开始拖动
-      final currentPosition = context.read<MediaPlayer>().position;
-      scrubState.value = (
-        active: true,
-        start: currentPosition,
-        startDx: details.globalPosition.dx,
-      );
-      scrub.start(currentPosition);
-    }
-
-    void onHorizontalDragUpdate(DragUpdateDetails details) {
-      if (!scrubState.value.active) return;
-      final totalDx = details.globalPosition.dx - scrubState.value.startDx;
-      const double sensitivity = 3.0; // 每滑动 3 像素代表 1 秒
-      final target = scrubState.value.start +
-          Duration(milliseconds: (totalDx / sensitivity * 1000).round());
-      scrub.seek(target);
-    }
-
-    void onHorizontalDragEnd() {
-      if (!scrubState.value.active) return;
-      scrubState.value = (active: false, start: Duration.zero, startDx: 0.0);
-      scrub.end();
-    }
 
     // 设备音量调节 (音量按钮上按住上下滑动 / 悬停滚轮微调)
     final volume = useMemoized(() => ShortVideoDeviceVolumeController(), []);
@@ -297,23 +228,21 @@ class ShortVideoView extends HookWidget {
       child: Listener(
         onPointerDown: (event) {
           isDragging.value = true;
-          lastPointerKind.value = event.kind;
         },
         onPointerUp: (_) => isDragging.value = false,
         onPointerCancel: (_) => isDragging.value = false,
         // 覆盖层 (底部信息 / 按钮) 挡住页面级滚轮时, 由此处兜底
         onPointerSignal: wheel.register,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
+        child: PlayerGestureLayer(
+          readPlayer: () => context.read<MediaPlayer>(),
+          seekStepSeconds: () => useAppStore().state.seekStepSeconds,
+          // 纵向留给 PageView 翻页；横滑 = 进度（与主窗口同一套阈值）
+          allowVertical: false,
           onTap: () => toggleShortVideoPlay(context),
-          onDoubleTapDown: onDoubleTapDown,
+          // 双击中间 1/3 = 播放暂停（与主窗口一致）
+          onDoubleTapMiddle: () => toggleShortVideoPlay(context),
           onLongPressStart: onLongPressStart,
-          onLongPressEnd: (_) => onLongPressEnd(),
-          onLongPressCancel: onLongPressEnd,
-          onHorizontalDragStart: onHorizontalDragStart,
-          onHorizontalDragUpdate: onHorizontalDragUpdate,
-          onHorizontalDragEnd: (_) => onHorizontalDragEnd(),
-          onHorizontalDragCancel: onHorizontalDragEnd,
+          onLongPressEnd: onLongPressEnd,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -376,10 +305,6 @@ class ShortVideoView extends HookWidget {
                     onRetry: () => context.read<MediaPlayer>().play(),
                   ),
                 ),
-              // 双击快进 / 快退提示 (方向 + 步长)
-              Positioned.fill(
-                child: ShortVideoSeekFeedbackOverlay(controller: seekFeedback),
-              ),
               // 底部信息与进度条
               Positioned(
                 left: 0,
@@ -388,11 +313,16 @@ class ShortVideoView extends HookWidget {
                 child: ShortVideoFeedFooter(
                   items: items,
                   currentFeedIndex: currentFeedIndex,
-                  scrubPreview: scrub.preview,
+                  scrubPreview: seekHub.preview,
                   progressBar: ShortVideoFeedProgressBar(
-                    scrubPreview: scrub.preview,
-                    onScrubStart: scrub.start,
-                    onScrubSeek: scrub.seek,
+                    scrubPreview: seekHub.preview,
+                    onScrubStart: (target) {
+                      // 进度条是「绝对定位」拖动：基准 = 按下处指向的目标，
+                      // 起点取实时播放位置，再立即跳到按下点。
+                      scrub.start(context.read<MediaPlayer>().position);
+                      scrub.seekTo(target);
+                    },
+                    onScrubSeek: scrub.seekTo,
                     onScrubEnd: scrub.end,
                     onTapSeek: (target) =>
                         context.read<MediaPlayer>().seek(target),

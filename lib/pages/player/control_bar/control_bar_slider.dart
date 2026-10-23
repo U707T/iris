@@ -1,6 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:iris/models/player.dart';
+import 'package:iris/pages/player/gesture/seek_hub.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/format_duration_to_minutes.dart';
 import 'package:iris/utils/throttled_seek.dart';
@@ -54,97 +55,112 @@ class ControlBarSlider extends HookWidget {
     );
 
     final double max = progress.duration.inMilliseconds.toDouble();
-    final double positionValue =
-        progress.position.inMilliseconds.toDouble().clamp(0.0, max);
     final double bufferValue =
         progress.buffer.inMilliseconds.toDouble().clamp(0.0, max);
 
-    return ExcludeFocus(
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
-        child: Row(
-          children: [
-            Visibility(
-              visible: !disabled,
-              child: Text(
-                formatDurationToMinutes(progress.position),
-                style: TextStyle(color: color, height: 2),
-              ),
-            ),
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  activeTrackColor: color?.withAlpha(222) ??
-                      Theme.of(context).colorScheme.primary,
-                  inactiveTrackColor: color?.withAlpha(70) ??
-                      Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.25),
-                  secondaryActiveTrackColor: color?.withAlpha(120) ??
-                      Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.4),
-                  thumbColor: color ?? Theme.of(context).colorScheme.primary,
-                  thumbShape: RoundSliderThumbShape(
-                    enabledThumbRadius: disabled ? 0 : 6,
+    // 画面横滑拖动时显示共享预览值：滑块与时间立刻跟手，
+    // 不用等播放器回调（旧实现拖动期间位置总是慢半拍）。
+    return ValueListenableBuilder<Duration?>(
+      valueListenable: seekHub.preview,
+      builder: (context, preview, _) {
+        final displayPosition = preview ?? progress.position;
+        final double displayValue =
+            displayPosition.inMilliseconds.toDouble().clamp(0.0, max);
+        final bool isPreviewing = preview != null;
+
+        return ExcludeFocus(
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+            child: Row(
+              children: [
+                Visibility(
+                  visible: !disabled,
+                  child: Text(
+                    formatDurationToMinutes(displayPosition),
+                    style: TextStyle(
+                      color: color,
+                      height: 2,
+                      // 预览期间加重，明确「这是你要跳到的位置」
+                      fontWeight: isPreviewing ? FontWeight.w600 : null,
+                    ),
                   ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 12,
+                ),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: color?.withAlpha(222) ??
+                          Theme.of(context).colorScheme.primary,
+                      inactiveTrackColor: color?.withAlpha(70) ??
+                          Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.25),
+                      secondaryActiveTrackColor: color?.withAlpha(120) ??
+                          Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.4),
+                      thumbColor: color ?? Theme.of(context).colorScheme.primary,
+                      thumbShape: RoundSliderThumbShape(
+                        enabledThumbRadius: disabled ? 0 : 6,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 12,
+                      ),
+                      trackHeight: 4,
+                      trackShape: const _CustomTrackShape(),
+                    ),
+                    child: Slider(
+                      value: displayValue,
+                      secondaryTrackValue: bufferValue,
+                      min: 0,
+                      max: max > 0 ? max : 1.0,
+                      onChanged: disabled
+                          ? null
+                          : (value) {
+                              showControl?.call();
+                              seekThrottle.seek(
+                                Duration(milliseconds: value.toInt()),
+                              );
+                            },
+                      onChangeStart: disabled
+                          ? null
+                          : (value) {
+                              wasPlaying.value =
+                                  context.read<MediaPlayer>().isPlaying;
+                              usePlayerUiStore().updateIsSeeking(true);
+                              seekThrottle.begin();
+                              pause();
+                            },
+                      onChangeEnd: disabled
+                          ? null
+                          : (value) async {
+                              // 补发最终位置, 再恢复播放
+                              seekThrottle.seek(
+                                Duration(milliseconds: value.toInt()),
+                              );
+                              seekThrottle.end();
+                              if (wasPlaying.value) {
+                                await play();
+                              }
+                              wasPlaying.value = false;
+                              usePlayerUiStore().updateIsSeeking(false);
+                            },
+                    ),
                   ),
-                  trackHeight: 4,
-                  trackShape: const _CustomTrackShape(),
                 ),
-                child: Slider(
-                  value: positionValue,
-                  secondaryTrackValue: bufferValue,
-                  min: 0,
-                  max: max > 0 ? max : 1.0,
-                  onChanged: disabled
-                      ? null
-                      : (value) {
-                          showControl?.call();
-                          seekThrottle.seek(
-                            Duration(milliseconds: value.toInt()),
-                          );
-                        },
-                  onChangeStart: disabled
-                      ? null
-                      : (value) {
-                          wasPlaying.value =
-                              context.read<MediaPlayer>().isPlaying;
-                          usePlayerUiStore().updateIsSeeking(true);
-                          seekThrottle.begin();
-                          pause();
-                        },
-                  onChangeEnd: disabled
-                      ? null
-                      : (value) async {
-                          // 补发最终位置, 再恢复播放
-                          seekThrottle.seek(
-                            Duration(milliseconds: value.toInt()),
-                          );
-                          seekThrottle.end();
-                          if (wasPlaying.value) {
-                            await play();
-                          }
-                          wasPlaying.value = false;
-                          usePlayerUiStore().updateIsSeeking(false);
-                        },
+                Visibility(
+                  visible: !disabled,
+                  child: Text(
+                    formatDurationToMinutes(progress.duration),
+                    style: TextStyle(color: color, height: 2),
+                  ),
                 ),
-              ),
+              ],
             ),
-            Visibility(
-              visible: !disabled,
-              child: Text(
-                formatDurationToMinutes(progress.duration),
-                style: TextStyle(color: color, height: 2),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

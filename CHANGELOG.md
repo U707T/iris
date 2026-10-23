@@ -1,3 +1,23 @@
+## v2.6.0
+
+### Changelog
+
+* **Unified seek gestures.** The main player and short-video mode now share one gesture layer instead of two divergent implementations. Horizontal drag pauses playback, previews the target position live (120 ms throttled seek), lands exactly where you release and resumes if it was playing — identical in both modes.
+* **One threshold everywhere.** An 8 dp dead zone plus a 1.4x dominant-axis ratio decide whether a drag is seeking, volume/brightness or page-turning. Diagonal swipes no longer get captured by the wrong gesture, and short video no longer steals a horizontal step before scrolling to the next clip.
+* **Double-tap zones aligned.** Left / right third rewinds / forwards by the configured step (previously the main window used 25% and short video had no on-screen feedback), the middle third plays/pauses (desktop keeps fullscreen). Both modes now show the same centred `±Ns` chip.
+* **Live position readout while scrubbing.** The control bar slider, the minimal progress overlay and the short-video footer all read the same preview value, so the time and thumb follow your finger instead of lagging behind the player callback. Scrubbing shows `target / duration  ±delta` in the centre.
+* **Volume / brightness rebuilt.** Both now use base value + accumulated offset (200 px = full scale) instead of per-frame deltas, so they no longer drop the first part of the gesture or fall behind on fast swipes; brightness/volume indicators share the same centred chip as seek feedback.
+* **Controls no longer disappear mid-scrub.** Auto-hide is suspended while seeking (and re-armed afterwards instead of stopping for good).
+
+### 更新日志
+
+* **滑动快进统一。** 主窗口与短视频模式不再各写一套手势，改为共用同一份实现：横滑即暂停、本地预览实时跟手（120ms 节流 seek）、松手精确落点并在原本播放时续播 —— 两个模式行为完全一致。
+* **判定阈值统一。** 8dp 死区 + 1.4 倍主轴优势比决定这次滑动是调进度、调音量亮度还是翻页。斜滑不再被错误的功能抢走，短视频也不会先拖一下进度再翻页。
+* **双击分区统一。** 左 / 右 1/3 按设置的步长快退 / 快进（主窗口此前是 25%，短视频此前没有画面提示），中间 1/3 播放暂停（桌面端仍是切全屏）。两个模式都显示同样的居中 `±Ns` 提示。
+* **拖动时有实时读数。** 控制栏进度条、极简进度浮层、短视频底部时间读取同一个预览值，时间与滑块跟手而不是等播放器回调；拖动中画面中央显示「目标位置 / 总时长 ±增量」。
+* **音量 / 亮度重做。** 改为「基准值 + 累计位移」（200px 满量程），不再丢起手的第一段位移，快速滑动也不会跟不上手；指示器与快进提示共用同一套居中胶囊。
+* **拖动时控制栏不再中途消失。** seek 期间暂停自动隐藏，结束后重新计时（而不是就此停摆）。
+
 ## v2.5.2
 
 ### Changelog

@@ -4,24 +4,28 @@ import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/l10n/app_localizations.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
+import 'package:iris/pages/player/gesture/seek_hub.dart';
+import 'package:iris/pages/player/gesture/seek_hud.dart';
 import 'package:iris/pages/player/short_video/short_video_view.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:provider/provider.dart';
 
-/// 短视频模式双击快进 / 快退提示测试:
-/// - 双击右侧 25% -> 快进 seekStepSeconds 秒, 画面中央短暂显示 "+Ns"
-/// - 双击左侧 25% -> 快退 seekStepSeconds 秒, 显示 "-Ns"
-/// - 提示约 700ms 后自动消失
+/// 短视频模式的快进 / 快退（与主窗口统一后）：
+/// - 双击左 / 右 1/3 = 快退 / 快进（步长取设置），画面中央出现 `±Ns` 提示；
+/// - 双击中间 1/3 = 播放暂停，不产生 seek。
+///
+/// 提示层现在挂在 `Player` 上（两个模式共用），这里用 [SeekHudOverlay] 单独验证
+/// 渲染，拖动规则由 `seek_session_test.dart` 覆盖。
 
-/// 记录 forward / backward 的步长 (秒)
 final List<int> forwards = [];
 final List<int> backwards = [];
 
-MediaPlayer _fakePlayer() => MediaPlayer(
+MediaPlayer _fakePlayer({Duration position = const Duration(seconds: 10)}) =>
+    MediaPlayer(
       isInitializing: false,
       isPlaying: true,
-      position: const Duration(seconds: 10),
+      position: position,
       duration: const Duration(minutes: 5),
       buffer: Duration.zero,
       width: 0,
@@ -61,9 +65,17 @@ Future<void> _pumpView(WidgetTester tester) async {
         ],
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
-          body: Provider<MediaPlayer>.value(
-            value: _fakePlayer(),
-            child: const ShortVideoView(),
+          body: Stack(
+            children: [
+              Provider<MediaPlayer>.value(
+                value: _fakePlayer(),
+                child: const ShortVideoView(),
+              ),
+              // 与 Player 里一致：提示层挂在模式分支之外
+              Positioned.fill(
+                child: SeekHudOverlay(controller: seekHub.hud),
+              ),
+            ],
           ),
         ),
       ),
@@ -72,7 +84,7 @@ Future<void> _pumpView(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// 在指定位置双击 (两次点击间隔 < 双击窗口)
+/// 在指定位置双击（两次点击间隔 < 双击窗口）
 Future<void> _doubleTapAt(WidgetTester tester, Offset position) async {
   await tester.tapAt(position);
   await tester.pump(const Duration(milliseconds: 60));
@@ -80,13 +92,20 @@ Future<void> _doubleTapAt(WidgetTester tester, Offset position) async {
   await tester.pump(const Duration(milliseconds: 60));
 }
 
+Future<void> _teardown(WidgetTester tester) async {
+  await tester.pumpWidget(const SizedBox());
+  await tester.pump();
+  seekHub.reset();
+}
+
 void main() {
   setUp(() {
     forwards.clear();
     backwards.clear();
+    seekHub.reset();
   });
 
-  testWidgets('双击右侧: 快进并显示 "+Ns" 提示, 随后自动消失', (tester) async {
+  testWidgets('双击右侧 1/3: 快进并显示 "+Ns" 提示', (tester) async {
     await _setQueue(tester, 0);
     await _pumpView(tester);
 
@@ -98,13 +117,10 @@ void main() {
     expect(find.byIcon(Icons.fast_forward_rounded), findsOneWidget);
     expect(find.text('+${step}s'), findsOneWidget);
 
-    // 提示 700ms 后自动收起
-    await tester.pump(const Duration(milliseconds: 800));
-    await tester.pumpAndSettle();
-    expect(find.text('+${step}s'), findsNothing);
+    await _teardown(tester);
   });
 
-  testWidgets('双击左侧: 快退并显示 "-Ns" 提示', (tester) async {
+  testWidgets('双击左侧 1/3: 快退并显示 "-Ns" 提示', (tester) async {
     await _setQueue(tester, 0);
     await _pumpView(tester);
 
@@ -116,8 +132,19 @@ void main() {
     expect(find.byIcon(Icons.fast_rewind_rounded), findsOneWidget);
     expect(find.text('-${step}s'), findsOneWidget);
 
-    await tester.pump(const Duration(milliseconds: 800));
-    await tester.pumpAndSettle();
-    expect(find.text('-${step}s'), findsNothing);
+    await _teardown(tester);
+  });
+
+  testWidgets('双击中间 1/3: 只播放暂停, 不 seek', (tester) async {
+    await _setQueue(tester, 0);
+    await _pumpView(tester);
+
+    final size = tester.getSize(find.byType(ShortVideoView));
+    await _doubleTapAt(tester, Offset(size.width * 0.5, size.height * 0.4));
+
+    expect(forwards, isEmpty);
+    expect(backwards, isEmpty);
+
+    await _teardown(tester);
   });
 }

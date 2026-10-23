@@ -206,8 +206,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
 
     expect(seeks, isNotEmpty);
-    // 关键回归点: 拖动从"当前播放位置"(60s)开始, 而不是捕获实例里的过期位置
-    expect(seeks.first, const Duration(seconds: 60));
+    // 关键回归点: 拖动基准取"当前播放位置"(60s), 而不是捕获实例里的过期位置(30s)。
+    // 起手不发 seek（手指还没动没有目标），所以第一条 seek 是「基准 + 已滑位移」，
+    // 只要它落在 (60s, 90s] 区间就证明基准是 60s 而非 30s / 0s。
+    expect(seeks.first, greaterThan(const Duration(seconds: 60)));
     // 所有 seek 都落在 [当前, 当前+30s] 区间, 不会跳回 30s / 0
     expect(seeks.every((s) => s.inSeconds >= 60 && s.inSeconds <= 90), isTrue);
 

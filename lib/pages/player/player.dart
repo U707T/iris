@@ -15,6 +15,8 @@ import 'package:iris/pages/player/overlays/gesture_overlay.dart';
 import 'package:iris/pages/player/overlays/minimal_progress_overlay.dart';
 import 'package:iris/pages/player/overlays/playback_error_overlay.dart';
 import 'package:iris/pages/player/overlays/stats_overlay.dart';
+import 'package:iris/pages/player/gesture/seek_hub.dart';
+import 'package:iris/pages/player/gesture/seek_hud.dart';
 import 'package:iris/pages/player/short_video/short_video_view.dart';
 import 'package:iris/pages/player/video_view.dart';
 import 'package:iris/store/use_player_ui_store.dart';
@@ -92,6 +94,13 @@ class Player extends HookWidget {
       controlHideTimer.value = Timer(
         Duration(seconds: controlHideDelaySeconds),
         () {
+          // 拖动 seek 进行中不收起：否则拖到一半控制栏消失，松手才发现跑偏。
+          // 这里必须**重新计时**而不是直接 return —— 直接退出会让计时器彻底停摆，
+          // 松手后控制栏再也收不起来了。
+          if (usePlayerUiStore().state.isSeeking) {
+            startControlHideTimer();
+            return;
+          }
           if (usePlayerUiStore().state.isShowControl &&
               !usePlayerUiStore().state.isHovering) {
             usePlayerUiStore().updateIsShowControl(false);
@@ -106,6 +115,11 @@ class Player extends HookWidget {
       progressHideTimer.value = Timer(
         Duration(seconds: controlHideDelaySeconds),
         () {
+          // 拖动中同样不收起迷你进度（它正是拖动时唯一的读数来源）
+          if (usePlayerUiStore().state.isSeeking) {
+            startProgressHideTimer();
+            return;
+          }
           if (usePlayerUiStore().state.isShowProgress) {
             usePlayerUiStore().updateIsShowProgress(false);
           }
@@ -310,6 +324,11 @@ class Player extends HookWidget {
                   ),
                 ),
               ],
+              // 快进 / 快退提示 (双击步长 + 拖动读数): 两个模式共用同一份,
+              // 放在分支之外, 主窗口与短视频模式的视觉/文案完全一致。
+              Positioned.fill(
+                child: SeekHudOverlay(controller: seekHub.hud),
+              ),
               // 播放统计 OSD (短视频模式没有统计源, 不显示, 免得开出一个空面板)
               if (!isShortVideoMode &&
                   usePlayerUiStore()
