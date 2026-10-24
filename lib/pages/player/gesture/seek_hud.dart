@@ -8,7 +8,7 @@ enum SeekHudKind {
   /// 双击：一次固定步长的快进 / 快退（显示 `+5s`）
   step,
 
-  /// 拖动：手指指向的目标位置（显示 `01:23 → 03:45 / 10:00`）
+  /// 拖动：手指指向的目标位置（显示 `03:45 / 10:00  +23s`）
   scrub,
 }
 
@@ -57,16 +57,15 @@ class SeekHudState {
       other.duration == duration;
 
   @override
-  int get hashCode => Object.hash(kind, forward, seconds, position, target, duration);
+  int get hashCode =>
+      Object.hash(kind, forward, seconds, position, target, duration);
 }
 
 /// 快进 / 快退提示的状态机（主窗口与短视频模式共用同一份）。
 ///
-/// 以前只有短视频模式有「双击 +5s」的中央提示，主窗口只有底部一条细进度线；
-/// 而拖动时两边都没有「当前位置 → 目标位置」的读数，滑多少全靠猜。
-///
 /// - [showStep] 双击用，[stepHold] 后自动收起；
 /// - [showScrub] 拖动用，持续显示直到 [hideScrub]（松手时调用）；
+/// - 值没变化时**不通知**（慢速拖动时同一秒内的多帧合并成一次重建）；
 /// - 连续操作以最后一次为准（session 计数，旧定时器不会把新提示收掉）。
 class SeekHudController {
   SeekHudController({this.stepHold = const Duration(milliseconds: 700)});
@@ -100,13 +99,16 @@ class SeekHudController {
     required Duration duration,
   }) {
     if (_disposed) return;
-    _timer?.cancel();
-    _session++;
-    value.value = SeekHudState.scrub(
+    final next = SeekHudState.scrub(
       position: position,
       target: target,
       duration: duration,
     );
+    // 目标没变就不重建（拖动是每帧调用的，能省一次 HUD 重建）
+    if (value.value == next) return;
+    _timer?.cancel();
+    _session++;
+    value.value = next;
   }
 
   /// 松手：收起拖动读数
@@ -146,52 +148,73 @@ class SeekHudOverlay extends StatelessWidget {
     fontFeatures: [FontFeature.tabularFigures()],
   );
 
+  static const TextStyle _deltaStyle = TextStyle(
+    color: Colors.white70,
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    decoration: TextDecoration.none,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
+
+  /// 增量文本的固定宽度：`+9s` → `+10s` 不能让胶囊整体宽度跳一下
+  static const double _deltaWidth = 54;
+
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
       child: ValueListenableBuilder<SeekHudState?>(
         valueListenable: controller.value,
-        builder: (context, state, _) => AnimatedSwitcher(
-          duration: const Duration(milliseconds: 150),
-          child: state == null
-              ? const SizedBox.shrink(key: ValueKey('no-seek-hud'))
-              : Center(
-                  key: ValueKey(
-                    state.kind == SeekHudKind.step
-                        ? 'seek-hud-step-${state.forward}-${state.seconds}'
-                        : 'seek-hud-scrub-${state.target?.inMilliseconds}',
+        builder: (context, state, _) {
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 120),
+            // key 只按「种类」区分。拖动读数每帧都在变，若按值做 key，
+            // AnimatedSwitcher 会每帧交叉淡入淡出两个不同 widget —— 数字糊成一片，
+            // 这是拖动读数「抖 / 闪」的直接原因。
+            child: state == null
+                ? const SizedBox.shrink(key: ValueKey('seek-hud-none'))
+                : Center(
+                    key: ValueKey('seek-hud-${state.kind}'),
+                    child: _Chip(state: state),
                   ),
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 18, 12),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: state.kind == SeekHudKind.step
-                          ? _stepChildren(state)
-                          : _scrubChildren(state),
-                    ),
-                  ),
-                ),
-        ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Chip extends StatelessWidget {
+  const _Chip({required this.state});
+
+  final SeekHudState state;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 18, 12),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: state.kind == SeekHudKind.step
+            ? _stepChildren(state)
+            : _scrubChildren(state),
       ),
     );
   }
 
   List<Widget> _stepChildren(SeekHudState state) => [
         Icon(
-          state.forward
-              ? Icons.fast_forward_rounded
-              : Icons.fast_rewind_rounded,
+          state.forward ? Icons.fast_forward_rounded : Icons.fast_rewind_rounded,
           color: Colors.white,
           size: 24,
         ),
         const SizedBox(width: 10),
         Text(
           '${state.forward ? '+' : '-'}${state.seconds}s',
-          style: _textStyle,
+          style: SeekHudOverlay._textStyle,
         ),
       ];
 
@@ -209,15 +232,15 @@ class SeekHudOverlay extends StatelessWidget {
       const SizedBox(width: 10),
       Text(
         '${formatDurationToMinutes(target)} / ${formatDurationToMinutes(state.duration)}',
-        style: _textStyle,
+        style: SeekHudOverlay._textStyle,
       ),
-      const SizedBox(width: 10),
-      Text(
-        '${forward ? '+' : '-'}${_shortDelta(delta)}',
-        style: _textStyle.copyWith(
-          color: Colors.white70,
-          fontSize: 14,
-          fontWeight: FontWeight.w400,
+      const SizedBox(width: 8),
+      SizedBox(
+        width: SeekHudOverlay._deltaWidth,
+        child: Text(
+          '${forward ? '+' : '-'}${_shortDelta(delta)}',
+          style: SeekHudOverlay._deltaStyle,
+          textAlign: TextAlign.right,
         ),
       ),
     ];

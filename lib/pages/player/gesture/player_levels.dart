@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:iris/utils/logger.dart';
@@ -112,25 +114,70 @@ class PlayerLevels {
     }
   }
 
-  void _applyBrightness(double value) {
-    try {
-      ScreenBrightness.instance.setApplicationScreenBrightness(value);
-    } catch (e) {
-      logger('Error setting brightness: $e');
-    }
+  void _applyBrightness(double value) => _writeBrightness(value);
+
+  void _applyVolume(double value) => _writeVolume(value);
+
+  // ------------------------------------------------------------------ 写入合并
+  //
+  // 拖动是每帧回调（60~120 次/秒），而亮度 / 音量都是跨线程的平台调用。
+  // 逐帧发会出现两种问题：
+  // - 平台侧排队，声音 / 亮度比手指晚几百毫秒（"跟不上手"）；
+  // - 低端机上 method channel 被打满，反而掉帧。
+  //
+  // 这里做「串行 + 只保留最新值」：上一次还没返回就先记下来，返回后立刻补发最新的那个。
+  // 既不积压，也不丢落点。
+
+  double? _pendingBrightness;
+  bool _writingBrightness = false;
+  double? _pendingVolume;
+  bool _writingVolume = false;
+
+  void _writeBrightness(double value) {
+    _pendingBrightness = value;
+    if (_writingBrightness) return;
+    unawaited(_flushBrightness());
   }
 
-  void _applyVolume(double value) {
-    try {
-      FlutterVolumeController.setVolume(value);
-    } catch (e) {
-      logger('Error setting volume: $e');
+  Future<void> _flushBrightness() async {
+    _writingBrightness = true;
+    while (_pendingBrightness != null && _alive) {
+      final value = _pendingBrightness!;
+      _pendingBrightness = null;
+      try {
+        await ScreenBrightness.instance.setApplicationScreenBrightness(value);
+      } catch (e) {
+        logger('Error setting brightness: $e');
+      }
     }
+    _writingBrightness = false;
+  }
+
+  void _writeVolume(double value) {
+    _pendingVolume = value;
+    if (_writingVolume) return;
+    unawaited(_flushVolume());
+  }
+
+  Future<void> _flushVolume() async {
+    _writingVolume = true;
+    while (_pendingVolume != null && _alive) {
+      final value = _pendingVolume!;
+      _pendingVolume = null;
+      try {
+        await FlutterVolumeController.setVolume(value);
+      } catch (e) {
+        logger('Error setting volume: $e');
+      }
+    }
+    _writingVolume = false;
   }
 
   void dispose() {
     _alive = false;
     _active = false;
+    _pendingBrightness = null;
+    _pendingVolume = null;
     brightness.dispose();
     volume.dispose();
     // 退出播放页恢复系统亮度（沿用旧行为）

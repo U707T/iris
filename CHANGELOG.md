@@ -1,3 +1,23 @@
+## v2.6.1
+
+### Changelog
+
+* **Seeking no longer fights the decoder.** Dragging used to fire a real seek every 120 ms, so the picture kept jumping and stuttered on slow devices and network sources. Now a drag only moves the preview — zero decoding work — and the picture catches up once your finger rests for 350 ms; releasing lands exactly and resumes. Drag, short-video swipe and both progress bars share this one rule.
+* **No more flicker in the seek readout.** The centre chip was rebuilt with a per-frame key, so its contents cross-faded on every frame while dragging. It now only re-renders when the value actually changes, and the delta has a fixed width so the chip does not jitter between `+9s` and `+10s`.
+* **Cleaner release.** If the picture already caught up while your finger was resting, releasing no longer seeks a second time (that was the white flash on let-go), and the preview is only dropped after the player's position has actually moved.
+* **Double-tap is millisecond-accurate.** It used to go through the second-truncated `forward` / `backward` helpers, so a 5 s step could land 4.2 s away and the two modes read different player instances. Both now seek from the live position with full precision.
+* **Volume / brightness keep up.** Platform writes are coalesced (serial, latest value wins) instead of one call per frame, so the level no longer lags behind your finger or floods the platform channel on fast swipes.
+* **Tapping the short-video progress bar behaves like the main slider** — pause, land, resume — instead of seeking while playing.
+
+### 更新日志
+
+* **拖动不再和解码器抢资源。** 以前每 120ms 就发一次真实 seek，画面反复跳变，低端机和网络源上直接卡成幻灯片。现在拖动只移动预览值（零解码开销），手指**停住 350ms** 画面才跟上；松手精确落定并续播。画面横滑、短视频横滑、两条进度条共用这一套规则。
+* **拖动读数不再闪。** 中央胶囊以前每帧都换 key，导致内容每帧交叉淡入淡出；现在只在数值真正变化时重建，增量也改成固定宽度，`+9s` 到 `+10s` 不会再让胶囊跳一下。
+* **松手更干净。** 手指停住时画面已经跳到目标的话，松手不再重复 seek 一次（那一下白闪就是它），预览也改成等播放器位置真的移动之后再收起。
+* **双击改成毫秒精度。** 以前走 `forward` / `backward` 的秒级截断，跳 5 秒实际可能只跳 4.2 秒，两个模式读的还是不同实例；现在都从实时位置按毫秒精度落点。
+* **音量 / 亮度跟得上手。** 平台写入改为「串行 + 只保留最新值」，不再每帧一次调用，快速滑动时既不会落后于手指，也不会把平台通道打满。
+* **短视频进度条点击**改成与主窗口滑块一致（暂停 → 落点 → 续播），不再「播放中跳一下继续播」。
+
 ## v2.6.0
 
 ### Changelog

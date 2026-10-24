@@ -2,9 +2,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/gesture/seek_hub.dart';
+import 'package:iris/pages/player/gesture/seek_session.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/format_duration_to_minutes.dart';
-import 'package:iris/utils/throttled_seek.dart';
 import 'package:provider/provider.dart';
 
 class ControlBarSlider extends HookWidget {
@@ -21,11 +21,6 @@ class ControlBarSlider extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 拖动开始时是否正在播放 (决定松手后要不要恢复) ——
-    // 不能用全局 autoPlay 判断: 被系统/媒体键暂停时 autoPlay 仍是 true,
-    // 拖一下进度条会莫名其妙开始播放。
-    final wasPlaying = useRef(false);
-
     final progress = context.select<
         MediaPlayer,
         ({
@@ -40,26 +35,24 @@ class ControlBarSlider extends HookWidget {
       ),
     );
 
-    final play = context.read<MediaPlayer>().play;
-    final pause = context.read<MediaPlayer>().pause;
-    final seek = context.read<MediaPlayer>().seek;
-
-    // MediaPlayer 是每次进度变化都会重建的快照, 直接把它塞进
-    // useMemoized(const []) 会一直用挂载时的旧闭包。这里只保留一个
-    // 指向最新 seek 的 ref, 节流器本身仍然只创建一次。
-    final seekRef = useRef(seek);
-    seekRef.value = seek;
-    final seekThrottle = useMemoized(
-      () => ThrottledSeek(seekTo: (target) => seekRef.value(target)),
+    // 拖动进度条走的是与画面横滑**同一份**会话：
+    // 暂停 -> 只更新预览 -> 停住才让画面跟上 -> 松手精确落定并续播。
+    // 旧实现自己维护 ThrottledSeek + wasPlaying，行为和手势那边对不上。
+    final session = useMemoized(
+      () => SeekSession(
+        readPlayer: () => context.read<MediaPlayer>(),
+        preview: seekHub.preview,
+      ),
       const [],
     );
+    useEffect(() {
+      return session.dispose;
+    }, [session]);
 
     final double max = progress.duration.inMilliseconds.toDouble();
     final double bufferValue =
         progress.buffer.inMilliseconds.toDouble().clamp(0.0, max);
 
-    // 画面横滑拖动时显示共享预览值：滑块与时间立刻跟手，
-    // 不用等播放器回调（旧实现拖动期间位置总是慢半拍）。
     return ValueListenableBuilder<Duration?>(
       valueListenable: seekHub.preview,
       builder: (context, preview, _) {
@@ -119,31 +112,28 @@ class ControlBarSlider extends HookWidget {
                           ? null
                           : (value) {
                               showControl?.call();
-                              seekThrottle.seek(
+                              session.seekTo(
                                 Duration(milliseconds: value.toInt()),
                               );
                             },
                       onChangeStart: disabled
                           ? null
                           : (value) {
-                              wasPlaying.value =
-                                  context.read<MediaPlayer>().isPlaying;
                               usePlayerUiStore().updateIsSeeking(true);
-                              seekThrottle.begin();
-                              pause();
+                              session.start(
+                                Duration(milliseconds: value.toInt()),
+                              );
+                              session.seekTo(
+                                Duration(milliseconds: value.toInt()),
+                              );
                             },
                       onChangeEnd: disabled
                           ? null
-                          : (value) async {
-                              // 补发最终位置, 再恢复播放
-                              seekThrottle.seek(
+                          : (value) {
+                              session.seekTo(
                                 Duration(milliseconds: value.toInt()),
                               );
-                              seekThrottle.end();
-                              if (wasPlaying.value) {
-                                await play();
-                              }
-                              wasPlaying.value = false;
+                              session.end();
                               usePlayerUiStore().updateIsSeeking(false);
                             },
                     ),

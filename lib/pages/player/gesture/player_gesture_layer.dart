@@ -241,14 +241,27 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 
     // 左 / 右 1/3 快退 / 快进，中间 1/3 播放暂停（两个模式同一套分区）
     if (dx < width / 3) {
-      widget.readPlayer().backward(step);
-      seekHub.hud.showStep(forward: false, seconds: step);
+      _stepSeek(-step);
     } else if (dx > width * 2 / 3) {
-      widget.readPlayer().forward(step);
-      seekHub.hud.showStep(forward: true, seconds: step);
+      _stepSeek(step);
     } else {
       widget.onDoubleTapMiddle();
     }
+  }
+
+  /// 双击步进：用毫秒精度的 position 直接 seek。
+  ///
+  /// 不再走 `MediaPlayer.forward/backward` —— 那两个是 `position.inSeconds`
+  /// （秒级截断）再加减，双击 5 秒实际可能只跳 4.2 秒，且两个模式读的是
+  /// 不同实例。这里统一读实时实例 + 毫秒精度 + 同一套夹取。
+  void _stepSeek(int seconds) {
+    final player = widget.readPlayer();
+    final target = clampSeekTarget(
+      player.position + Duration(seconds: seconds),
+      player.duration,
+    );
+    unawaited(player.seek(target).catchError((_) {}));
+    seekHub.hud.showStep(forward: seconds > 0, seconds: seconds.abs());
   }
 
   // ------------------------------------------------------------------ 指针

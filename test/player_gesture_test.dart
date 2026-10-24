@@ -101,7 +101,9 @@ void main() {
     await _pump(tester, step: 7);
     await _doubleTapAt(tester, const Offset(560, 400));
 
-    expect(forwards, [7]);
+    // 双击步进现在走毫秒精度的 seek（不再用 forward/backward 的秒级截断）
+    expect(seeks, [const Duration(seconds: 37)]);
+    expect(forwards, isEmpty);
     expect(backwards, isEmpty);
     expect(find.text('+7s'), findsOneWidget);
 
@@ -115,7 +117,9 @@ void main() {
     await _pump(tester, step: 7);
     await _doubleTapAt(tester, const Offset(40, 400));
 
-    expect(backwards, [7]);
+    expect(seeks, [const Duration(seconds: 23)]);
+    expect(forwards, isEmpty);
+    expect(backwards, isEmpty);
     expect(find.text('-7s'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 800));
@@ -128,6 +132,7 @@ void main() {
     await _doubleTapAt(tester, const Offset(300, 400));
 
     expect(middleTaps, 1);
+    expect(seeks, isEmpty);
     expect(forwards, isEmpty);
     expect(backwards, isEmpty);
 

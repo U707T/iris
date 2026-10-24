@@ -18,8 +18,7 @@ import 'package:provider/provider.dart';
 /// 提示层现在挂在 `Player` 上（两个模式共用），这里用 [SeekHudOverlay] 单独验证
 /// 渲染，拖动规则由 `seek_session_test.dart` 覆盖。
 
-final List<int> forwards = [];
-final List<int> backwards = [];
+final List<Duration> seeks = [];
 
 MediaPlayer _fakePlayer({Duration position = const Duration(seconds: 10)}) =>
     MediaPlayer(
@@ -33,11 +32,11 @@ MediaPlayer _fakePlayer({Duration position = const Duration(seconds: 10)}) =>
       saveProgress: () async {},
       play: () async {},
       pause: () async {},
-      backward: (seconds) async => backwards.add(seconds),
-      forward: (seconds) async => forwards.add(seconds),
+      backward: (_) async {},
+      forward: (_) async {},
       stepBackward: () async {},
       stepForward: () async {},
-      seek: (_) async {},
+      seek: (target) async => seeks.add(target),
     );
 
 List<PlayQueueItem> _queue() => [
@@ -100,8 +99,7 @@ Future<void> _teardown(WidgetTester tester) async {
 
 void main() {
   setUp(() {
-    forwards.clear();
-    backwards.clear();
+    seeks.clear();
     seekHub.reset();
   });
 
@@ -113,7 +111,11 @@ void main() {
     await _doubleTapAt(tester, Offset(size.width * 0.85, size.height * 0.4));
 
     final step = useAppStore().state.seekStepSeconds;
-    expect(forwards, [step], reason: '双击右侧应快进一步');
+    expect(
+      seeks,
+      [const Duration(seconds: 10) + Duration(seconds: step)],
+      reason: '双击右侧应从当前位置快进一步',
+    );
     expect(find.byIcon(Icons.fast_forward_rounded), findsOneWidget);
     expect(find.text('+${step}s'), findsOneWidget);
 
@@ -128,7 +130,11 @@ void main() {
     await _doubleTapAt(tester, Offset(size.width * 0.15, size.height * 0.4));
 
     final step = useAppStore().state.seekStepSeconds;
-    expect(backwards, [step], reason: '双击左侧应快退一步');
+    expect(
+      seeks,
+      [const Duration(seconds: 10) - Duration(seconds: step)],
+      reason: '双击左侧应从当前位置快退一步',
+    );
     expect(find.byIcon(Icons.fast_rewind_rounded), findsOneWidget);
     expect(find.text('-${step}s'), findsOneWidget);
 
@@ -142,8 +148,7 @@ void main() {
     final size = tester.getSize(find.byType(ShortVideoView));
     await _doubleTapAt(tester, Offset(size.width * 0.5, size.height * 0.4));
 
-    expect(forwards, isEmpty);
-    expect(backwards, isEmpty);
+    expect(seeks, isEmpty);
 
     await _teardown(tester);
   });

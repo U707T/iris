@@ -324,8 +324,14 @@ class ShortVideoView extends HookWidget {
                     },
                     onScrubSeek: scrub.seekTo,
                     onScrubEnd: scrub.end,
-                    onTapSeek: (target) =>
-                        context.read<MediaPlayer>().seek(target),
+                    // 点进度条跳转也走同一套会话（暂停 -> 落定 -> 续播），
+                    // 与主窗口 Slider 的点击行为一致；旧实现是直接 seek，
+                    // 播放中会「跳一下继续播」，两个模式手感不同。
+                    onTapSeek: (target) {
+                      scrub.start(context.read<MediaPlayer>().position);
+                      scrub.seekTo(target);
+                      scrub.end();
+                    },
                   ),
                 ),
               ),
