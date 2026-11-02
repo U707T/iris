@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/gesture/player_drag_recognizer.dart';
 import 'package:iris/pages/player/gesture/player_levels.dart';
+import 'package:iris/pages/player/gesture/player_tap_recognizer.dart';
 import 'package:iris/pages/player/gesture/seek_gesture.dart';
 import 'package:iris/pages/player/gesture/seek_hub.dart';
 import 'package:iris/pages/player/gesture/seek_session.dart';
@@ -42,6 +43,7 @@ class PlayerGestureLayer extends StatefulWidget {
     required this.onLongPressEnd,
     this.levels,
     this.allowVertical = true,
+    this.deferSingleTap,
     this.onScrubActiveChanged,
     this.onHover,
     this.onWindowDrag,
@@ -63,6 +65,12 @@ class PlayerGestureLayer extends StatefulWidget {
 
   /// 双击中间 1/3
   final VoidCallback onDoubleTapMiddle;
+
+  /// 这次单击是否要推迟到双击窗口结束再确认（见识别器说明）。
+  ///
+  /// 主窗口只在「收起控制栏」时推迟（唤起必须秒开）；短视频的
+  /// 「播放 / 暂停」一直推迟（否则双击中间 1/3 会先暂停一下）。
+  final bool Function()? deferSingleTap;
 
   /// 长按开始（倍速）
   final VoidCallback onLongPressStart;
@@ -101,8 +109,7 @@ class PlayerGestureLayer extends StatefulWidget {
 class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   late final PlayerDragDelegate _delegate;
   late final PlayerDragGestureRecognizer _drag;
-  late final TapGestureRecognizer _tap;
-  late final DoubleTapGestureRecognizer _doubleTap;
+  late final PlayerTapGestureRecognizer _tap;
   late final LongPressGestureRecognizer _longPress;
   late final SeekSession _seek;
 
@@ -131,8 +138,8 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 
     _drag = PlayerDragGestureRecognizer(delegate: _delegate);
 
-    _tap = TapGestureRecognizer();
-    _doubleTap = DoubleTapGestureRecognizer();
+    _tap = PlayerTapGestureRecognizer();
+    _tap.deferSingleTap = () => widget.deferSingleTap?.call() ?? false;
     _longPress = LongPressGestureRecognizer();
     _wireCallbacks();
   }
@@ -146,12 +153,8 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 
   void _wireCallbacks() {
     _tap
-      ..onTapDown = (details) {
-        if (details.kind != null) _lastKind = details.kind!;
-      }
-      ..onTap = widget.onTap;
-
-    _doubleTap.onDoubleTapDown = _handleDoubleTapDown;
+      ..onTap = widget.onTap
+      ..onDoubleTap = _handleDoubleTap;
 
     _longPress
       ..onLongPressStart = (_) {
@@ -174,7 +177,6 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
     _seek.dispose();
     _drag.dispose();
     _tap.dispose();
-    _doubleTap.dispose();
     _longPress.dispose();
     super.dispose();
   }
@@ -234,10 +236,10 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 
   // ------------------------------------------------------------------ 双击
 
-  void _handleDoubleTapDown(TapDownDetails details) {
+  void _handleDoubleTap(Offset globalPosition) {
     final step = widget.seekStepSeconds();
     final width = MediaQuery.sizeOf(context).width;
-    final dx = details.globalPosition.dx;
+    final dx = globalPosition.dx;
 
     // 左 / 右 1/3 快退 / 快进，中间 1/3 播放暂停（两个模式同一套分区）
     if (dx < width / 3) {
@@ -267,6 +269,7 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
   // ------------------------------------------------------------------ 指针
 
   void _handlePointerDown(PointerDownEvent event) {
+    _lastKind = event.kind;
     if (widget.readZoom == null) return;
     _pointers[event.pointer] = event.position;
     if (_pointers.length < 2) return;
@@ -342,14 +345,9 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
             () => _drag,
             (_) {},
           ),
-          TapGestureRecognizer:
-              GestureRecognizerFactoryWithHandlers<TapGestureRecognizer>(
+          PlayerTapGestureRecognizer:
+              GestureRecognizerFactoryWithHandlers<PlayerTapGestureRecognizer>(
             () => _tap,
-            (_) {},
-          ),
-          DoubleTapGestureRecognizer:
-              GestureRecognizerFactoryWithHandlers<DoubleTapGestureRecognizer>(
-            () => _doubleTap,
             (_) {},
           ),
           LongPressGestureRecognizer:

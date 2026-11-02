@@ -107,6 +107,10 @@ class GestureOverlay extends HookWidget {
       readPlayer: () => context.read<MediaPlayer>(),
       seekStepSeconds: () => useAppStore().state.seekStepSeconds,
       levels: levels,
+      // 单击在这里只有两种结果: 唤出 / 收起控制栏。
+      // 唤出必须秒开（否则「点一下画面」要等 300ms 双击窗口），
+      // 收起可以等窗口结束再确认 —— 这样双击快进不会顺手把控制栏收掉。
+      deferSingleTap: () => usePlayerUiStore().state.isShowControl,
       onHover: (event) {
         if (event.kind != PointerDeviceKind.touch) showControl();
       },

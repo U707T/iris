@@ -10,6 +10,7 @@ import 'package:iris/info.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/audio.dart';
+import 'package:iris/pages/player/overlays/controls_auto_hide.dart';
 import 'package:iris/pages/player/overlays/controls_overlay.dart';
 import 'package:iris/pages/player/overlays/gesture_overlay.dart';
 import 'package:iris/pages/player/overlays/minimal_progress_overlay.dart';
@@ -44,9 +45,6 @@ class Player extends HookWidget {
 
     final cover = useCover();
 
-    final controlHideTimer = useRef<Timer?>(null);
-    final progressHideTimer = useRef<Timer?>(null);
-
     final fit = useAppStore().select(context, (state) => state.fit);
     final bool autoHideControls =
         useAppStore().select(context, (state) => state.autoHideControls);
@@ -54,8 +52,20 @@ class Player extends HookWidget {
         useAppStore().select(context, (state) => state.controlHideDelaySeconds);
     final isShortVideoMode =
         usePlayerUiStore().select(context, (state) => state.isShortVideoMode);
+    final isSeeking =
+        usePlayerUiStore().select(context, (state) => state.isSeeking);
+    final isHovering =
+        usePlayerUiStore().select(context, (state) => state.isHovering);
+    final isPlaying =
+        context.select<MediaPlayer, bool>((player) => player.isPlaying);
     final playbackError =
         context.select<MediaPlayer, String?>((player) => player.error);
+
+    // 弹层 / 菜单 / 对话框盖在播放器上时, 本页不再是 current route。
+    // 用它统一判断「现在有东西压在控制栏上面」: 一处覆盖所有入口
+    // (弹出菜单 / 播放队列 / 设置 / 关于 / 快捷键 / 音量 popover ...),
+    // 不再靠每个按钮自己记得先置 isHovering。
+    final bool isRouteCurrent = ModalRoute.of(context)?.isCurrent ?? true;
 
     final playQueue =
         usePlayQueueStore().select(context, (state) => state.playQueue);
@@ -87,89 +97,94 @@ class Player extends HookWidget {
       return;
     }, []);
 
-    void startControlHideTimer() {
-      controlHideTimer.value?.cancel();
-      // 设置里关掉自动隐藏后, 控制栏只在点击画面时手动收/放
-      if (!autoHideControls) return;
-      controlHideTimer.value = Timer(
-        Duration(seconds: controlHideDelaySeconds),
-        () {
-          // 拖动 seek 进行中不收起：否则拖到一半控制栏消失，松手才发现跑偏。
-          // 这里必须**重新计时**而不是直接 return —— 直接退出会让计时器彻底停摆，
-          // 松手后控制栏再也收不起来了。
-          if (usePlayerUiStore().state.isSeeking) {
-            startControlHideTimer();
-            return;
-          }
-          if (usePlayerUiStore().state.isShowControl &&
-              !usePlayerUiStore().state.isHovering) {
-            usePlayerUiStore().updateIsShowControl(false);
-          }
-        },
-      );
-    }
+    // 控制栏 / 迷你进度的显隐调度: 规则见 controls_auto_hide.dart
+    final controlsAutoHide = useMemoized(
+      () => ControlsAutoHide(
+        readControls: () => usePlayerUiStore().state.isShowControl,
+        writeControls: usePlayerUiStore().updateIsShowControl,
+        readMinimal: () => usePlayerUiStore().state.isShowProgress,
+        writeMinimal: usePlayerUiStore().updateIsShowProgress,
+      ),
+      const [],
+    );
 
-    void startProgressHideTimer() {
-      progressHideTimer.value?.cancel();
-      if (!autoHideControls) return;
-      progressHideTimer.value = Timer(
-        Duration(seconds: controlHideDelaySeconds),
-        () {
-          // 拖动中同样不收起迷你进度（它正是拖动时唯一的读数来源）
-          if (usePlayerUiStore().state.isSeeking) {
-            startProgressHideTimer();
-            return;
-          }
-          if (usePlayerUiStore().state.isShowProgress) {
-            usePlayerUiStore().updateIsShowProgress(false);
-          }
-        },
-      );
-    }
+    // 音频没有画面可看, 控制栏一直留着; 出错时把控制栏留给用户去重试。
+    // 两者都按「不在播放」处理, 于是不会进入倒计时 —— 界面与 store 状态一致。
+    final bool autoHideEligible =
+        isPlaying && file?.type == ContentType.video && playbackError == null;
 
-    void resetControlHideTimer() {
-      controlHideTimer.value?.cancel();
-      startControlHideTimer();
-    }
+    useEffect(() {
+      controlsAutoHide
+        ..delay = Duration(seconds: controlHideDelaySeconds)
+        ..enabled = autoHideControls
+        ..playing = autoHideEligible
+        ..seeking = isSeeking
+        ..hovering = isHovering
+        ..overlayOpen = !isRouteCurrent
+        ..active = !isShortVideoMode
+        ..sync();
+      return;
+    }, [
+      controlsAutoHide,
+      autoHideControls,
+      controlHideDelaySeconds,
+      autoHideEligible,
+      isSeeking,
+      isHovering,
+      isRouteCurrent,
+      isShortVideoMode,
+    ]);
 
-    void resetBottomProgressTimer() {
-      progressHideTimer.value?.cancel();
-      startProgressHideTimer();
-    }
+    useEffect(() {
+      return controlsAutoHide.dispose;
+    }, [controlsAutoHide]);
 
-    void showControl() {
-      usePlayerUiStore().updateIsShowControl(true);
-      // 不要在这里重置 isHovering: 悬停回调会先置 true 再调 showControl,
-      // 重置会把"指针停在控制栏上"的状态抹掉, 5 秒后控制栏照样消失。
-      resetControlHideTimer();
-    }
+    void showControl() => controlsAutoHide.show();
 
-    void hideControl() {
-      usePlayerUiStore().updateIsShowControl(false);
-      usePlayerUiStore().updateIsHovering(false);
-      controlHideTimer.value?.cancel();
-    }
+    void hideControl() => controlsAutoHide.hide();
 
+    /// 唤出并重新计时, 但**不**改变悬停状态: 悬停回调会先置 isHovering,
+    /// 这里再把它抹掉的话, 指针停在控制栏上也会被计时器收走。
     Future<void> showControlForHover(Future<void> callback) async {
       try {
         await context.read<MediaPlayer>().saveProgress();
         showControl();
-        usePlayerUiStore().updateIsHovering(true);
         await callback;
       } catch (e) {
         logger(e.toString());
       } finally {
-        // 弹层关闭 / 抛异常都要收尾, 否则 isHovering 会永久停在 true,
-        // 自动隐藏计时器再也不会把控制栏收起来。
-        usePlayerUiStore().updateIsHovering(false);
+        // 弹层关闭 / 抛异常都要重新计时 (overlayOpen 由路由状态自己维护)
         showControl();
       }
     }
 
-    void showProgress() {
-      usePlayerUiStore().updateIsShowProgress(true);
-      resetBottomProgressTimer();
-    }
+    void showProgress() => controlsAutoHide.showMinimal();
+
+    // 播放 -> 暂停 / 播完: 把控制栏放回来 (YouTube / VLC / mpv 一致)。
+    // 暂停后画面静止, 用户下一步大概率要看进度或调音量, 让人先点一下画面
+    // 才能看到控制栏是没必要的一步。
+    //
+    // 注意排除「拖动 seek 造成的临时暂停」: `SeekSession.start` 会先 pause 再续播,
+    // 那不是用户按了暂停 —— 横滑时该出现的只有底部的瞬时进度读数, 不是整套控制栏。
+    // 判定用 isSeeking + 共享预览值: 两者都在拖动开始时同步置位, 早于播放器
+    // 暂停事件（异步流）到达, 所以不会被误判。
+    final wasPlaying = useRef(isPlaying);
+    useEffect(() {
+      final pausedBySeek = isSeeking || seekHub.preview.value != null;
+      if (wasPlaying.value && !isPlaying && !isShortVideoMode && !pausedBySeek) {
+        showControl();
+      }
+      wasPlaying.value = isPlaying;
+      return;
+    }, [isPlaying, isShortVideoMode, isSeeking]);
+
+    // 换片时把控制栏叫回来 (主流播放器一致): 刚打开的媒体应该能马上看到进度与标题,
+    // 而不是沿用上一条留下的「已收起」状态。
+    useEffect(() {
+      if (file == null) return;
+      showControl();
+      return;
+    }, [file?.uri]);
 
     // Android 返回手势 / 返回键:
     // 1. 短视频模式中 -> 先退出短视频模式
@@ -193,8 +208,8 @@ class Player extends HookWidget {
       }
 
       if (uiState.isShowControl || uiState.isShowProgress) {
+        // hide 会把迷你进度一起收掉
         hideControl();
-        usePlayerUiStore().updateIsShowProgress(false);
         return;
       }
 
@@ -221,15 +236,6 @@ class Player extends HookWidget {
       showControlForHover: showControlForHover,
       showProgress: showProgress,
     );
-
-    useEffect(() {
-      startControlHideTimer();
-      return () => controlHideTimer.value?.cancel();
-    }, [autoHideControls, controlHideDelaySeconds]);
-
-    useEffect(() {
-      return () => progressHideTimer.value?.cancel();
-    }, []);
 
     useEffect(() {
       if (isDesktop) {
@@ -367,8 +373,6 @@ class Player extends HookWidget {
                     title: title,
                     showControl: showControl,
                     showControlForHover: showControlForHover,
-                    hideControl: hideControl,
-                    showProgress: showProgress,
                   ),
                 ),
               // 播放失败提示 (装载超时 / 解码失败 / 网络错误)

@@ -238,6 +238,9 @@ class ShortVideoView extends HookWidget {
           seekStepSeconds: () => useAppStore().state.seekStepSeconds,
           // 纵向留给 PageView 翻页；横滑 = 进度（与主窗口同一套阈值）
           allowVertical: false,
+          // 短视频的单击是「播放 / 暂停」, 有副作用: 推迟到双击窗口结束,
+          // 否则双击中间 1/3 会先暂停再播放 (能听见一次多余的停顿)
+          deferSingleTap: () => true,
           onTap: () => toggleShortVideoPlay(context),
           // 双击中间 1/3 = 播放暂停（与主窗口一致）
           onDoubleTapMiddle: () => toggleShortVideoPlay(context),

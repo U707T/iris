@@ -1,4 +1,27 @@
-## v2.6.1
+## v2.6.2
+
+### Changelog
+
+* **Controls stay when paused.** Auto-hide used to keep its 5 s countdown running while playback was paused — you'd pause to look at a frame, look back, and the title bar and control bar were gone. Countdowns now only run while playing, and pausing (or reaching the end of a file) brings the bars back. Matches YouTube / VLC / mpv / PotPlayer / IINA
+* **One rule set instead of two timers.** The countdown used to be two ad-hoc `Timer`s in `Player` plus four booleans, with twenty-odd call sites each resetting them by hand. It is now one scheduler (`controls_auto_hide.dart`) with explicit inputs: playing, hovering, seeking, overlay open, setting on/off. The "re-armed by hand" paths are gone, so the states can no longer drift apart
+* **Hidden controls are really hidden.** The control bar slid out by a hard-coded `-128` px while the compact two-row layout is 140 px tall, leaving a 12 px strip of buttons on screen — clickable, and it swallowed taps meant to bring the bars back. The bars now slide out by their own height and stop taking pointer input while hidden
+* **Tap responds immediately.** With `TapGestureRecognizer` + `DoubleTapGestureRecognizer` in the same arena, a single tap had to wait out the 300 ms double-tap window before it did anything (measured). Single taps now fire on pointer-up; the double-tap action is layered on top of the first tap, which is what YouTube / PotPlayer / mpv do. Short-video keeps the deferred tap (its single tap pauses playback, so an early pause would be audible)
+* **Menus no longer outlive the controls.** Opening the rate menu, play queue, settings, volume popover and friends used to let the control bar slide away underneath its own popup. Whether an overlay is up is now derived from the route stack, so every entry point is covered instead of the few that remembered to hold a flag
+* **Drag-seeking no longer pops the whole control bar.** Pause-to-keep was a little too eager on the first pass: a horizontal scrub temporarily pauses playback, so the bars would spring up in the middle of the gesture. Only the bottom readout shows while scrubbing now
+* **A deliberately slower tap still counts.** The tap recognizer briefly ignored presses held longer than 300 ms; long-press (speed boost) only steps in at 500 ms, so that window did nothing at all. Removed
+* **The mini progress readout fades on its own.** With "auto-hide controls" switched off, the thin progress readout that appears while seeking with the keyboard stayed on screen forever (its timer was gated on the same setting). It is a transient readout now: always dismissed, while the full bars keep respecting the setting
+
+### 更新日志
+
+* **暂停不再收起控制栏。** 以前暂停之后 5 秒计时照样走：暂停下来看清一帧，回头标题栏和控制栏已经没了。现在只在播放中倒计时；暂停、播到结尾、播放出错都会把控制栏放回来 —— 与 YouTube / VLC / mpv / PotPlayer / IINA 一致
+* **一套规则代替两套计时器。** 以前是 `Player` 里两个临时 `Timer` 加四个布尔量，二十多个调用点各自手动重置。现在收敛成一个调度器（`controls_auto_hide.dart`），输入只有播放中 / 悬停 / 拖动 / 有弹层 / 设置开关，不再有「各处补一次重置」的分叉
+* **收起就是真的收起。** 控制栏以前按写死的 `-128px` 滑出，而窄屏两行布局实测 140px 高 —— 屏幕底部会留一条 12px 的按钮条，能点到，还会吃掉「点击唤出控制栏」的那一次点击。现在按自身高度滑出，并在收起时不参与命中测试
+* **点击立刻响应。** `TapGestureRecognizer` 与 `DoubleTapGestureRecognizer` 放在同一个竞技场里时，单击要等 300ms 双击窗口结束才生效（实测）。现在单击在抬手时立即触发，双击叠加在第一下之后 —— YouTube / PotPlayer / mpv 就是这个做法。短视频保留延迟单击（它的单击是播放/暂停，提前执行会听见一次多余停顿）
+* **弹层开着时控制栏不再自己收掉。** 以前打开倍速菜单、播放队列、设置、音量面板时，控制栏会在这层弹层底下滑走。现在「有没有弹层」直接读路由栈，所有入口一次覆盖，不再依赖某个按钮记着去挂标志
+* **拖动 seek 不再弹整套控制栏。** 第一版的「暂停即常驻」对拖动略显积极：横滑会临时暂停播放，控制栏会在手势中途弹出来。现在拖动中只有底部的瞬时读数
+* **点得慢一点也算单击。** 单击识别器一度忽略按住超过 300ms 的点击，而长按（倍速）要 500ms 才介入 —— 中间这段等于什么都没发生。已移除该上限
+* **迷你进度不再常驻。** 关掉「自动隐藏控制栏」后，键盘快进唤出的细进度条以前会一直留在屏幕上（它的计时器跟这个开关绑在一起）。现在它是瞬时读数：一定会自己消失，而完整控制栏仍然尊重设置
+
 
 ### Changelog
 

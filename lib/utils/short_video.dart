@@ -59,6 +59,9 @@ void exitShortVideoMode() {
   uiStore.updateShortVideoMode(false);
   uiStore.updateIsSeeking(false);
   uiStore.updateIsShowProgress(false);
+  // 回到普通模式时控制栏可见 (并重新开始自动隐藏计时):
+  // 与进入时相反 —— 进入短视频不需要控制栏, 退出时用户需要看到进度与标题。
+  uiStore.updateIsShowControl(true);
 }
 
 /// 在短视频模式内切换到上一条 / 下一条视频 (跳过音频)
