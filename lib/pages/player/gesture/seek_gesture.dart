@@ -30,7 +30,8 @@ const Duration kSeekSpanPerScreen = Duration(minutes: 6);
 
 /// 屏幕宽度未知时的兜底灵敏度：1 逻辑像素（dp）= 1 秒。
 ///
-/// 等于「393dp 手机 × 6 分钟/屏」的换算值，只在拿不到宽度时使用（单测 / 首帧）。
+/// 393dp 手机按「6 分钟/屏」换算是 916 ms/px，这里取整成 1000（手机量级、好记）；
+/// 只在拿不到宽度时使用（单测 / 首帧），正常手势路径一定走 [seekMsPerPixel]。
 const double kSeekFallbackMsPerPixel = 1000.0;
 
 /// 手势进入死区（dp）：位移没超过它时不做方向判定。
