@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/gesture/player_gesture_layer.dart';
+import 'package:iris/pages/player/gesture/seek_gesture.dart';
 import 'package:iris/pages/player/gesture/seek_hub.dart';
 import 'package:iris/pages/player/gesture/seek_hud.dart';
 import 'package:provider/provider.dart';
@@ -44,6 +45,11 @@ Future<void> _pump(
 }) async {
   await tester.binding.setSurfaceSize(const Size(600, 800));
   addTearDown(() => tester.binding.setSurfaceSize(null));
+  // setSurfaceSize 只改渲染表面，不改 MediaQuery：手势层读的是 MediaQuery 宽度，
+  // 这里把 view 一起钉成 600×800（DPR 1），测试里的换算才是确定的。
+  tester.view.physicalSize = const Size(600, 800);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
 
   final player = _player();
   await tester.pumpWidget(
@@ -142,7 +148,20 @@ void main() {
   testWidgets('横滑: 暂停 -> 预览跟手 -> 松手补发并续播', (tester) async {
     await _pump(tester);
 
-    // 从中心右滑 60px = +20 秒（3px/秒）
+    // 幅度按「一屏宽 = 6 分钟」（长片封顶，与 panelFM 实机一致）换算：
+    // 宽度取手势层实际看到的 MediaQuery 宽度，避免写死测试画布尺寸。
+    final screenWidth = MediaQuery.sizeOf(
+      tester.element(find.byType(PlayerGestureLayer)),
+    ).width;
+    const dragDx = 60.0;
+    final expectedDelta = seekDeltaFor(
+      dragDx,
+      duration: const Duration(minutes: 10),
+      screenWidth: screenWidth,
+    );
+    expect(expectedDelta, const Duration(seconds: 36),
+        reason: '600px 宽的一屏 = 6 分钟 -> 60px = 36 秒');
+
     final gesture = await tester.startGesture(const Offset(300, 400));
     await gesture.moveBy(const Offset(20, 0));
     await tester.pump();
@@ -151,12 +170,13 @@ void main() {
 
     await gesture.moveBy(const Offset(40, 0));
     await tester.pump();
-    expect(seekHub.preview.value, const Duration(seconds: 50),
-        reason: '30s + 60px/3 = 50s');
+    expect(seekHub.preview.value, const Duration(seconds: 30) + expectedDelta,
+        reason: '30s + 60px 对应的增量');
 
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(seeks.last, const Duration(seconds: 50), reason: '松手落定最终位置');
+    expect(seeks.last, const Duration(seconds: 30) + expectedDelta,
+        reason: '松手落定最终位置');
     expect(playCalls, 1, reason: '原本在播 -> 续播');
 
     // 等预览保留期结束（600ms）后自动收起

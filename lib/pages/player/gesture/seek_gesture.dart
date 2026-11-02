@@ -9,11 +9,29 @@
 /// - 死区 [kGestureDeadZoneDp]：位移没超过它时**保持未定态**，什么都不做；
 /// - 主轴优势比 [kGestureAxisBias]：某一轴必须明显占优才锁定方向，斜滑保持未定，
 ///   避免「横滑到一半变成调音量」这种跳变（照 panelFM 的 MtGesture.playerAxis）；
-/// - 灵敏度 [kSeekPixelsPerSecond]：与屏幕尺寸无关的固定物理量（3px = 1 秒）。
+/// - 幅度 [seekSpanPerScreen]：**滑过一屏宽 = 跳转多长时间**，按片长自适应并封顶 6 分钟
+///   （口径见 [kSeekSpanPerScreen]，与 panelFM 的实机幅度一致）。
 library;
 
-/// 拖动 seek 的灵敏度：每滑动多少逻辑像素代表 1 秒（主窗口 / 短视频 / 进度条同一口径）。
-const double kSeekPixelsPerSecond = 3.0;
+/// 横滑 seek 的幅度：**滑过一屏宽**对应的时间跨度（主窗口 / 短视频 / 全平台同一口径）。
+///
+/// 为什么按「一屏宽」而不是「每像素多少秒」：手感只与「手指划过屏幕的比例」有关。
+/// 按每像素算，换个设备（手机 / 平板 / 桌面宽窗口）同一段手势走过去的时间就不一样了。
+///
+/// 取值依据（v2.6.3 修正，「滑半天只走一点点」的根因）：
+/// - panelFM 实机口径是 3 **物理**像素 = 1 秒（`MtGesture.PlayerSeekPxPerSecond` 收到的
+///   是 Compose 的 px），1080p 手机一屏 1080px ≈ **360 秒**；
+/// - IRIS 此前把同一个数字用在**逻辑**像素上（3dp = 1 秒），一屏 393dp 只有 131 秒 ——
+///   幅度只有 panelFM 的 1/3；
+/// - 但短片段不能直接吃 6 分钟/屏：30 秒的片段若按 6 分钟算，手指挪 30dp 就到头了。
+///   所以短片按**片长**算（一屏宽 = 全长，与 YouTube / 主流短视频的滚动一致），
+///   只有长片才用满这个封顶值。
+const Duration kSeekSpanPerScreen = Duration(minutes: 6);
+
+/// 屏幕宽度未知时的兜底灵敏度：1 逻辑像素（dp）= 1 秒。
+///
+/// 等于「393dp 手机 × 6 分钟/屏」的换算值，只在拿不到宽度时使用（单测 / 首帧）。
+const double kSeekFallbackMsPerPixel = 1000.0;
 
 /// 手势进入死区（dp）：位移没超过它时不做方向判定。
 const double kGestureDeadZoneDp = 8.0;
@@ -58,6 +76,26 @@ Duration clampSeekTarget(Duration target, Duration duration) {
   return target;
 }
 
+/// 一屏宽的横滑对应多长时间：短片 = 全长，长片 = [kSeekSpanPerScreen]。
+///
+/// [duration] 未知（0）时按长片处理，退回封顶值 —— 拖动开始时片长一定是已知的。
+Duration seekSpanPerScreen(Duration duration) =>
+    duration > Duration.zero && duration < kSeekSpanPerScreen
+        ? duration
+        : kSeekSpanPerScreen;
+
+/// 横滑灵敏度：每逻辑像素代表多少毫秒。
+///
+/// [screenWidth] 是滑动手势所在区域的宽度（逻辑像素），[duration] 是当前片长。
+/// 宽度未知（<= 0）时退回 [kSeekFallbackMsPerPixel]。
+double seekMsPerPixel({
+  required Duration duration,
+  double screenWidth = 0,
+}) =>
+    screenWidth > 0
+        ? seekSpanPerScreen(duration).inMilliseconds / screenWidth
+        : kSeekFallbackMsPerPixel;
+
 /// 由「基准位置 + 横向位移」算出 seek 目标。
 ///
 /// [dxPixels] 是相对**按下点**的累计横向位移（正 = 快进），不是每帧增量：
@@ -66,11 +104,22 @@ Duration seekTargetFor({
   required Duration base,
   required double dxPixels,
   required Duration duration,
+  double screenWidth = 0,
 }) {
-  final deltaMs = (dxPixels / kSeekPixelsPerSecond * 1000).round();
+  final deltaMs =
+      (dxPixels * seekMsPerPixel(duration: duration, screenWidth: screenWidth))
+          .round();
   return clampSeekTarget(base + Duration(milliseconds: deltaMs), duration);
 }
 
 /// 位移 → 时间增量（用于提示文本 / 日志）。
-Duration seekDeltaFor(double dxPixels) =>
-    Duration(milliseconds: (dxPixels / kSeekPixelsPerSecond * 1000).round());
+Duration seekDeltaFor(
+  double dxPixels, {
+  required Duration duration,
+  double screenWidth = 0,
+}) =>
+    Duration(
+      milliseconds:
+          (dxPixels * seekMsPerPixel(duration: duration, screenWidth: screenWidth))
+              .round(),
+    );

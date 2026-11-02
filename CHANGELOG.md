@@ -1,3 +1,17 @@
+## v2.6.3
+
+### Changelog
+
+* **Swipe-to-seek now travels a mainstream distance.** A horizontal drag used to move 1 second per 3 logical pixels, so a full screen width was worth barely two minutes and you had to swipe over and over to get anywhere. The mapping is now **one screen width = the clip length, capped at 6 minutes**: short clips scrub proportionally (a 30-second clip fills one screen, as YouTube / Shorts do), anything 6 minutes or longer gets the full 6-minute span per screen. That is the amplitude PanelFM has on a 1080p phone — it divides by 3 *physical* pixels per second, i.e. 1080 px ≈ 6 minutes, while IRIS was dividing by 3 *logical* pixels (393 dp ≈ 2.2 minutes), a third of the range for the same gesture
+* **The span follows the screen, not the pixel count.** Amplitude is expressed as "one screen width = N seconds", so a tablet, a wide desktop window and a phone all need the same proportional swipe — and the short-video mode no longer jumps to the end of a clip from a small nudge
+* **Both modes, one rule.** Main player and short video share the gesture layer, so both got the new amplitude; the progress bars are absolute-position controls and are unaffected
+
+### 更新日志
+
+* **横滑 seek 改为主流的幅度。** 以前 3 **逻辑**像素走 1 秒 —— 一屏宽只值两分钟出头，想去到片尾得来回滑好几次。现在按「**一屏宽 = 片长，最长 6 分钟**」换算：短片按比例（30 秒的片段正好一屏宽走完，与 YouTube / 短视频一致），6 分钟以上的片子每屏宽 6 分钟 —— 这正是 panelFM 在 1080p 手机上的实机幅度（它按 3 **物理**像素 = 1 秒，一屏 1080px ≈ 6 分钟；IRIS 此前把同一个数字用在逻辑像素上，393dp 一屏只有 2.2 分钟，只有它的 1/3）
+* **幅度跟屏宽走，不跟像素数走。** 口径改成「一屏宽 = 多少秒」，平板、桌面宽窗口和手机上同样比例的手势幅度一致；短视频模式也不会再「手指挪一点就跑到片尾」
+* **两个模式同一套规则。** 主窗口与短视频共用同一份手势层，幅度一起生效；进度条是按位置定位的控件，不受影响
+
 ## v2.6.2
 
 ### Changelog

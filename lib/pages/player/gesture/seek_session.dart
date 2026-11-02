@@ -103,12 +103,16 @@ class SeekSession {
   }
 
   /// 拖动中：按相对按下点的累计横向位移更新目标（正 = 快进）。
-  void dragTo(double dxPixels) {
+  ///
+  /// [screenWidth] 传手势区域的宽度（逻辑像素）：幅度按「一屏宽 = 多少秒」换算，
+  /// 见 `seek_gesture.dart` 的 [kSeekSpanPerScreen]。
+  void dragTo(double dxPixels, {double screenWidth = 0}) {
     if (!_alive || !_active) return;
     seekTo(seekTargetFor(
       base: _base,
       dxPixels: dxPixels,
       duration: readPlayer().duration,
+      screenWidth: screenWidth,
     ));
   }
 

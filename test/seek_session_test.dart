@@ -15,11 +15,15 @@ void main() {
   late int pauseCalls;
   late ValueNotifier<Duration?> preview;
 
-  MediaPlayer buildPlayer({required bool playing}) => MediaPlayer(
+  MediaPlayer buildPlayer({
+    required bool playing,
+    Duration duration = const Duration(minutes: 1),
+  }) =>
+      MediaPlayer(
         isInitializing: false,
         isPlaying: playing,
         position: Duration.zero,
-        duration: const Duration(minutes: 1),
+        duration: duration,
         buffer: Duration.zero,
         width: 0,
         height: 0,
@@ -123,20 +127,56 @@ void main() {
     expect(playCalls, 0);
   });
 
-  test('累计位移换算: 3px = 1 秒, 且夹在 0~duration', () {
-    final player = buildPlayer(playing: false);
-    final session = build(player);
+  group('横滑幅度（一屏宽 = 多少秒）', () {
+    test('短片: 一屏宽 = 全长（短视频不会手指一挪就跑到头）', () {
+      final player = buildPlayer(
+        playing: false,
+        duration: const Duration(minutes: 1),
+      );
+      final session = build(player);
 
-    session.start(const Duration(seconds: 10));
-    session.dragTo(30);
-    expect(session.target, const Duration(seconds: 20));
-    expect(preview.value, const Duration(seconds: 20));
+      session.start(const Duration(seconds: 10));
+      // 600px 宽的一屏 = 60 秒片长 -> 滑一半（300px）= 30 秒
+      session.dragTo(300, screenWidth: 600);
+      expect(session.target, const Duration(seconds: 40));
+      expect(preview.value, const Duration(seconds: 40));
+    });
 
-    session.dragTo(-3000);
-    expect(session.target, Duration.zero, reason: '左滑到负值夹到 0');
+    test('长片: 一屏宽封顶 6 分钟（与 panelFM 实机幅度一致）', () {
+      final player = buildPlayer(
+        playing: false,
+        duration: const Duration(hours: 2),
+      );
+      final session = build(player);
 
-    session.dragTo(100000);
-    expect(session.target, const Duration(minutes: 1), reason: '右滑夹到时长');
+      session.start(const Duration(seconds: 10));
+      // 1080p 手机一屏 1080px = 360 秒（panelFM: 3 物理像素 = 1 秒）
+      session.dragTo(1080, screenWidth: 1080);
+      expect(session.target, const Duration(seconds: 370));
+      expect(seekSpanPerScreen(const Duration(hours: 2)),
+          const Duration(minutes: 6));
+    });
+
+    test('宽度未知时退回 1dp = 1 秒', () {
+      final player = buildPlayer(playing: false);
+      final session = build(player);
+
+      session.start(const Duration(seconds: 10));
+      session.dragTo(30);
+      expect(session.target, const Duration(seconds: 40));
+    });
+
+    test('目标夹在 0~duration', () {
+      final player = buildPlayer(playing: false);
+      final session = build(player);
+
+      session.start(const Duration(seconds: 10));
+      session.dragTo(-3000, screenWidth: 600);
+      expect(session.target, Duration.zero, reason: '左滑到负值夹到 0');
+
+      session.dragTo(100000, screenWidth: 600);
+      expect(session.target, const Duration(minutes: 1), reason: '右滑夹到时长');
+    });
   });
 
   test('目标没变化时不重复通知（同一帧重复回调不重建 UI）', () {

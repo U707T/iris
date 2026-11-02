@@ -206,7 +206,9 @@ class _PlayerGestureLayerState extends State<PlayerGestureLayer> {
 
   void _handleDragUpdate(GestureAxis axis, Offset globalDelta) {
     if (axis == GestureAxis.horizontal) {
-      _seek.dragTo(globalDelta.dx);
+      // 幅度按「一屏宽 = 多少秒」换算（见 seek_gesture.dart）：
+      // 这里传窗口 / 屏幕宽度，平板与桌面宽窗口的手感才不会跟着变大变小。
+      _seek.dragTo(globalDelta.dx, screenWidth: _delegate.screenWidth);
       _updateScrubHud();
       return;
     }
