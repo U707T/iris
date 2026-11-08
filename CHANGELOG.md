@@ -1,3 +1,15 @@
+## v2.6.5
+
+### Changelog
+
+* **Screen orientation is out of the settings basement.** It used to sit four levels deep (more menu → settings → playback → screen orientation). The same three choices — device / landscape / portrait — now open one level down, from the more menu, with the current value shown on the right. Nothing new behind it: it edits the same persisted field, so the two entries cannot disagree
+* **Correction to v2.6.4.** That release described the landscape switch as a new capability. It was not: `ScreenOrientation` has existed since the upstream `feat: add screen orientation option`, and v2.6.4 only added a menu shortcut. The same release also listed `resizeableActivity="true"` as if it changed behaviour — it is an explicit declaration of the value that `targetSdk 36` already defaults to. The one-tap landscape switch from v2.6.4 is replaced by this entry, which covers all three choices instead of only landscape
+
+### 更新日志
+
+* **屏幕方向从设置里提出来了。** 它原来埋在「更多 → 设置 → 播放 → 屏幕方向」四层之下；现在在「更多」菜单里往下走一层就能选，右侧显示当前值。设备 / 横向 / 纵向三个选项与原来完全一致，改的还是同一份持久化设置，两个入口不会各说各话
+* **更正 v2.6.4 的说法。** 那一版把「横屏」写成了新增能力，其实 `ScreenOrientation` 从上游 `feat: add screen orientation option` 起就有，v2.6.4 只是加了个菜单入口；同一版把 `resizeableActivity="true"` 也写成了行为改动，它只是把 `targetSdk 36` 的默认值显式写出来。v2.6.4 那个只覆盖横向的一键开关由本版这个入口取代，三个选项都在
+
 ## v2.6.4
 
 ### Changelog

@@ -12,11 +12,11 @@ import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/exit_app.dart';
 import 'package:iris/utils/get_localizations.dart';
-import 'package:iris/utils/landscape_mode.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/take_screenshot.dart';
 import 'package:iris/widgets/bottom_sheets/show_open_link_bottom_sheet.dart';
 import 'package:iris/widgets/dialogs/show_open_link_dialog.dart';
+import 'package:iris/widgets/dialogs/show_orientation_dialog.dart';
 import 'package:iris/widgets/dialogs/show_rate_dialog.dart';
 import 'package:iris/widgets/dialogs/show_rotate_dialog.dart';
 import 'package:iris/widgets/dialogs/show_shortcuts_dialog.dart';
@@ -61,11 +61,14 @@ class MoreMenuButton extends HookWidget {
     final rate = useAppStore().select(context, (state) => state.rate);
     final isFullScreen =
         usePlayerUiStore().select(context, (state) => state.isFullScreen);
-    // 「横屏模式」与设置里的「屏幕方向」读写同一份状态, 这里只是快捷开关
+    // 「屏幕方向」与设置里那一项读写同一份状态, 这里只是把入口从四层提到两层
     final ScreenOrientation screenOrientation =
         useAppStore().select(context, (state) => state.orientation);
-    final bool landscapeMode =
-        screenOrientation == ScreenOrientation.landscape;
+    final orientationLabels = {
+      ScreenOrientation.device: t.device,
+      ScreenOrientation.landscape: t.landscape,
+      ScreenOrientation.portrait: t.portrait,
+    };
 
     return PopupMenuButton(
       key: moreMenuKey,
@@ -227,30 +230,25 @@ class MoreMenuButton extends HookWidget {
             ),
             onTap: () => showControlForHover(showRotateDialog(context)),
           ),
-        // 横屏模式: 给系统小窗 / 分屏用。
-        // 小窗按 Activity 的 requestedOrientation 决定形状, 锁横屏后才会
-        // 横着铺开; 退出时恢复到打开前的方向, 不覆盖设置里的选择。
-        if (!isDesktop && file?.type == ContentType.video)
+        // 屏幕方向: 设置里那一项埋在「更多 → 设置 → 播放 → 屏幕方向」四层之下,
+        // 这里给同一份设置一个两层入口 (设备 / 横向 / 纵向, 与原对话框一致)。
+        // 系统小窗 / 分屏要按横屏铺开时, 不用再翻进设置。
+        if (!isDesktop)
           PopupMenuItem(
             child: ListTile(
               mouseCursor: SystemMouseCursors.click,
-              leading: const Icon(
-                Icons.screen_lock_landscape_rounded,
-                size: 20,
+              leading: const Icon(Icons.screen_rotation_rounded, size: 20),
+              title: Text(t.screen_orientation),
+              trailing: Text(
+                orientationLabels[screenOrientation] ??
+                    screenOrientation.name,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).dividerColor,
+                ),
               ),
-              title: Text(t.landscape_mode),
-              trailing: landscapeMode
-                  ? Icon(
-                      Icons.check_rounded,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.primary,
-                    )
-                  : null,
             ),
-            onTap: () async {
-              await toggleLandscapeMode();
-              showControl();
-            },
+            onTap: () => showControlForHover(showOrientationDialog(context)),
           ),
         // 短视频模式
         if (hasVideos)
