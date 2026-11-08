@@ -6,11 +6,13 @@ import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/globals.dart' show moreMenuKey;
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
+import 'package:iris/models/store/app_state.dart';
 import 'package:iris/models/storages/local.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/exit_app.dart';
 import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/utils/landscape_mode.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/take_screenshot.dart';
 import 'package:iris/widgets/bottom_sheets/show_open_link_bottom_sheet.dart';
@@ -59,6 +61,11 @@ class MoreMenuButton extends HookWidget {
     final rate = useAppStore().select(context, (state) => state.rate);
     final isFullScreen =
         usePlayerUiStore().select(context, (state) => state.isFullScreen);
+    // 「横屏模式」与设置里的「屏幕方向」读写同一份状态, 这里只是快捷开关
+    final ScreenOrientation screenOrientation =
+        useAppStore().select(context, (state) => state.orientation);
+    final bool landscapeMode =
+        screenOrientation == ScreenOrientation.landscape;
 
     return PopupMenuButton(
       key: moreMenuKey,
@@ -219,6 +226,31 @@ class MoreMenuButton extends HookWidget {
               ),
             ),
             onTap: () => showControlForHover(showRotateDialog(context)),
+          ),
+        // 横屏模式: 给系统小窗 / 分屏用。
+        // 小窗按 Activity 的 requestedOrientation 决定形状, 锁横屏后才会
+        // 横着铺开; 退出时恢复到打开前的方向, 不覆盖设置里的选择。
+        if (!isDesktop && file?.type == ContentType.video)
+          PopupMenuItem(
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: const Icon(
+                Icons.screen_lock_landscape_rounded,
+                size: 20,
+              ),
+              title: Text(t.landscape_mode),
+              trailing: landscapeMode
+                  ? Icon(
+                      Icons.check_rounded,
+                      size: 18,
+                      color: Theme.of(context).colorScheme.primary,
+                    )
+                  : null,
+            ),
+            onTap: () async {
+              await toggleLandscapeMode();
+              showControl();
+            },
           ),
         // 短视频模式
         if (hasVideos)

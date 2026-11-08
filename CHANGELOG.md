@@ -1,3 +1,17 @@
+## v2.6.4
+
+### Changelog
+
+* **Landscape mode, one tap away.** The "more" menu now has a **Landscape mode** switch: it locks the activity to landscape so MIUI / HyperOS system floating windows (小窗) and split screen lay the video out horizontally instead of squeezing it into a portrait strip. The check mark shows whether it is on
+* **It is the same switch as Settings → Playback → Screen orientation.** Both entry points read and write one field in the persisted settings, so nothing can drift out of sync — and because it is the same field, turning it off returns to whatever you had before, including a deliberate "Portrait" choice, instead of hard-coding "follow the device"
+* **Floating windows resize without restarting playback.** `MainActivity` now declares `resizeableActivity="true"` explicitly. Combined with the existing `configChanges` (orientation / screenSize / smallestScreenSize / screenLayout) a window resize never recreates the activity, so the decoder and the video texture survive the transition
+
+### 更新日志
+
+* **横屏模式，一键切换。** 「更多」菜单新增 **横屏模式** 开关：锁定横屏后，MIUI / HyperOS 的系统小窗与分屏会按横向铺开视频，而不是把画面挤成一条竖窗。右侧打勾表示当前已开启
+* **它和「设置 → 播放 → 屏幕方向」是同一个开关。** 两个入口读写同一份持久化设置，不会出现两套状态打架；也正因为是同一个字段，关闭横屏时会回到开启前的方向（包括你特意选过的「纵向」），而不是写死"跟随设备"
+* **小窗改尺寸不再重启播放。** `MainActivity` 显式声明 `resizeableActivity="true"`，配合原有的 `configChanges`（orientation / screenSize / smallestScreenSize / screenLayout），窗口尺寸变化不会重建 Activity —— 解码器与视频纹理都能跨过这次切换
+
 ## v2.6.3
 
 ### Changelog
