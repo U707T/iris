@@ -1,3 +1,17 @@
+## v2.6.6
+
+### Changelog
+
+* **The "more" menu is grouped by job instead of accreting.** Fifteen entries used to sit in one flat list — opening a file, rotating the picture and quitting the app all looked alike, and nothing was where you would look twice. They are now four groups with dividers: open content (file / link / storage), picture and orientation (screenshot / rotate / screen orientation / fullscreen), playback and queue (speed / audio track / short video / stats), and app (shortcuts / history / settings / exit). Settings and exit stay at the bottom, where the thumb expects them
+* **Empty groups leave no holes.** Every entry keeps its own show condition (compact window, video only, desktop only …), so a divider is only inserted when both neighbouring groups actually have something in them — an audio-only queue on a phone does not sprout stray separators
+* **The test reads the rendered order, not the source order.** `control_bar_more_menu_test.dart` opens the menu at 360 dp and asserts y positions: the four groups in sequence, and exactly three dividers for four non-empty groups
+
+### 更新日志
+
+* **「更多」菜单改成按用途分组，不再一路平铺。** 15 项原来挤在一个平列表里：打开文件、旋转画面、退出应用长得一模一样，想找的东西总不在你以为的位置。现在分四组加分隔线：打开内容（文件 / 链接 / 存储）、画面与方向（截图 / 旋转 / 屏幕方向 / 全屏）、播放与队列（倍速 / 音轨 / 短视频 / 统计）、应用（快捷键 / 历史 / 设置 / 退出）。设置与退出留在最底部，符合拇指习惯
+* **空组不占位。** 每一项仍然保留自己的显示条件（窄屏 / 仅视频 / 仅桌面…），分隔线只在相邻两组都有内容时才插 —— 手机上只放音频时不会冒出孤立的分隔线
+* **测试断言的是渲染结果，不是代码结构。** `control_bar_more_menu_test.dart` 在 360dp 宽度下打开菜单，按 y 坐标验证四组顺序，以及「四组非空 → 恰好三条分隔线」
+
 ## v2.6.5
 
 ### Changelog

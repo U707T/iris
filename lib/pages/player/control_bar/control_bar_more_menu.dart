@@ -80,127 +80,22 @@ class MoreMenuButton extends HookWidget {
       style: ButtonStyle(overlayColor: overlayColor),
       clipBehavior: Clip.hardEdge,
       constraints: const BoxConstraints(minWidth: 200),
-      itemBuilder: (BuildContext context) => [
-        PopupMenuItem(
-          child: ListTile(
-            mouseCursor: SystemMouseCursors.click,
-            leading: const Icon(
-              Icons.file_open_rounded,
-              size: 16.5,
-            ),
-            title: Text(t.open_file),
-            trailing: Text(
-              'Ctrl + O',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).dividerColor,
-              ),
-            ),
-          ),
-          onTap: () async {
-            showControl();
-            if (Platform.isAndroid) {
-              await pickContentFile();
-            } else {
-              await pickLocalFile();
-            }
-            showControl();
-          },
-        ),
-        PopupMenuItem(
-          child: ListTile(
-            mouseCursor: SystemMouseCursors.click,
-            leading: const Icon(
-              Icons.file_present_rounded,
-              size: 16.5,
-            ),
-            title: Text(t.open_link),
-            trailing: Text(
-              'Ctrl + L',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).dividerColor,
-              ),
-            ),
-          ),
-          onTap: () async {
-            isDesktop
-                ? await showOpenLinkDialog(context)
-                : await showOpenLinkBottomSheet(context);
-            showControl();
-          },
-        ),
-        if (compact)
-          PopupMenuItem(
-            child: ListTile(
-              mouseCursor: SystemMouseCursors.click,
-              leading: const Icon(Icons.graphic_eq_rounded, size: 20),
-              title: Text(t.audio_track),
-            ),
-            onTap: () => showControlForHover(
-              showPopup(
-                context: context,
-                child: Provider<MediaPlayer>.value(
-                  value: context.read<MediaPlayer>(),
-                  child: const TrackPanel(),
-                ),
-                direction: PopupDirection.right,
-              ),
-            ),
-          ),
-        if (compact)
-          PopupMenuItem(
-            child: ListTile(
-              mouseCursor: SystemMouseCursors.click,
-              leading: const Icon(Icons.storage_rounded, size: 20),
-              title: Text(t.storage),
-            ),
-            onTap: () => showControlForHover(
-              showPopup(
-                context: context,
-                child: const Storages(),
-                direction: PopupDirection.right,
-              ),
-            ),
-          ),
-        if (compact && isDesktop)
-          PopupMenuItem(
-            child: ListTile(
-              mouseCursor: SystemMouseCursors.click,
-              leading: Icon(
-                isFullScreen
-                    ? Icons.close_fullscreen_rounded
-                    : Icons.open_in_full_rounded,
-                size: 20,
-              ),
-              title: Text(
-                isFullScreen ? t.exit_fullscreen : t.enter_fullscreen,
-              ),
-            ),
-            onTap: () =>
-                usePlayerUiStore().updateFullScreen(!isFullScreen),
-          ),
-        if (width < 600)
+      itemBuilder: (BuildContext context) {
+        // 按使用场景分四组: 打开内容 → 画面与方向 → 播放与队列 → 应用。
+        // 每一项自己的显示条件 (窄屏 / 视频 / 桌面 ...) 保持在原处;
+        // 空组不出现, 分隔线只在两组都有内容时才插。
+        // 打开内容
+        final List<PopupMenuEntry<dynamic>> openGroup = [
           PopupMenuItem(
             child: ListTile(
               mouseCursor: SystemMouseCursors.click,
               leading: const Icon(
-                Icons.speed_rounded,
-                size: 20,
+                Icons.file_open_rounded,
+                size: 16.5,
               ),
-              title: Text('${t.playback_speed}: ${rate}X'),
-            ),
-            onTap: () => showControlForHover(showRateDialog(context)),
-          ),
-        // 截图
-        if (file?.type == ContentType.video)
-          PopupMenuItem(
-            child: ListTile(
-              mouseCursor: SystemMouseCursors.click,
-              leading: const Icon(Icons.photo_camera_rounded, size: 20),
-              title: Text(t.screenshot),
+              title: Text(t.open_file),
               trailing: Text(
-                'Ctrl + S',
+                'Ctrl + O',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).dividerColor,
@@ -209,155 +104,290 @@ class MoreMenuButton extends HookWidget {
             ),
             onTap: () async {
               showControl();
-              await takeScreenshot(context, context.read<MediaPlayer>());
+              if (Platform.isAndroid) {
+                await pickContentFile();
+              } else {
+                await pickLocalFile();
+              }
               showControl();
             },
           ),
-        // 画面旋转
-        if (file?.type == ContentType.video)
           PopupMenuItem(
             child: ListTile(
               mouseCursor: SystemMouseCursors.click,
-              leading: const Icon(Icons.screen_rotation_alt_rounded, size: 20),
-              title: Text(t.rotate),
+              leading: const Icon(
+                Icons.file_present_rounded,
+                size: 16.5,
+              ),
+              title: Text(t.open_link),
               trailing: Text(
-                'Ctrl + T',
+                'Ctrl + L',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).dividerColor,
                 ),
               ),
             ),
-            onTap: () => showControlForHover(showRotateDialog(context)),
+            onTap: () async {
+              isDesktop
+                  ? await showOpenLinkDialog(context)
+                  : await showOpenLinkBottomSheet(context);
+              showControl();
+            },
           ),
-        // 屏幕方向: 设置里那一项埋在「更多 → 设置 → 播放 → 屏幕方向」四层之下,
-        // 这里给同一份设置一个两层入口 (设备 / 横向 / 纵向, 与原对话框一致)。
-        // 系统小窗 / 分屏要按横屏铺开时, 不用再翻进设置。
-        if (!isDesktop)
+          if (compact)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: const Icon(Icons.storage_rounded, size: 20),
+                title: Text(t.storage),
+              ),
+              onTap: () => showControlForHover(
+                showPopup(
+                  context: context,
+                  child: const Storages(),
+                  direction: PopupDirection.right,
+                ),
+              ),
+            ),
+        ];
+        // 画面与方向
+        final List<PopupMenuEntry<dynamic>> viewGroup = [
+          // 截图
+          if (file?.type == ContentType.video)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: const Icon(Icons.photo_camera_rounded, size: 20),
+                title: Text(t.screenshot),
+                trailing: Text(
+                  'Ctrl + S',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).dividerColor,
+                  ),
+                ),
+              ),
+              onTap: () async {
+                showControl();
+                await takeScreenshot(context, context.read<MediaPlayer>());
+                showControl();
+              },
+            ),
+          // 画面旋转
+          if (file?.type == ContentType.video)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: const Icon(Icons.screen_rotation_alt_rounded, size: 20),
+                title: Text(t.rotate),
+                trailing: Text(
+                  'Ctrl + T',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).dividerColor,
+                  ),
+                ),
+              ),
+              onTap: () => showControlForHover(showRotateDialog(context)),
+            ),
+          // 屏幕方向: 设置里那一项埋在「更多 → 设置 → 播放 → 屏幕方向」四层之下,
+          // 这里给同一份设置一个两层入口 (设备 / 横向 / 纵向, 与原对话框一致)。
+          // 系统小窗 / 分屏要按横屏铺开时, 不用再翻进设置。
+          if (!isDesktop)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: const Icon(Icons.screen_rotation_rounded, size: 20),
+                title: Text(t.screen_orientation),
+                trailing: Text(
+                  orientationLabels[screenOrientation] ??
+                      screenOrientation.name,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).dividerColor,
+                  ),
+                ),
+              ),
+              onTap: () => showControlForHover(showOrientationDialog(context)),
+            ),
+          if (compact && isDesktop)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: Icon(
+                  isFullScreen
+                      ? Icons.close_fullscreen_rounded
+                      : Icons.open_in_full_rounded,
+                  size: 20,
+                ),
+                title: Text(
+                  isFullScreen ? t.exit_fullscreen : t.enter_fullscreen,
+                ),
+              ),
+              onTap: () =>
+                  usePlayerUiStore().updateFullScreen(!isFullScreen),
+            ),
+        ];
+        // 播放与队列
+        final List<PopupMenuEntry<dynamic>> playbackGroup = [
+          if (width < 600)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: const Icon(
+                  Icons.speed_rounded,
+                  size: 20,
+                ),
+                title: Text('${t.playback_speed}: ${rate}X'),
+              ),
+              onTap: () => showControlForHover(showRateDialog(context)),
+            ),
+          if (compact)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: const Icon(Icons.graphic_eq_rounded, size: 20),
+                title: Text(t.audio_track),
+              ),
+              onTap: () => showControlForHover(
+                showPopup(
+                  context: context,
+                  child: Provider<MediaPlayer>.value(
+                    value: context.read<MediaPlayer>(),
+                    child: const TrackPanel(),
+                  ),
+                  direction: PopupDirection.right,
+                ),
+              ),
+            ),
+          // 短视频模式
+          if (hasVideos)
+            PopupMenuItem(
+              onTap: onEnterShortVideo,
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: const Icon(Icons.swipe_vertical_rounded, size: 20),
+                title: Text(t.short_video_mode),
+              ),
+            ),
+          // 播放统计
           PopupMenuItem(
             child: ListTile(
               mouseCursor: SystemMouseCursors.click,
-              leading: const Icon(Icons.screen_rotation_rounded, size: 20),
-              title: Text(t.screen_orientation),
+              leading: const Icon(Icons.monitor_heart_rounded, size: 20),
+              title: Text(t.playback_stats),
               trailing: Text(
-                orientationLabels[screenOrientation] ??
-                    screenOrientation.name,
+                'Ctrl + I',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context).dividerColor,
                 ),
               ),
             ),
-            onTap: () => showControlForHover(showOrientationDialog(context)),
+            onTap: () {
+              usePlayerUiStore().toggleIsShowStats();
+              showControl();
+            },
           ),
-        // 短视频模式
-        if (hasVideos)
-          PopupMenuItem(
-            onTap: onEnterShortVideo,
-            child: ListTile(
-              mouseCursor: SystemMouseCursors.click,
-              leading: const Icon(Icons.swipe_vertical_rounded, size: 20),
-              title: Text(t.short_video_mode),
-            ),
-          ),
-        // 播放统计
-        PopupMenuItem(
-          child: ListTile(
-            mouseCursor: SystemMouseCursors.click,
-            leading: const Icon(Icons.monitor_heart_rounded, size: 20),
-            title: Text(t.playback_stats),
-            trailing: Text(
-              'Ctrl + I',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).dividerColor,
+        ];
+        // 应用
+        final List<PopupMenuEntry<dynamic>> appGroup = [
+          // 快捷键
+          if (isDesktop)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: const Icon(Icons.keyboard_rounded, size: 20),
+                title: Text(t.shortcuts),
               ),
+              onTap: () => showControlForHover(showShortcutsDialog(context)),
             ),
-          ),
-          onTap: () {
-            usePlayerUiStore().toggleIsShowStats();
-            showControl();
-          },
-        ),
-        // 快捷键
-        if (isDesktop)
           PopupMenuItem(
             child: ListTile(
               mouseCursor: SystemMouseCursors.click,
-              leading: const Icon(Icons.keyboard_rounded, size: 20),
-              title: Text(t.shortcuts),
+              leading: const Icon(
+                Icons.history_rounded,
+                size: 20,
+              ),
+              title: Text(t.history),
+              trailing: Text(
+                'Ctrl + H',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).dividerColor,
+                ),
+              ),
             ),
-            onTap: () => showControlForHover(showShortcutsDialog(context)),
-          ),
-        PopupMenuItem(
-          child: ListTile(
-            mouseCursor: SystemMouseCursors.click,
-            leading: const Icon(
-              Icons.history_rounded,
-              size: 20,
-            ),
-            title: Text(t.history),
-            trailing: Text(
-              'Ctrl + H',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).dividerColor,
+            onTap: () => showControlForHover(
+              showPopup(
+                context: context,
+                child: const History(),
+                direction: PopupDirection.right,
               ),
             ),
           ),
-          onTap: () => showControlForHover(
-            showPopup(
-              context: context,
-              child: const History(),
-              direction: PopupDirection.right,
+          PopupMenuItem(
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: const Icon(
+                Icons.settings_rounded,
+                size: 20,
+              ),
+              title: Text(t.settings),
+              trailing: Text(
+                'Ctrl + P',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).dividerColor,
+                ),
+              ),
             ),
-          ),
-        ),
-        PopupMenuItem(
-          child: ListTile(
-            mouseCursor: SystemMouseCursors.click,
-            leading: const Icon(
-              Icons.settings_rounded,
-              size: 20,
-            ),
-            title: Text(t.settings),
-            trailing: Text(
-              'Ctrl + P',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).dividerColor,
+            onTap: () => showControlForHover(
+              showPopup(
+                context: context,
+                child: const Settings(),
+                direction: PopupDirection.right,
               ),
             ),
           ),
-          onTap: () => showControlForHover(
-            showPopup(
-              context: context,
-              child: const Settings(),
-              direction: PopupDirection.right,
-            ),
-          ),
-        ),
-        PopupMenuItem(
-          child: ListTile(
-            mouseCursor: SystemMouseCursors.click,
-            leading: const Icon(
-              Icons.exit_to_app_rounded,
-              size: 20,
-            ),
-            title: Text(t.exit),
-            trailing: Text(
-              'Alt + X',
-              style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context).dividerColor,
+          PopupMenuItem(
+            child: ListTile(
+              mouseCursor: SystemMouseCursors.click,
+              leading: const Icon(
+                Icons.exit_to_app_rounded,
+                size: 20,
+              ),
+              title: Text(t.exit),
+              trailing: Text(
+                'Alt + X',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).dividerColor,
+                ),
               ),
             ),
+            onTap: () async {
+              await exitApp(context.read<MediaPlayer>());
+            },
           ),
-          onTap: () async {
-            await exitApp(context.read<MediaPlayer>());
-          },
-        ),
-      ],
+        ];
+
+        final groups = <List<PopupMenuEntry<dynamic>>>[
+          openGroup,
+          viewGroup,
+          playbackGroup,
+          appGroup,
+        ];
+
+        final entries = <PopupMenuEntry<dynamic>>[];
+        for (final group in groups) {
+          if (group.isEmpty) continue;
+          if (entries.isNotEmpty) entries.add(const PopupMenuDivider());
+          entries.addAll(group);
+        }
+        return entries;
+      },
     );
   }
 }
