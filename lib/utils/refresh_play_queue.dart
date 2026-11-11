@@ -123,16 +123,39 @@ Future<int?> refreshPlayQueue() async {
     folderFirst: appState.folderFirst,
   );
 
+  final latest = store.state;
   final merged = mergeQueueWithListed(
     // 用扫描结束时的队列状态做合并, 而不是开头那份快照: 大目录回扫要几百
     // 毫秒, 期间用户可能删条目 / 切集, 拿旧快照覆盖等于把这些操作抹掉。
-    state: store.state,
+    state: latest,
     listed: media,
   );
   if (merged == null) return null;
 
-  await store.update(playQueue: merged.playQueue, index: merged.currentIndex);
+  // 目录内容没变就别写: `update` 会落一次盘并触发整棵控制栏重建,
+  // 用户只是手贱点了一下刷新不该有这些动静。
+  if (!_sameQueue(merged.playQueue, latest.playQueue) ||
+      merged.currentIndex != latest.currentIndex) {
+    await store.update(
+      playQueue: merged.playQueue,
+      index: merged.currentIndex,
+    );
+  }
   return merged.playQueue.length;
+}
+
+/// 两份队列是不是"同一条不差": 顺序、`index`、`FileItem` 实例都一样。
+///
+/// 用 `identical` 而不是 `==` 才符合这里的语义 —— 刷新保留的就是原来的
+/// 实例, 换了实例本身就意味着播放器要重新 open。
+bool _sameQueue(List<PlayQueueItem> a, List<PlayQueueItem> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i].index != b[i].index || !identical(a[i].file, b[i].file)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /// 队列条目对应的存储: 优先查已配置的存储, 查不到就按本地路径 / SAF 兜底。

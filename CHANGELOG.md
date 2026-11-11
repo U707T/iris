@@ -1,3 +1,19 @@
+## v2.6.8
+
+### Changelog
+
+* **A self-review of v2.6.7, and the play button is provably centred.** Measured at 320 / 360 / 411 / 600 / 900 / 1024 dp with 1, 2 and 5 queue items: the offset from the bar's centre is **0.00 dp** in every case — including the single-item queue, where previous / next collapse into zero-width slots and `spaceEvenly` still lands the play button on the middle of five. `control_bar_layout_test.dart` asserts it (plus shuffle / repeat symmetry around the centre), so adding a sixth button to that row can no longer quietly push it off-centre
+* **Refresh no longer writes when the folder did not change.** The scan used to call `store.update` unconditionally: one JSON write plus one full control-bar rebuild for a tap that found nothing new. The merge result is now compared with the live state (order, `index`, `FileItem` identity) and skipped when identical
+* **The refresh path has a real-filesystem test.** `refresh_play_queue_io_test.dart` scans a temporary folder: a new file is appended, a non-media file never enters the queue, a deleted file drops out and the current index falls back to the nearest surviving entry, and a no-op scan emits no state change at all. The pure merge rules stay in `refresh_play_queue_test.dart`; this one covers what a pure test cannot see (folder inference, storage lookup, sorting)
+* **Docs: the sandbox note in README was stale.** It still said `dl.google.com` was unreachable. Since the 2026-11-08 re-test the Google endpoints answer again and what actually breaks is the transparent proxy — the note now describes that instead of a dead mirror
+
+### 更新日志
+
+* **对 v2.6.7 做了一轮自查，播放键的居中现在是量出来的。** 在 320 / 360 / 411 / 600 / 900 / 1024dp 下，用 1 / 2 / 5 条队列实测：与整条控制栏中心的偏差恒为 **0.00dp** —— 包括只有一条时「上一个 / 下一个」退化成零宽占位、`spaceEvenly` 仍把播放键放在五个槽位正中的那一档。`control_bar_layout_test.dart` 已把这条（以及随机 / 循环两侧对称）写成断言，以后往第一排加第六个按钮也不会悄悄把它挤偏
+* **目录没变时刷新不再写状态。** 以前不管扫到有没有新东西都会走一次 `store.update`：一次 JSON 落盘 + 一次整条控制栏重建。现在合并结果会和当前状态比一遍（顺序、`index`、`FileItem` 实例），完全一样就跳过
+* **刷新这条路径补了真实文件系统的测试。** `refresh_play_queue_io_test.dart` 扫一个临时目录：新增文件追加到末尾、非媒体文件不进队列、删除的文件被移除且当前项落到最近的存活条目、目录没变时一次状态变更都不发。纯合并规则仍在 `refresh_play_queue_test.dart`，这里补的是纯函数看不见的那一段（目录反推、存储查找、排序）
+* **文档：README 里的沙箱说明过期了。** 它还写着「`dl.google.com` 不通」。2026-11-08 复测后 Google 系域名已恢复可达，真正会坏的是那层透明代理 —— 现在改成描述这件事，而不是一个已经不成立的结论
+
 ## v2.6.7
 
 ### Changelog

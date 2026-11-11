@@ -32,29 +32,26 @@ MediaPlayer _dummyPlayer() => MediaPlayer(
       getStats: () => const {},
     );
 
-Future<void> _pumpControlBar(WidgetTester tester, double width) async {
+Future<void> _pumpControlBar(
+  WidgetTester tester,
+  double width, {
+  int items = 2,
+}) async {
   await tester.binding.setSurfaceSize(Size(width, 400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
   usePlayQueueStore().set(
     PlayQueueState(
       playQueue: [
-        PlayQueueItem(
-          file: FileItem(
-            name: 'a.mp4',
-            uri: 'a.mp4',
-            type: ContentType.video,
+        for (var i = 0; i < items; i++)
+          PlayQueueItem(
+            file: FileItem(
+              name: '${i + 1}.mp4',
+              uri: '${i + 1}.mp4',
+              type: ContentType.video,
+            ),
+            index: i,
           ),
-          index: 0,
-        ),
-        PlayQueueItem(
-          file: FileItem(
-            name: 'b.mp4',
-            uri: 'b.mp4',
-            type: ContentType.video,
-          ),
-          index: 1,
-        ),
       ],
       currentIndex: 0,
     ),
@@ -156,6 +153,28 @@ void main() {
     // 第一排只有五个: 随机 / 上一个 / 播放 / 下一个 / 循环
     expect(find.byIcon(Icons.shuffle_rounded), findsOneWidget);
     expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
+  });
+
+  testWidgets('第一排的播放键在正中间 (上 / 下一个隐藏时也一样)', (tester) async {
+    // "停止"删掉之后第一排是 随机 | 上 | 播 | 下 | 循环; 队列只有一条时
+    // 上 / 下一个会退化成 SizedBox.shrink() —— spaceEvenly 仍按 5 个槽位分,
+    // 所以中间那一格还落在正中。这条断言把"居中"钉死, 免得以后往第一排
+    // 加按钮时悄悄把播放键挤偏。
+    for (final int items in <int>[1, 2, 4]) {
+      await _pumpControlBar(tester, 360, items: items);
+
+      final double center = tester.getRect(find.byType(ControlBar)).center.dx;
+      final double play =
+          tester.getCenter(find.byIcon(Icons.play_arrow_rounded)).dx;
+      expect(play, closeTo(center, 0.5), reason: '队列 $items 条: play=$play');
+
+      // 两侧的模式键对称, 进一步确认隐藏按钮没有把整排推偏
+      final double shuffle =
+          tester.getCenter(find.byIcon(Icons.shuffle_rounded)).dx;
+      final double repeat =
+          tester.getCenter(find.byIcon(Icons.repeat_rounded)).dx;
+      expect(shuffle + repeat, closeTo(center * 2, 1), reason: '队列 $items 条');
+    }
   });
 
   testWidgets('第二排的横竖屏按钮一键在横 / 纵之间切换', (tester) async {

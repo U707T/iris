@@ -155,7 +155,7 @@ flutter build apk --split-per-abi    # Android（发布版需自备签名配置�
 
 ## 本地构建缓存（沙箱）
 
-> 本目录的 `build/` + `.dart_tool/` 合计约 **2.3 GB**，其中大部分是同一产物的重复拷贝。但沙箱网络不稳（`dl.google.com` 不通），**要重新下载的东西一个都不能删**。详见 `/workspace/AI通用说明.md` §2。
+> 本目录的 `build/` + `.dart_tool/` 合计约 **2.3 GB**，其中大部分是同一产物的重复拷贝。但沙箱出网走透明代理，**代理一掉，`dl.google.com` 等 Google 系域名会一起变成超时 / 000**，Flutter 引擎与 Android 依赖没有镜像可换 —— 所以**要重新下载的东西一个都不能删**。详见 `/workspace/AI通用说明.md` §2。
 
 | 路径 | 现状（2026-11-04） | 怎么办 |
 |---|---|---|
