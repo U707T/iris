@@ -20,6 +20,7 @@ import 'package:iris/widgets/dialogs/show_orientation_dialog.dart';
 import 'package:iris/widgets/dialogs/show_rate_dialog.dart';
 import 'package:iris/widgets/dialogs/show_rotate_dialog.dart';
 import 'package:iris/widgets/dialogs/show_shortcuts_dialog.dart';
+import 'package:iris/widgets/dialogs/show_zoom_dialog.dart';
 import 'package:iris/widgets/popup.dart';
 import 'package:iris/widgets/popups/history.dart';
 import 'package:iris/widgets/popups/settings/settings.dart';
@@ -27,8 +28,8 @@ import 'package:iris/widgets/popups/storages/storages.dart';
 import 'package:iris/widgets/popups/track/track_panel.dart';
 import 'package:provider/provider.dart';
 
-/// 控制栏右侧的「更多」菜单 (打开文件 / 链接、截图、旋转、短视频、
-/// 统计、快捷键、历史、设置、退出)
+/// 控制栏右侧的「更多」菜单 (打开文件 / 链接、截图、旋转、缩放、
+/// 屏幕方向、短视频、统计、快捷键、历史、设置、退出)
 class MoreMenuButton extends HookWidget {
   const MoreMenuButton({
     super.key,
@@ -61,6 +62,9 @@ class MoreMenuButton extends HookWidget {
     final rate = useAppStore().select(context, (state) => state.rate);
     final isFullScreen =
         usePlayerUiStore().select(context, (state) => state.isFullScreen);
+    // 「缩放」原来在控制栏上占一个放大镜按钮; 按钮让位给刷新 / 横竖屏后,
+    // 精确调节 (滑条 + 步进) 收到这里, 手势之外仍然有入口。
+    final zoom = usePlayerUiStore().select(context, (state) => state.zoom);
     // 「屏幕方向」与设置里那一项读写同一份状态, 这里只是把入口从四层提到两层
     final ScreenOrientation screenOrientation =
         useAppStore().select(context, (state) => state.orientation);
@@ -190,6 +194,23 @@ class MoreMenuButton extends HookWidget {
                 ),
               ),
               onTap: () => showControlForHover(showRotateDialog(context)),
+            ),
+          // 画面缩放: 100% 附近会吸附回原始大小 (见 PlayerUiStore.updateZoom)
+          if (file?.type != ContentType.audio)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading: const Icon(Icons.zoom_in_rounded, size: 20),
+                title: Text(t.zoom),
+                trailing: Text(
+                  '${(zoom * 100).round()}%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context).dividerColor,
+                  ),
+                ),
+              ),
+              onTap: () => showControlForHover(showZoomDialog(context)),
             ),
           // 屏幕方向: 设置里那一项埋在「更多 → 设置 → 播放 → 屏幕方向」四层之下,
           // 这里给同一份设置一个两层入口 (设备 / 横向 / 纵向, 与原对话框一致)。

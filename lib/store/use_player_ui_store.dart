@@ -1,8 +1,22 @@
 import 'package:flutter_zustand/flutter_zustand.dart';
-import 'package:iris/globals.dart' show minZoom, maxZoom;
+import 'package:iris/globals.dart' show maxZoom, minZoom, zoomSnapThreshold;
 import 'package:iris/models/store/player_ui_state.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:window_manager/window_manager.dart';
+
+/// 画面缩放的最终落点: 先夹到 [minZoom] / [maxZoom], 再对 100% 做磁吸。
+///
+/// 磁吸放在这里而不是各个入口 (双指 / Ctrl + 滚轮 / 缩放面板), 是因为它们
+/// 调的都是 [PlayerUiStore.updateZoom] —— 只写一份规则, 三个入口的手感不会
+/// 各自漂移。死区里一律返回 **精确的** 1.0, 而不是 0.99 / 1.01:
+/// `video_view.dart` 用 `zoom != 1.0` 决定是否套 Transform, 差一点点都会让
+/// 画面多走一层无意义的缩放。
+double resolveZoom(double zoom) {
+  final double clamped =
+      zoom < minZoom ? minZoom : (zoom > maxZoom ? maxZoom : zoom);
+  if ((clamped - 1.0).abs() <= zoomSnapThreshold) return 1.0;
+  return clamped;
+}
 
 class PlayerUiStore extends Store<PlayerUiState> {
   PlayerUiStore() : super(const PlayerUiState());
@@ -11,13 +25,9 @@ class PlayerUiStore extends Store<PlayerUiState> {
     set(state.copyWith(aspectRatio: ratio));
   }
 
+  /// 设置画面缩放: 夹取 + 100% 磁吸, 规则见 [resolveZoom]。
   void updateZoom(double zoom) {
-    final clamped = zoom < minZoom
-        ? minZoom
-        : zoom > maxZoom
-            ? maxZoom
-            : zoom;
-    set(state.copyWith(zoom: clamped));
+    set(state.copyWith(zoom: resolveZoom(zoom)));
   }
 
   void resetZoom() => updateZoom(1.0);

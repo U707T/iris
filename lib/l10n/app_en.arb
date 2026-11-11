@@ -173,5 +173,17 @@
   "default_gateway_failed": "Could not read the default gateway. Enter it manually",
   "auto_hide_controls": "Auto-hide controls",
   "auto_hide_controls_description": "Hide the title bar and control bar after playback starts",
-  "auto_hide_delay": "Hide after"
+  "auto_hide_delay": "Hide after",
+  "refresh_play_queue": "Refresh playlist",
+  "play_queue_refreshed": "Playlist refreshed ({count} items)",
+  "play_queue_refresh_failed": "Could not refresh: the current folder is unreadable",
+  "switch_to_landscape": "Switch to landscape",
+  "switch_to_portrait": "Switch to portrait",
+  "@play_queue_refreshed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

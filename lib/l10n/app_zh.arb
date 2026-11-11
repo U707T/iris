@@ -173,5 +173,17 @@
   "default_gateway_failed": "无法读取默认网关，请手动填写",
   "auto_hide_controls": "自动隐藏控制栏",
   "auto_hide_controls_description": "播放时延迟收起标题栏与控制栏",
-  "auto_hide_delay": "隐藏延迟"
+  "auto_hide_delay": "隐藏延迟",
+  "refresh_play_queue": "刷新播放列表",
+  "play_queue_refreshed": "播放列表已刷新（{count} 项）",
+  "play_queue_refresh_failed": "刷新失败：无法读取当前目录",
+  "switch_to_landscape": "切换到横屏",
+  "switch_to_portrait": "切换到竖屏",
+  "@play_queue_refreshed": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

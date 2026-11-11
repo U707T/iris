@@ -24,6 +24,13 @@ final rateMenuKey = GlobalKey<PopupMenuButtonState>();
 const double minZoom = 0.25;
 const double maxZoom = 5.0;
 const double zoomStep = 0.05;
+
+/// 100% 附近的吸附死区: 手动缩放落进 ±3% 就贴回原始大小。
+///
+/// 必须小于 [zoomStep] (5%) —— 否则缩放面板的「+ / -」从 100% 出发一步就
+/// 落回死区里, 按钮看起来像坏了。用户也不必再用双指 / 滚轮去"抠" 100%:
+/// 松手前只要接近原大小, 手感和双击复位一样干净。
+const double zoomSnapThreshold = 0.03;
 const List<double> longPressSpeedStops = [
   1.25,
   1.5,

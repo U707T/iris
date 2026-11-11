@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
@@ -9,8 +11,8 @@ import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/utils/refresh_play_queue.dart';
 import 'package:iris/utils/toggle_shuffle.dart';
-import 'package:iris/widgets/dialogs/show_zoom_dialog.dart';
 import 'package:iris/widgets/popup.dart';
 import 'package:iris/widgets/popups/play_queue.dart';
 import 'package:iris/widgets/popups/storages/storages.dart';
@@ -84,41 +86,6 @@ class PlayPauseButton extends HookWidget {
           style: ButtonStyle(overlayColor: overlayColor),
         ),
       ],
-    );
-  }
-}
-
-/// 停止: 暂停并清空当前播放项
-class StopButton extends HookWidget {
-  const StopButton({
-    super.key,
-    required this.showControl,
-    this.color,
-    this.overlayColor,
-  });
-
-  final void Function() showControl;
-  final Color? color;
-  final WidgetStateProperty<Color?>? overlayColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = getLocalizations(context);
-
-    return IconButton(
-      tooltip: '${t.stop} ( Ctrl + C )',
-      icon: Icon(
-        Icons.stop_rounded,
-        size: 26,
-        color: color,
-      ),
-      onPressed: () {
-        showControl();
-        useAppStore().updateAutoPlay(false);
-        context.read<MediaPlayer>().pause();
-        usePlayQueueStore().updateCurrentIndex(-1);
-      },
-      style: ButtonStyle(overlayColor: overlayColor),
     );
   }
 }
@@ -304,37 +271,6 @@ class FitButton extends HookWidget {
         showControl();
         useAppStore().toggleFit();
       },
-      style: ButtonStyle(overlayColor: overlayColor),
-    );
-  }
-}
-
-/// 无级缩放 (打开缩放面板)
-class ZoomButton extends HookWidget {
-  const ZoomButton({
-    super.key,
-    required this.showControlForHover,
-    this.color,
-    this.overlayColor,
-  });
-
-  final Future<void> Function(Future<void> callback) showControlForHover;
-  final Color? color;
-  final WidgetStateProperty<Color?>? overlayColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = getLocalizations(context);
-    final zoom = usePlayerUiStore().select(context, (state) => state.zoom);
-
-    return IconButton(
-      tooltip: '${t.zoom}: ${(zoom * 100).round()}% ( Ctrl + 滚轮 )',
-      icon: Icon(
-        Icons.zoom_in_rounded,
-        size: 20,
-        color: zoom == 1.0 ? color?.withAlpha(153) : color,
-      ),
-      onPressed: () => showControlForHover(showZoomDialog(context)),
       style: ButtonStyle(overlayColor: overlayColor),
     );
   }
@@ -597,6 +533,111 @@ class ShortVideoButton extends HookWidget {
         color: color,
       ),
       onPressed: onPressed,
+      style: ButtonStyle(overlayColor: overlayColor),
+    );
+  }
+}
+
+/// 一键切换横 / 竖屏
+///
+/// 改的是设置里那份 `ScreenOrientation` (与「更多 → 屏幕方向」同一字段),
+/// 所以在系统小窗 / 分屏里想按横屏铺开时, 不用再翻进菜单点三层。
+/// 规则: 当前是横向就切纵向, 其余 (纵向 / 跟随设备) 一律切横向 ——
+/// 手机上绝大多数时候是竖着拿的, "切横向"才是那个想要的默认动作。
+class OrientationButton extends HookWidget {
+  const OrientationButton({
+    super.key,
+    required this.showControl,
+    this.color,
+    this.overlayColor,
+  });
+
+  final void Function() showControl;
+  final Color? color;
+  final WidgetStateProperty<Color?>? overlayColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = getLocalizations(context);
+    final ScreenOrientation orientation =
+        useAppStore().select(context, (state) => state.orientation);
+    final bool toLandscape = orientation != ScreenOrientation.landscape;
+
+    return IconButton(
+      tooltip: toLandscape ? t.switch_to_landscape : t.switch_to_portrait,
+      icon: Icon(
+        Icons.screen_rotation_rounded,
+        size: 20,
+        color: color,
+      ),
+      onPressed: () {
+        showControl();
+        useAppStore().updateOrientation(
+          toLandscape ? ScreenOrientation.landscape : ScreenOrientation.portrait,
+        );
+      },
+      style: ButtonStyle(overlayColor: overlayColor),
+    );
+  }
+}
+
+/// 刷新播放列表: 回扫当前目录, 增删队列成员 (不动正在播的那一条)
+class RefreshPlayQueueButton extends HookWidget {
+  const RefreshPlayQueueButton({
+    super.key,
+    required this.showControl,
+    this.color,
+    this.overlayColor,
+  });
+
+  final void Function() showControl;
+  final Color? color;
+  final WidgetStateProperty<Color?>? overlayColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = getLocalizations(context);
+    // 大目录 (上千项) 的回扫要几百毫秒: 期间换成转圈并拒绝连点,
+    // 否则连敲两下就是两次并发扫描 + 两次落盘。
+    final isRefreshing = useState(false);
+
+    Future<void> refresh() async {
+      if (isRefreshing.value) return;
+      isRefreshing.value = true;
+      final int? count = await refreshPlayQueue();
+      isRefreshing.value = false;
+      if (!context.mounted) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          content: Text(
+            count == null
+                ? t.play_queue_refresh_failed
+                : t.play_queue_refreshed(count),
+          ),
+        ),
+      );
+    }
+
+    return IconButton(
+      tooltip: t.refresh_play_queue,
+      icon: isRefreshing.value
+          ? SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: color,
+              ),
+            )
+          : Icon(
+              Icons.refresh_rounded,
+              size: 20,
+              color: color,
+            ),
+      onPressed: () {
+        showControl();
+        unawaited(refresh());
+      },
       style: ButtonStyle(overlayColor: overlayColor),
     );
   }

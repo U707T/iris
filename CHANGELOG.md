@@ -1,3 +1,19 @@
+## v2.6.7
+
+### Changelog
+
+* **The control bar lost two buttons and gained two.** Stop and the zoom magnifier are gone from the bottom bar. Stop was "pause + clear the queue" — one tap away from a state you rarely want, and `Ctrl + C` still does it. Zoom already has two gestures (pinch, `Ctrl` + wheel); its precise panel moved to **More → Zoom**, which shows the current percentage on the right. The freed slots went to a **one-tap landscape / portrait toggle** (second from the right, just before the more button) and a **refresh playlist** button
+* **Refresh playlist rescans the folder without rebuilding the queue.** Existing entries keep their order, their `index` and even their `FileItem` instance; files that disappeared are dropped, files added since the last scan are appended. Keeping the instance is what makes it safe: the engine re-opens a file when the `FileItem` changes, so a naive rebuild would restart whatever you are watching. Single links, lone SAF picks and unreadable folders change nothing and answer with a snack bar instead
+* **Manual zoom now snaps back at 100%.** Pinch, `Ctrl` + wheel and the zoom panel share one landing rule: within ±3% of 1.0 the value snaps to *exactly* 1.0, so getting back to the original size no longer means fighting the gesture. The dead band is deliberately narrower than the panel's 5% step — otherwise `+` from 100% would be swallowed by the magnet, and `video_view.dart`'s `zoom != 1.0` check gets a clean 1.0 instead of 0.99
+* **The tool row stays one row at every phone width.** Seven buttons at 360 dp leave 8 px once Material's 48 dp tap targets are counted, so below 420 dp that row drops to the 40 dp minimum (icon size unchanged), and the audio-track / storage entries move into the more menu from 512 dp instead of 448 dp. Button order (orientation second from the right), the removed buttons and every width from 320 to 1280 dp are pinned by `control_bar_layout_test.dart`; the zoom snap by `zoom_snap_test.dart`
+
+### 更新日志
+
+* **控制栏去掉两个按钮，加回两个。** 底部栏不再有「停止」和放大镜。停止本质是「暂停 + 清空队列」，手指一滑就会误触到不想去的状态，`Ctrl + C` 仍然保留；缩放本来就丢给了双指和 `Ctrl + 滚轮`，精确面板收进 **更多 → 缩放**，右侧显示当前百分比。腾出的位置给了一键 **横竖屏切换**（倒数第二个，紧挨「更多」）和 **刷新播放列表**
+* **刷新播放列表只回扫目录，不重建队列。** 现有条目保留顺序、`index`，连 `FileItem` 实例都不换；目录里消失的被移除，新出现的追加到末尾。保留实例才是安全的关键：引擎认的是 `FileItem` 是否变化，粗暴重建会把正在看的片子从头重开。在线链接、单个 SAF 文件、读不到的目录一律不动队列，只回一个提示
+* **手动缩放会在 100% 处吸附。** 双指、`Ctrl + 滚轮`、缩放面板共用同一条落点规则：距 1.0 在 ±3% 以内就贴成**精确的** 1.0，不用再和手势较劲才能回到原始大小。死区刻意窄于面板的 5% 步进 —— 否则从 100% 按「+」会被磁吸吃掉；`video_view.dart` 里 `zoom != 1.0` 的判断也因此拿到干净的 1.0，而不是 0.99
+* **第二排在所有手机宽度下都保持一行。** 360dp 下并排 7 个按钮，扣掉 Material 默认 48dp 点击区只剩 8px，所以 420dp 以下这一排收成 40dp 下限（图标大小不变），音轨 / 存储的收起线从 448dp 提到 512dp。按钮顺序（横竖屏是倒数第二个）、已移除的按钮，以及 320–1280dp 每一档宽度都由 `control_bar_layout_test.dart` 钉住；缩放的磁吸由 `zoom_snap_test.dart` 钉住
+
 ## v2.6.6
 
 ### Changelog
