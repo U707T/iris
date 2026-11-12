@@ -13,21 +13,23 @@ import 'package:popover/popover.dart';
 Future<void> showVolumePopover(
   BuildContext context,
   void Function() showControl,
-) async =>
-    showPopover(
-      context: context,
-      bodyBuilder: (context) => Container(
-        padding: EdgeInsets.fromLTRB(8, 0, 16, 0),
-        child: VolumeControl(showControl: showControl),
-      ),
-      direction: PopoverDirection.top,
-      width: 240,
-      height: 48,
-      arrowHeight: 0,
-      arrowWidth: 0,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Colors.transparent,
-    );
+) async => showPopover(
+  context: context,
+  bodyBuilder: (context) => Container(
+    padding: EdgeInsets.fromLTRB(8, 0, 16, 0),
+    child: VolumeControl(showControl: showControl),
+  ),
+  direction: PopoverDirection.top,
+  width: 240,
+  height: 48,
+  arrowHeight: 0,
+  arrowWidth: 0,
+  backgroundColor: Theme.of(context).colorScheme.surface,
+  barrierColor: Colors.transparent,
+  // popover 自带的默认阴影 (BoxShadow 0x1F000000) 与全应用"浮层不投影"
+  // 的约定冲突, 小窗里会糊在画面上; 这里显式去掉。
+  shadow: const [],
+);
 
 class VolumeControl extends HookWidget {
   const VolumeControl({
@@ -85,10 +87,12 @@ class VolumeControl extends HookWidget {
           unawaited(appStore.updateMute(false, persist: false));
         }
         // 读实时值而不是 build 时捕获的 volume: 快速滚轮下否则会丢步
-        unawaited(appStore.updateVolume(
-          appStore.state.volume + (delta < 0 ? 2 : -2),
-          persist: false,
-        ));
+        unawaited(
+          appStore.updateVolume(
+            appStore.state.volume + (delta < 0 ? 2 : -2),
+            persist: false,
+          ),
+        );
         schedulePersist();
       },
       child: Row(
@@ -101,8 +105,8 @@ class VolumeControl extends HookWidget {
               isMuted || volume == 0
                   ? Icons.volume_off_rounded
                   : volume < 50
-                      ? Icons.volume_down_rounded
-                      : Icons.volume_up_rounded,
+                  ? Icons.volume_down_rounded
+                  : Icons.volume_up_rounded,
               size: 20,
               color: color,
             ),
@@ -113,10 +117,7 @@ class VolumeControl extends HookWidget {
             style: ButtonStyle(overlayColor: overlayColor),
           ),
           Expanded(
-            child: VolumeSlider(
-              showControl: showControl,
-              color: color,
-            ),
+            child: VolumeSlider(showControl: showControl, color: color),
           ),
           if (showVolumeText) const SizedBox(width: 8),
           if (showVolumeText) Text('${volume >= 100 ? '' : '  '}$volume'),

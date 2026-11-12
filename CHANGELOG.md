@@ -1,3 +1,19 @@
+## v2.6.9
+
+### Changelog
+
+* **No more drop shadows on any surface.** Every floating thing in the player — the more menu, dialogs, the snack bar, bottom sheets, the volume popover — used to carry the Material shadow, and in a MIUI / HyperOS floating window that shadow lands right on the picture: the window is small, the content is bright, and the grey halo around a 200 dp menu is more visible than the menu itself. Shadows are now switched off **in the theme**, not call site by call site: the real source is `ColorScheme.shadow` (each M3 overlay component reads it in its own defaults — the more menu's is `shadowColor => _colors.shadow`), so a single transparent value there covers all of them, including the dynamic-colour and OLED-black variants that replace the whole colour scheme. `elevation` is also pinned to 0 on dialogs, snack bars, bottom sheets and pop-up menus, and the volume popover's own `BoxShadow` is dropped
+* **Verified by pixels, not by config.** `overlay_no_shadow_pixels_test.dart` renders a menu over pure white, reads the raster and measures the darkest pixel in the band just outside the menu: it must stay above 0.97. The same measurement runs against a stock theme as a control and **has to** find a shadow (it reads 0.78), so the passing case cannot be a blind detector. `theme_no_shadow_test.dart` pins the theme fields for light / dark / dynamic colour / pure black
+* **The control bar no longer overflows in a floating window.** It read its width from `MediaQuery`, i.e. the *window*, while laying out inside whatever box it was actually given — in a floating window, split screen or sidebar those differ, and the tool row was arranging ten buttons into 512–639 dp: 608 dp of content, guaranteed overflow (128 dp of it stripped in release builds). Width now comes from `LayoutBuilder`'s own constraints, with the window width only as a fallback for unbounded cases. Measured at 320 / 360 / 411 / 512 / 640 / 768 / 880 dp: no overflow at any of them, and the play button still sits at exactly 0.00 dp from the bar's centre
+* **LayoutBuilder is not a hook context.** The store subscriptions and `useMemoized` calls stayed in `build`; only the width decision moved inside the builder. Calling hooks there trips `Hooks can only be called from the build method` on the first frame
+
+### 更新日志
+
+* **所有浮层都不再投影。** 播放器里的浮层 —— 「更多」菜单、对话框、提示条、底部弹层、音量浮窗 —— 都带着 Material 的阴影，在 MIUI / HyperOS 的小窗里那条阴影正好压在画面上：窗口小、内容亮，200dp 的菜单周围糊一圈灰边，比菜单本身还显眼。现在阴影**在主题层**关掉，而不是逐处写 `elevation: 0`：真正的来源是 `ColorScheme.shadow`（M3 每个浮层组件在自己的 defaults 里各取一遍，「更多」菜单那处就是 `shadowColor => _colors.shadow`），在那一个值上设成透明就能全覆盖，包括会整体替换配色的动态取色与 OLED 纯黑。同时把对话框 / 提示条 / 底部弹层 / 弹出菜单的 `elevation` 钉成 0，音量浮窗自带的 `BoxShadow` 也去掉
+* **验的是像素，不是配置。** `overlay_no_shadow_pixels_test.dart` 在纯白底上弹一个菜单，读回位图，量菜单外侧那条带子里最暗的像素：必须高于 0.97。同一套测量还会跑一遍原生主题作为对照，而且**必须**测出阴影（读数 0.78）—— 否则"通过"可能只是检测器不灵敏。`theme_no_shadow_test.dart` 则钉住浅色 / 深色 / 动态取色 / 纯黑四种主题的字段
+* **控制栏在小窗里不再溢出。** 它以前从 `MediaQuery` 取宽度（也就是**窗口**宽度），却排在实际拿到的那块盒子里 —— 小窗、分屏、侧边栏里两者并不相等，于是 512–639dp 这一段会把十个按钮排进 608dp 的内容宽度，必然溢出（release 下直接被裁掉 128dp）。现在宽度取自 `LayoutBuilder` 的自身约束，只有约束无界时才回落到窗口宽度。320 / 360 / 411 / 512 / 640 / 768 / 880dp 全部实测无溢出，播放键仍然精确落在控制栏中心（偏差 0.00dp）
+* **`LayoutBuilder` 的不是 hook 上下文。** store 订阅与 `useMemoized` 仍留在 `build` 里，只有"用哪个宽度排"这一件事进了 builder —— 在 builder 里调 hook 会在第一帧就触发 `Hooks can only be called from the build method`
+
 ## v2.6.8
 
 ### Changelog

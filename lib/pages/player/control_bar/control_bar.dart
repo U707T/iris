@@ -35,22 +35,50 @@ class ControlBar extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-
-    final playQueue =
-        usePlayQueueStore().select(context, (state) => state.playQueue);
-    final currentIndex =
-        usePlayQueueStore().select(context, (state) => state.currentIndex);
+    // hook / store 订阅必须在 build 里调用 —— LayoutBuilder 的 builder 不是
+    // hook 上下文 (`Hooks can only be called from the build method`), 所以先取
+    // 状态, 再把"用哪个宽度排"交给 LayoutBuilder。
+    final playQueue = usePlayQueueStore().select(
+      context,
+      (state) => state.playQueue,
+    );
+    final currentIndex = usePlayQueueStore().select(
+      context,
+      (state) => state.currentIndex,
+    );
 
     final FileItem? file = useMemoized(() {
-      final index =
-          playQueue.indexWhere((element) => element.index == currentIndex);
+      final index = playQueue.indexWhere(
+        (element) => element.index == currentIndex,
+      );
       return playQueue.isEmpty || index < 0 ? null : playQueue[index].file;
     }, [playQueue, currentIndex]);
 
     final bool hasVideos = useMemoized(
-        () => playQueue.any((e) => e.file.type == ContentType.video),
-        [playQueue]);
+      () => playQueue.any((e) => e.file.type == ContentType.video),
+      [playQueue],
+    );
+
+    // 宽度必须读**自身约束**, 不能读 MediaQuery:
+    // 系统小窗 / 分屏 / 侧边栏里, 控制栏拿到的盒子可能比窗口窄,
+    // 按窗口宽度排 10 个按钮就会直接溢出 (调试态是黄黑条纹, release 是裁切)。
+    // 约束无界时 (极少见, 例如被塞进没有宽度的 Row) 才回落到窗口宽度。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.hasBoundedWidth
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        return _buildBar(context, width, file: file, hasVideos: hasVideos);
+      },
+    );
+  }
+
+  Widget _buildBar(
+    BuildContext context,
+    double width, {
+    required FileItem? file,
+    required bool hasVideos,
+  }) {
 
     void enterShortVideo() {
       enterShortVideoMode();
@@ -156,8 +184,10 @@ class ControlBar extends HookWidget {
       overlayColor: overlayColor,
     );
 
-    final sliderWidget =
-        ControlBarSlider(showControl: showControl, color: color);
+    final sliderWidget = ControlBarSlider(
+      showControl: showControl,
+      color: color,
+    );
 
     // 按钮只声明一次, 两种布局只决定"怎么摆":
     // 以前三份列表各写一遍, 已经分叉 (mobile 没有 rate), 加按钮要改三处。
@@ -183,9 +213,13 @@ class ControlBar extends HookWidget {
     // → 刷新 → 横竖屏 → 更多。
     // 「更多」永远压最右, 刷新 / 横竖屏紧挨着它 —— 这三个是"工具的工具",
     // 与左边一排和播放直接相关的按钮区分开。
+    //
+    // 这一排最宽的一档是 768dp (9 个 48dp + 160dp 音量条 + 64dp 倍速 = 624dp),
+    // 而 512dp 起才可能出现 9 个按钮 (compact 收起音轨 / 存储), 两档都留出
+    // 100dp 以上余量 —— 排得下是靠宽度判定, 不需要再按顺序往外挪。
     final List<Widget> toolButtons = [
       if (file?.type != ContentType.audio) fitButton,
-      // 手机上这一行放不下, rate 只保留在宽屏
+      // 手机上这一行放不下, 倍速只保留在宽屏
       if (width >= 640) rateButton,
       volumeWidget,
       if (!compact) audioTrackButton,

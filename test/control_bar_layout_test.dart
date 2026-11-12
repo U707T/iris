@@ -36,6 +36,7 @@ Future<void> _pumpControlBar(
   WidgetTester tester,
   double width, {
   int items = 2,
+  bool constrainToOwnBox = false,
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -71,9 +72,12 @@ Future<void> _pumpControlBar(
           home: Scaffold(
             body: Center(
               child: MediaQuery(
-                // ControlBar 用 MediaQuery 的宽度选布局, 必须和实际约束一致,
-                // 否则测到的是"桌面布局被塞进 360 宽"的假溢出。
-                data: MediaQueryData(size: Size(width, 400)),
+                // 「小窗」测试里 MediaQuery 固定成 1280 宽 (相当于系统给
+                // Activity 的窗口), 而控制栏只拿到 constrainToOwnBox 那一小块
+                // —— 正是 MIUI / HyperOS 小窗、分屏、侧边栏的形态。
+                data: MediaQueryData(
+                  size: constrainToOwnBox ? const Size(1280, 720) : Size(width, 400),
+                ),
                 child: SizedBox(
                   width: width,
                   height: 220,
@@ -153,6 +157,19 @@ void main() {
     // 第一排只有五个: 随机 / 上一个 / 播放 / 下一个 / 循环
     expect(find.byIcon(Icons.shuffle_rounded), findsOneWidget);
     expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
+  });
+
+  testWidgets('小窗: 盒子比窗口窄时也按盒子排, 不溢出', (tester) async {
+    // MediaQuery 报 1280 (桌面单行), 但控制栏实际只有 512 / 600 / 640 宽。
+    // 按窗口宽度排 10 个按钮 = 608dp, 在这三档里都必然溢出。
+    for (final width in <double>[512, 560, 600, 639, 640, 700]) {
+      await _pumpControlBar(tester, width, constrainToOwnBox: true);
+      expect(
+        tester.takeException(),
+        isNull,
+        reason: '小窗 ${width.toInt()} 宽溢出',
+      );
+    }
   });
 
   testWidgets('第一排的播放键在正中间 (上 / 下一个隐藏时也一样)', (tester) async {
