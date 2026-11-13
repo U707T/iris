@@ -3,6 +3,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
+import 'package:iris/hooks/player/use_picture_in_picture.dart';
 import 'package:iris/hooks/use_app_lifecycle.dart';
 import 'package:iris/hooks/use_cover.dart';
 import 'package:iris/hooks/use_keyboard.dart';
@@ -14,6 +15,7 @@ import 'package:iris/pages/player/overlays/controls_auto_hide.dart';
 import 'package:iris/pages/player/overlays/controls_overlay.dart';
 import 'package:iris/pages/player/overlays/gesture_overlay.dart';
 import 'package:iris/pages/player/overlays/minimal_progress_overlay.dart';
+import 'package:iris/pages/player/overlays/picture_in_picture_overlay.dart';
 import 'package:iris/pages/player/overlays/playback_error_overlay.dart';
 import 'package:iris/pages/player/overlays/stats_overlay.dart';
 import 'package:iris/pages/player/gesture/seek_hub.dart';
@@ -25,6 +27,7 @@ import 'package:iris/utils/drop_queue.dart';
 import 'package:iris/utils/exit_app.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/logger.dart';
+import 'package:iris/utils/picture_in_picture.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/short_video.dart';
 import 'package:iris/store/use_app_store.dart';
@@ -52,6 +55,8 @@ class Player extends HookWidget {
         useAppStore().select(context, (state) => state.controlHideDelaySeconds);
     final isShortVideoMode =
         usePlayerUiStore().select(context, (state) => state.isShortVideoMode);
+    final isPictureInPicture =
+        usePlayerUiStore().select(context, (state) => state.isPictureInPicture);
     final isSeeking =
         usePlayerUiStore().select(context, (state) => state.isSeeking);
     final isHovering =
@@ -89,6 +94,10 @@ class Player extends HookWidget {
                 : file.name
             : INFO.title,
         [file, currentPlayIndex, playQueue]);
+
+    // 画中画: 平台状态镜像 + Android 自动进入的武装 / 解除。
+    // 必须放在 file 之后 —— 条件是"当前这条是不是视频"。
+    usePictureInPicture(file: file, hasOverlay: !isRouteCurrent);
 
     final focusNode = useFocusNode();
 
@@ -202,6 +211,13 @@ class Player extends HookWidget {
     Future<void> handleSystemBack() async {
       final uiState = usePlayerUiStore().state;
 
+      // 小窗里按返回: 桌面还原窗口; Android 的小窗归系统管, 这里什么也不做
+      // （别在 240dp 的小窗里弹"再次点击返回退出应用"）。
+      if (uiState.isPictureInPicture) {
+        await PictureInPicture.exit();
+        return;
+      }
+
       if (uiState.isShortVideoMode) {
         exitShortVideoMode();
         return;
@@ -311,37 +327,47 @@ class Player extends HookWidget {
                     fit: fit,
                   ),
                 ),
-                Positioned.fill(
-                  child: MinimalProgressOverlay(
-                    title: title,
-                    file: file,
+                if (!isPictureInPicture)
+                  Positioned.fill(
+                    child: MinimalProgressOverlay(
+                      title: title,
+                      file: file,
+                    ),
                   ),
-                ),
                 // Audio
                 if (file?.type == ContentType.audio)
                   Positioned.fill(
                     child: Audio(cover: cover),
                   ),
-                Positioned.fill(
-                  child: GestureOverlay(
-                    showControl: showControl,
-                    hideControl: hideControl,
-                    showProgress: showProgress,
+                // 小窗里换成最小交互层: 手势层那套双击快进 / 滑动 seek /
+                // 长按倍速在一块 240dp 的画面里既点不准也没有意义。
+                if (isPictureInPicture)
+                  const Positioned.fill(
+                    child: PictureInPictureOverlay(),
+                  )
+                else
+                  Positioned.fill(
+                    child: GestureOverlay(
+                      showControl: showControl,
+                      hideControl: hideControl,
+                      showProgress: showProgress,
+                    ),
                   ),
-                ),
               ],
               // 快进 / 快退提示 (双击步长 + 拖动读数): 两个模式共用同一份,
               // 放在分支之外, 主窗口与短视频模式的视觉/文案完全一致。
-              Positioned.fill(
-                child: SeekHudOverlay(controller: seekHub.hud),
-              ),
+              if (!isPictureInPicture)
+                Positioned.fill(
+                  child: SeekHudOverlay(controller: seekHub.hud),
+                ),
               // 播放统计 OSD (短视频模式没有统计源, 不显示, 免得开出一个空面板)
               if (!isShortVideoMode &&
+                  !isPictureInPicture &&
                   usePlayerUiStore()
                       .select(context, (state) => state.isShowStats))
                 const StatsOverlay(),
               // 退出确认提示 (Android 返回键二次确认)
-              if (isExitConfirm.value)
+              if (isExitConfirm.value && !isPictureInPicture)
                 Positioned(
                   left: 0,
                   right: 0,
@@ -366,7 +392,7 @@ class Player extends HookWidget {
                     ),
                   ),
                 ),
-              if (!isShortVideoMode)
+              if (!isShortVideoMode && !isPictureInPicture)
                 Positioned.fill(
                   child: ControlsOverlay(
                     file: file,
@@ -376,7 +402,7 @@ class Player extends HookWidget {
                   ),
                 ),
               // 播放失败提示 (装载超时 / 解码失败 / 网络错误)
-              if (!isShortVideoMode && playbackError != null)
+              if (!isShortVideoMode && !isPictureInPicture && playbackError != null)
                 Positioned.fill(
                   child: PlaybackErrorOverlay(
                     fileName: file?.name,

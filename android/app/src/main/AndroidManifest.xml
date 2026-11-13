@@ -18,8 +18,11 @@
     >
         <!-- resizeableActivity: 系统小窗 / 分屏需要它（targetSdk>=24 默认 true，显式写出来便于 OEM 识别）。
              configChanges 必须包含 orientation|screenSize|smallestScreenSize：小窗 / 分屏改尺寸时
-             不重建 Activity，播放器的 Texture 与解码状态才不会被打断。 -->
-        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleInstance" android:taskAffinity="" android:theme="@style/LaunchTheme" android:resizeableActivity="true" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
+             不重建 Activity，播放器的 Texture 与解码状态才不会被打断。
+             supportsPictureInPicture: 系统画中画（API 26+）。进入后 Activity 被收缩成
+             系统小窗，同样靠上面那串 configChanges 做到不重建 —— 否则每进一次小窗
+             都会重开解码器、从头缓冲。 -->
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleInstance" android:taskAffinity="" android:theme="@style/LaunchTheme" android:resizeableActivity="true" android:supportsPictureInPicture="true" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
             <!-- Specifies an Android theme to apply to this Activity as soon as
                  the Android process has started. This theme is visible to the user
                  while the Flutter UI initializes. After that, this theme continues

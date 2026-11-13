@@ -115,6 +115,13 @@ class PlayerUiStore extends Store<PlayerUiState> {
   void updateShortVideoMode(bool bool) {
     set(state.copyWith(isShortVideoMode: bool));
   }
+
+  /// 画中画状态。Android 由原生 `onPictureInPictureModeChanged` 回调写入,
+  /// 桌面端由小窗控制器写入 —— 两边的"真实状态"都不在 Flutter 侧, 这里只是
+  /// 一份镜像, 决定控制层要不要让位。
+  void updatePictureInPicture(bool bool) {
+    set(state.copyWith(isPictureInPicture: bool));
+  }
 }
 
 PlayerUiStore usePlayerUiStore() => create(() => PlayerUiStore());

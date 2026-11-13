@@ -25,10 +25,12 @@ IRIS is a lightweight video player built with Flutter. This repository is an enh
 - [X] File search
 - [X] Remember window size and position
 - [X] Configurable skip duration
+- [X] Picture-in-picture (Android system window / desktop always-on-top mini window)
 - [X] Pure black (OLED) theme
 
 ### Highlights added by this fork
 
+- **Picture-in-picture**: one switch under Settings → Play. On Android, leaving the app while a video plays enters the system PiP window (smoothly handed over by the system on Android 12+, entered at the same moment on older releases); it can also be entered from **More → Picture-in-picture**. Desktop has no system PiP protocol, so the window shrinks to an always-on-top mini window anchored to the bottom-right, restored with `Esc` or the button in its corner. Only tap-to-play/pause survives inside it — a 240 dp picture has no room for a control bar
 - **Short video mode**: enter it from the control bar button; a preloaded player pool makes vertical swiping seamless; the progress bar can be tapped / dragged; double-tapping the left / right side seeks with a brief "±Ns" pill; long-press speed-up shows a breathing light effect; hold the volume button and slide to adjust the device volume (hover + wheel to fine-tune on desktop)
 - **Control bar rework**: the two rows now have separate jobs — transport only (shuffle / previous / play / next / repeat) on top, tools below (fit / volume / queue / short video / refresh playlist / landscape-portrait / more). Stop and the zoom magnifier are gone (`Ctrl + C` still stops, zoom lives on pinch and `Ctrl` + wheel with a precise panel under **More → Zoom**); refresh rescans the current folder and edits the queue without touching what is playing, and manual zoom snaps back to the original size near 100%
 - **Screen orientation, one tap away**: the tool row has a landscape ↔ portrait toggle; the more menu still offers all three choices (device / landscape / portrait) for system floating windows and split screen

@@ -64,6 +64,7 @@ abstract class AppState with _$AppState {
     @Default(5) int seekStepSeconds,
     @Default(10) int seekStepLargeSeconds,
     @Default(true) bool pureBlackTheme,
+    @Default(false) bool pictureInPicture,
   }) = _AppState;
 
   factory AppState.fromJson(Map<String, dynamic> json) =>

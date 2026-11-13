@@ -39,6 +39,7 @@ abstract class PlayerUiState with _$PlayerUiState {
     @Default(false) bool isShowProgress,
     @Default(false) bool isShowStats,
     @Default(false) bool isShortVideoMode,
+    @Default(false) bool isPictureInPicture,
   }) = _PlayerUiState;
 
   factory PlayerUiState.fromJson(Map<String, dynamic> json) =>

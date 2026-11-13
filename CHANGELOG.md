@@ -1,3 +1,29 @@
+## v2.7.0
+
+### Changelog
+
+* **Picture-in-picture, behind a switch.** Settings → Play → Picture-in-picture (off by default) enables two things: the **More → Picture-in-picture** entry and, on Android, leaving the app while a video plays puts it in a system PiP window. The switch is only rendered when the platform can actually do it — Android needs API 26 plus `FEATURE_PICTURE_IN_PICTURE`, desktop always can (it is our own mini window), iOS has no implementation and therefore no switch. A switch that does nothing is worse than no switch
+* **The Android side talks to the platform, it does not re-implement it.** `MainActivity` gained a `iris/picture_in_picture` channel: `isSupported`, `setAutoEnter` (armed from Dart with the current aspect ratio) and `enter`. API 31+ arms `PictureInPictureParams.setAutoEnterEnabled` so the system animates into PiP on Home / gesture-nav itself; 26–30 fall back to `onUserLeaveHint`, because that is the last moment the activity is still resumed. `onPictureInPictureModeChanged` is the only source of truth for the UI — Flutter never assumes it entered
+* **Only arm while a video is actually playing.** Paused, audio-only, short-video mode and playback errors all disarm (`shouldArmAutoPictureInPicture`). A frozen frame in a 240 dp always-on-top window is worse than simply going to the background, and short-video mode swaps players while its aspect keeps changing. An open dialog or popup disarms it as well: those are routes inside the same window, so Home would put a shrunken settings page into the PiP window instead of the picture
+* **Aspect ratio is clamped before it reaches `PictureInPictureParams`.** Android accepts 1:2.39 – 2.39:1 and throws `IllegalArgumentException` outside it; 2.4:1 scope films and videos whose SAR leaks into the ratio cross that line. `resolvePictureInPictureAspect` clamps once and is shared by the native params, the desktop mini window and the tests, so the three cannot drift
+* **Desktop gets a real mini window.** There is no PiP protocol on Windows / Linux / macOS, so the same window is shrunk to a 420 dp always-on-top window anchored to the bottom-right of the *current* screen, at the video's aspect ratio (`computePictureInPictureBounds`). Entering stores bounds, minimum size, always-on-top, maximised and fullscreen state and restores every one of them on exit; dragging the picture moves the window (the frame is borderless and the title bar is hidden), a hover button and `Esc` leave it
+* **The mini window does not poison the remembered window state.** `saveCurrentWindowState` refuses to write while PiP is active, and `useResizeWindow` stops applying the video aspect ratio — otherwise quitting from a PiP window would make the app open at 420 dp next launch, and auto-resize would inflate the mini window back to a normal one
+* **Inside the mini window the normal controls are gone, deliberately.** Ten 48 dp buttons in a 240 dp window is not a control bar. The title bar, control bar, mini progress, stats, gesture layer and the Android "press back again" pill are all skipped; `PictureInPictureOverlay` keeps only tap-to-play/pause (Android's PiP chrome has no play button) and, on desktop, drag plus the exit affordance
+* **`PictureInPicture` is resolved once at startup**, not per build: `main()` probes the platform and stores the answer in `globals.pictureInPictureSupported`; the settings tile and the More entry both read it. The channel handler is installed there too, so a PiP window that is entered before the player mounts is not lost
+* **Tests: the rules that can be computed here.** `picture_in_picture_test.dart` pins the aspect clamp, the arm/disarm truth table, and that the mini window lands inside the work area for 7 ratios × 3 screens (including a screen at negative X); `picture_in_picture_settings_test.dart` pins the switch's visibility, its state binding and the More entry appearing only when the switch is on. The rules are covered; the native window itself (Android PiP, desktop window manager) cannot be exercised from this sandbox and still needs a real-device run
+
+### 更新日志
+
+* **画中画，收在一个开关后面。** 设置 → 播放 → 画中画（默认关闭）打开后同时启用两件事：**更多 → 画中画** 入口，以及 Android 上"正在放视频时离开应用自动进系统小窗"。开关只在平台真的支持时才出现 —— Android 要 API 26 + `FEATURE_PICTURE_IN_PICTURE`，桌面恒可（那是应用自己的小窗），iOS 没实现所以没有开关。留一个点了没反应的开关，比不给入口更糟
+* **Android 侧只对接平台，不自己造轮子。** `MainActivity` 新增 `iris/picture_in_picture` 通道：`isSupported`、`setAutoEnter`（由 Dart 带着当前宽高比来武装）、`enter`。API 31+ 用 `PictureInPictureParams.setAutoEnterEnabled`，按 Home / 上滑时由系统自己带过场动画进小窗；26–30 回落到 `onUserLeaveHint`，那是 Activity 还处于 resumed 的最后一刻。`onPictureInPictureModeChanged` 是界面状态的唯一来源 —— Flutter 侧不假设"点了就进去了"
+* **只在真放视频时武装。** 暂停 / 纯音频 / 短视频模式 / 播放失败都会解除（`shouldArmAutoPictureInPicture`）。一个冻在 240dp 置顶小窗里的画面比直接切后台更难受，而短视频模式会换播放器、宽高比也一直在变。开着对话框 / 播放队列 / 设置时同样解除 —— 那些都是同一个窗口里的路由，按 Home 会把缩小版设置页塞进小窗，而不是画面
+* **宽高比在到达 `PictureInPictureParams` 之前就夹好。** Android 只接受 1:2.39 – 2.39:1，越界直接 `IllegalArgumentException`；2.4:1 的宽银幕、以及 SAR 混进比例的片子都会踩线。`resolvePictureInPictureAspect` 夹一次，原生参数、桌面小窗和测试共用同一份规则，三处不会各走各的
+* **桌面端是一个真的小窗。** Windows / Linux / macOS 没有画中画协议，所以同一个窗口被缩成 420dp 的置顶小窗，贴着**当前屏幕**右下角，比例取视频比例（`computePictureInPictureBounds`）。进入前把窗口尺寸、最小尺寸、置顶、最大化、全屏各抄一份，退出时逐项还原；拖画面就是拖窗口（无边框且隐藏了标题栏），悬停按钮和 `Esc` 都能退出
+* **小窗不会污染"记住窗口大小"。** 画中画期间 `saveCurrentWindowState` 拒绝写盘、`useResizeWindow` 也不再套画面比例 —— 否则从小窗里退出应用，下次就会以 420dp 开场；自动调整比例则会把小窗重新撑回普通窗口
+* **小窗里刻意没有常规控件。** 240dp 宽里排十个 48dp 按钮不叫控制栏。标题栏、控制栏、迷你进度、统计、手势层、Android 的"再次返回退出"提示全部跳过；`PictureInPictureOverlay` 只留轻点播放 / 暂停（Android 的系统小窗自带控件里没有播放键）以及桌面端的拖动和退出按钮
+* **画中画能力只在启动时探测一次**，不在 build 里反复问原生：`main()` 把结果写进 `globals.pictureInPictureSupported`，设置项和「更多」入口都读它。通道回调也在那里挂好，进入小窗早于播放页挂载时状态也不会丢
+* **测试：能在这里算的规则都钉住了。** `picture_in_picture_test.dart` 钉住宽高比夹取、武装 / 解除的真值表，以及 7 种比例 × 3 块屏幕（含 X 为负的副屏）下小窗都落在工作区内；`picture_in_picture_settings_test.dart` 钉住开关的可见性、状态绑定，以及「更多」入口只在开关打开时出现。规则本身都有断言；原生小窗（Android PiP / 桌面窗口管理器）在这个沙箱里跑不了，仍需真机验证
+
 ## v2.6.9
 
 ### Changelog

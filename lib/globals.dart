@@ -19,6 +19,17 @@ bool autoPlayOnLaunch = false;
 /// Windows 无障碍兼容开关 (规避引擎崩溃 flutter/flutter#175041)。
 /// 见 lib/utils/windows_a11y_compat.dart; main() 启动时按环境变量 / 命令行参数设置。
 bool disableWindowsA11y = false;
+
+/// 画中画能力 (main() 启动时探测一次)。
+///
+/// Android 要 API >= 26 且系统声明 FEATURE_PICTURE_IN_PICTURE; 桌面端走
+/// 应用内小窗, 恒为 true; iOS 没有实现, 恒为 false。设置页的开关和「更多」
+/// 菜单的入口都读这一份结果, 免得每次 build 都去问一次原生。
+bool pictureInPictureSupported = false;
+
+/// 主窗口的最小尺寸。普通模式下它是控制栏 / 标题栏不被挤坏的下限;
+/// 画中画小窗会临时放宽到更小, 退出时再恢复成这个值 (见 picture_in_picture.dart)。
+const Size minimumWindowSize = Size(427, 240);
 final moreMenuKey = GlobalKey<PopupMenuButtonState>();
 final rateMenuKey = GlobalKey<PopupMenuButtonState>();
 const double minZoom = 0.25;

@@ -15,6 +15,7 @@ import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/theme.dart';
 import 'package:iris/utils/data_migration.dart';
 import 'package:iris/utils/logger.dart';
+import 'package:iris/utils/picture_in_picture.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/request_storage_permission.dart';
 import 'package:iris/utils/windows_a11y_compat.dart';
@@ -56,6 +57,10 @@ void main(List<String> arguments) async {
 
   MediaKit.ensureInitialized();
 
+  // 画中画能力只探测一次 (结果写进 globals): 设置页的开关、「更多」菜单的
+  // 入口、播放页的自动进入都读那一份, 不在 build 里反复问原生。
+  await PictureInPicture.detectSupport();
+
 
   final appLinks = AppLinks();
   final initUri = await appLinks.getInitialLinkString();
@@ -74,7 +79,7 @@ void main(List<String> arguments) async {
 
     WindowOptions windowOptions = const WindowOptions(
       size: Size(1280, 720),
-      minimumSize: Size(427, 240),
+      minimumSize: globals.minimumWindowSize,
       center: true,
       backgroundColor: Colors.transparent,
       skipTaskbar: false,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
@@ -12,6 +13,7 @@ import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/exit_app.dart';
 import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/utils/picture_in_picture.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/take_screenshot.dart';
 import 'package:iris/widgets/bottom_sheets/show_open_link_bottom_sheet.dart';
@@ -65,6 +67,12 @@ class MoreMenuButton extends HookWidget {
     // 「缩放」原来在控制栏上占一个放大镜按钮; 按钮让位给刷新 / 横竖屏后,
     // 精确调节 (滑条 + 步进) 收到这里, 手势之外仍然有入口。
     final zoom = usePlayerUiStore().select(context, (state) => state.zoom);
+    // 画中画开关与当前画面的宽高比: 进入小窗时按它定形状 (Android 的
+    // PictureInPictureParams, 桌面小窗的尺寸都读这一份)。
+    final bool pictureInPicture =
+        useAppStore().select(context, (state) => state.pictureInPicture);
+    final double aspectRatio =
+        usePlayerUiStore().select(context, (state) => state.aspectRatio);
     // 「屏幕方向」与设置里那一项读写同一份状态, 这里只是把入口从四层提到两层
     final ScreenOrientation screenOrientation =
         useAppStore().select(context, (state) => state.orientation);
@@ -211,6 +219,23 @@ class MoreMenuButton extends HookWidget {
                 ),
               ),
               onTap: () => showControlForHover(showZoomDialog(context)),
+            ),
+          // 画中画: 设置里的总开关关着就不出现 —— 开关本身就是"要不要这个能力",
+          // 留着入口反而会让人以为设置没生效。
+          if (file?.type == ContentType.video &&
+              PictureInPicture.isSupported &&
+              pictureInPicture)
+            PopupMenuItem(
+              child: ListTile(
+                mouseCursor: SystemMouseCursors.click,
+                leading:
+                    const Icon(Icons.picture_in_picture_alt_rounded, size: 20),
+                title: Text(t.enter_picture_in_picture),
+              ),
+              onTap: () {
+                showControl();
+                unawaited(PictureInPicture.enter(aspectRatio: aspectRatio));
+              },
             ),
           // 屏幕方向: 设置里那一项埋在「更多 → 设置 → 播放 → 屏幕方向」四层之下,
           // 这里给同一份设置一个两层入口 (设备 / 横向 / 纵向, 与原对话框一致)。

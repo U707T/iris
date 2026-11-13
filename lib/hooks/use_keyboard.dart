@@ -12,6 +12,7 @@ import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/exit_app.dart';
+import 'package:iris/utils/picture_in_picture.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:iris/utils/short_video.dart';
 import 'package:iris/utils/take_screenshot.dart';
@@ -218,9 +219,11 @@ KeyboardEvent useKeyboard({
             ),
           );
           break;
-        // 退出全屏 / 退出短视频模式
+        // 退出画中画 / 退出全屏 / 退出短视频模式
         case LogicalKeyboardKey.escape:
-          if (usePlayerUiStore().state.isShortVideoMode) {
+          if (usePlayerUiStore().state.isPictureInPicture) {
+            await PictureInPicture.exit();
+          } else if (usePlayerUiStore().state.isShortVideoMode) {
             exitShortVideoMode();
           } else if (isDesktop && playerUiState.isFullScreen) {
             usePlayerUiStore().updateFullScreen(false);

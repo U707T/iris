@@ -24,6 +24,8 @@ void useResizeWindow() {
   final autoResize = useAppStore().select(context, (state) => state.autoResize);
   final isFullScreen =
       usePlayerUiStore().select(context, (state) => state.isFullScreen);
+  final isPictureInPicture =
+      usePlayerUiStore().select(context, (state) => state.isPictureInPicture);
   final aspectRatio =
       usePlayerUiStore().select(context, (state) => state.aspectRatio);
 
@@ -42,6 +44,9 @@ void useResizeWindow() {
 
     Future<void> performResize() async {
       if (isFullScreen) return;
+      // 画中画小窗的尺寸由 picture_in_picture.dart 决定, 这里再按画面比例
+      // 调一次会把它撑回普通窗口的大小。
+      if (isPictureInPicture) return;
 
       if (!autoResize) {
         await windowManager.setAspectRatio(0);
@@ -121,6 +126,7 @@ void useResizeWindow() {
   }, [
     autoResize,
     isFullScreen,
+    isPictureInPicture,
     aspectRatio,
     contentType,
   ]);

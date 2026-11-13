@@ -180,6 +180,11 @@ class AppStore extends PersistentStore<AppState> {
     await save(state);
   }
 
+  Future<void> togglePictureInPicture() async {
+    set(state.copyWith(pictureInPicture: !state.pictureInPicture));
+    await save(state);
+  }
+
   Future<void> updateWindowBounds(List<double>? bounds,
       {bool? maximized}) async {
     set(state.copyWith(

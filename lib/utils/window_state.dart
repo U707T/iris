@@ -1,4 +1,5 @@
 import 'package:iris/store/use_app_store.dart';
+import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/platform.dart';
 import 'package:window_manager/window_manager.dart';
@@ -8,9 +9,13 @@ import 'package:window_manager/window_manager.dart';
 /// 平时由 useRememberWindow 的 600ms 防抖调用；关窗时也要显式 flush 一次，
 /// 否则「拖完窗口立刻 Alt+F4」会丢掉最后一次调整。
 /// 全屏时不覆盖普通窗口的 bounds，和防抖保存的行为保持一致。
+///
+/// 画中画小窗同理：它只是临时的显示形态，把 420dp 的尺寸记成"上次的窗口大小"，
+/// 下次启动就会以一块小窗开场（而且用户已经关掉画中画也回不去）。
 Future<void> saveCurrentWindowState() async {
   if (!isDesktop) return;
   if (!useAppStore().state.rememberWindowSize) return;
+  if (usePlayerUiStore().state.isPictureInPicture) return;
 
   try {
     if (await windowManager.isFullScreen()) return;

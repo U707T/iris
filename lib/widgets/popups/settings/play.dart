@@ -8,6 +8,7 @@ import 'package:iris/widgets/dialogs/show_long_press_speed_dialog.dart';
 import 'package:iris/widgets/dialogs/show_orientation_dialog.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/utils/picture_in_picture.dart';
 import 'package:iris/utils/platform.dart';
 
 class Play extends HookWidget {
@@ -35,6 +36,8 @@ class Play extends HookWidget {
         useAppStore().select(context, (state) => state.autoHideControls);
     final int controlHideDelaySeconds =
         useAppStore().select(context, (state) => state.controlHideDelaySeconds);
+    final bool pictureInPicture =
+        useAppStore().select(context, (state) => state.pictureInPicture);
 
     final orientationMap = {
       ScreenOrientation.device: t.device,
@@ -136,6 +139,21 @@ class Play extends HookWidget {
                   .toList(),
             ),
           ),
+          // 画中画: 能力不支持时整项不出现 (Android < 8.0 / iOS),
+          // 而不是留一个点了没反应的开关。
+          if (PictureInPicture.isSupported)
+            ListTile(
+              leading: const Icon(Icons.picture_in_picture_alt_rounded),
+              title: Text(t.picture_in_picture),
+              subtitle: Text(isDesktop
+                  ? t.picture_in_picture_description_desktop
+                  : t.picture_in_picture_description),
+              onTap: () => useAppStore().togglePictureInPicture(),
+              trailing: Checkbox(
+                value: pictureInPicture,
+                onChanged: (_) => useAppStore().togglePictureInPicture(),
+              ),
+            ),
           Visibility(
             visible: isDesktop,
             child: ListTile(
