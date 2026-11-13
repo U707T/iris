@@ -77,7 +77,7 @@ void main() {
   });
 }
 
-/// [getTheme] 只把 context 透传给 [baseTheme], 而 baseTheme 不用它 ——
+/// [getTheme] 目前不读 context (只为将来需要 MediaQuery 时留的入参) ——
 /// 这里给一个不依赖树的空实现, 免得为了测主题去搭 Widget 环境。
 class _FakeContext implements BuildContext {
   @override

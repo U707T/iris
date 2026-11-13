@@ -56,6 +56,10 @@ class Play extends HookWidget {
             title: Text(t.seek_step),
             subtitle: Text(t.seek_step_seconds(seekStepSeconds)),
             trailing: DropdownButton<int>(
+              // DropdownButton 的菜单阴影不走 ColorScheme.shadow —— 它画的是
+              // kElevationToShadow[elevation] 里写死的黑色 BoxShadow, 主题层
+              // 关不掉, 只能逐个传 0。
+              elevation: 0,
               borderRadius: BorderRadius.circular(12),
               padding: const EdgeInsets.symmetric(horizontal: 8),
               value: seekStepSeconds,
@@ -75,6 +79,10 @@ class Play extends HookWidget {
             title: Text(t.seek_step_large),
             subtitle: Text(t.seek_step_seconds(seekStepLargeSeconds)),
             trailing: DropdownButton<int>(
+              // DropdownButton 的菜单阴影不走 ColorScheme.shadow —— 它画的是
+              // kElevationToShadow[elevation] 里写死的黑色 BoxShadow, 主题层
+              // 关不掉, 只能逐个传 0。
+              elevation: 0,
               borderRadius: BorderRadius.circular(12),
               padding: const EdgeInsets.symmetric(horizontal: 8),
               value: seekStepLargeSeconds,
@@ -103,6 +111,10 @@ class Play extends HookWidget {
             leading: const Icon(Icons.timer_outlined),
             title: Text(t.auto_hide_delay),
             trailing: DropdownButton<int>(
+              // DropdownButton 的菜单阴影不走 ColorScheme.shadow —— 它画的是
+              // kElevationToShadow[elevation] 里写死的黑色 BoxShadow, 主题层
+              // 关不掉, 只能逐个传 0。
+              elevation: 0,
               borderRadius: BorderRadius.circular(12),
               padding: const EdgeInsets.symmetric(horizontal: 8),
               value: const [2, 3, 5, 10, 15, 30]
