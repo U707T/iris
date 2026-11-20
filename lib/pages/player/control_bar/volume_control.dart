@@ -8,27 +8,30 @@ import 'package:iris/pages/player/control_bar/volume_slider.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/toggle_mute_or_restore.dart';
-import 'package:popover/popover.dart';
 
-Future<void> showVolumePopover(
+/// 音量面板。
+///
+/// 以前用 `popover` 包：它把内容塞进一颗 **旧版** `Material` 里，而
+/// `material_ui` 的 Slider 认的是新版 `Material` —— debug 下点开会直接
+/// 断言 `No Material widget found`。控制栏的音量按钮已经让位给存储，
+/// 面板改成从这里进，顺手换成标准 AlertDialog：Material 由对话框自己
+/// 提供，主题也不会在两套 Material 之间漂移。
+Future<void> showVolumeDialog(
   BuildContext context,
   void Function() showControl,
-) async => showPopover(
+) async => showDialog<void>(
   context: context,
-  bodyBuilder: (context) => Container(
-    padding: EdgeInsets.fromLTRB(8, 0, 16, 0),
-    child: VolumeControl(showControl: showControl),
-  ),
-  direction: PopoverDirection.top,
-  width: 240,
-  height: 48,
-  arrowHeight: 0,
-  arrowWidth: 0,
-  backgroundColor: Theme.of(context).colorScheme.surface,
-  barrierColor: Colors.transparent,
-  // popover 自带的默认阴影 (BoxShadow 0x1F000000) 与全应用"浮层不投影"
-  // 的约定冲突, 小窗里会糊在画面上; 这里显式去掉。
-  shadow: const [],
+  builder: (context) {
+    final t = getLocalizations(context);
+    return AlertDialog(
+      title: Text(t.volume),
+      contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      content: SizedBox(
+        width: 280,
+        child: VolumeControl(showControl: showControl),
+      ),
+    );
+  },
 );
 
 class VolumeControl extends HookWidget {

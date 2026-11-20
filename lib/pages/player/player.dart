@@ -69,7 +69,7 @@ class Player extends HookWidget {
 
     // 弹层 / 菜单 / 对话框盖在播放器上时, 本页不再是 current route。
     // 用它统一判断「现在有东西压在控制栏上面」: 一处覆盖所有入口
-    // (弹出菜单 / 播放队列 / 设置 / 关于 / 快捷键 / 音量 popover ...),
+    // (弹出菜单 / 播放队列 / 设置 / 关于 / 快捷键 / 音量对话框 ...),
     // 不再靠每个按钮自己记得先置 isHovering。
     final bool isRouteCurrent = ModalRoute.of(context)?.isCurrent ?? true;
 

@@ -12,6 +12,7 @@ import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/toggle_shuffle.dart';
 import 'package:iris/widgets/popup.dart';
 import 'package:iris/widgets/popups/play_queue.dart';
+import 'package:iris/widgets/popups/storages/storages.dart';
 import 'package:provider/provider.dart';
 
 /// 播放 / 暂停按钮 (含初始化指示与拖动保护)
@@ -331,19 +332,45 @@ class RateButton extends HookWidget {
   }
 }
 
-/// 音量: 窄窗口为弹出面板, 宽窗口为内联滑条
+/// 桌面单行的内联音量滑条。
+///
+/// 只在 ≥1200 的单行布局里出现（两行布局的音量在「更多 → 音量」里），
+/// 所以这里没有「窄窗口弹面板」那条分支 —— 留着也永远走不到。
 class VolumeWidget extends HookWidget {
   const VolumeWidget({
     super.key,
-    required this.width,
     required this.showControl,
+    this.color,
+    this.overlayColor,
+  });
+
+  final void Function() showControl;
+  final Color? color;
+  final WidgetStateProperty<Color?>? overlayColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 160,
+      child: VolumeControl(
+        showControl: showControl,
+        showVolumeText: false,
+        color: color,
+        overlayColor: overlayColor,
+      ),
+    );
+  }
+}
+
+/// 存储 (打开文件)
+class StorageButton extends HookWidget {
+  const StorageButton({
+    super.key,
     required this.showControlForHover,
     this.color,
     this.overlayColor,
   });
 
-  final double width;
-  final void Function() showControl;
   final Future<void> Function(Future<void> callback) showControlForHover;
   final Color? color;
   final WidgetStateProperty<Color?>? overlayColor;
@@ -351,37 +378,53 @@ class VolumeWidget extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final t = getLocalizations(context);
-    final volume = useAppStore().select(context, (state) => state.volume);
-    final isMuted = useAppStore().select(context, (state) => state.isMuted);
 
-    return width < 768
-        ? Builder(
-            builder: (context) => IconButton(
-              tooltip: '${t.volume}: $volume',
-              icon: Icon(
-                isMuted || volume == 0
-                    ? Icons.volume_off_rounded
-                    : volume < 50
-                        ? Icons.volume_down_rounded
-                        : Icons.volume_up_rounded,
-                size: 20,
-                color: color,
-              ),
-              onPressed: () => showControlForHover(
-                showVolumePopover(context, showControl),
-              ),
-              style: ButtonStyle(overlayColor: overlayColor),
-            ),
-          )
-        : SizedBox(
-            width: 160,
-            child: VolumeControl(
-              showControl: showControl,
-              showVolumeText: false,
-              color: color,
-              overlayColor: overlayColor,
-            ),
-          );
+    return IconButton(
+      tooltip: '${t.storage} ( F )',
+      icon: Icon(
+        Icons.storage_rounded,
+        size: 20,
+        color: color,
+      ),
+      onPressed: () => showControlForHover(
+        showPopup(
+          context: context,
+          child: const Storages(),
+          direction: PopupDirection.right,
+        ),
+      ),
+      style: ButtonStyle(overlayColor: overlayColor),
+    );
+  }
+}
+
+/// 进入短视频模式
+class ShortVideoButton extends HookWidget {
+  const ShortVideoButton({
+    super.key,
+    required this.onPressed,
+    this.color,
+    this.overlayColor,
+  });
+
+  final VoidCallback onPressed;
+  final Color? color;
+  final WidgetStateProperty<Color?>? overlayColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = getLocalizations(context);
+
+    return IconButton(
+      tooltip: t.short_video_mode,
+      icon: Icon(
+        Icons.swipe_vertical_rounded,
+        size: 20,
+        color: color,
+      ),
+      onPressed: onPressed,
+      style: ButtonStyle(overlayColor: overlayColor),
+    );
   }
 }
 

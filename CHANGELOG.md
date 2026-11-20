@@ -1,3 +1,17 @@
+## v2.8.1
+
+### Changelog
+
+* **Both control-bar rows now hold five slots.** Phones / tablets: transport (shuffle / previous / play / next / repeat) on top, and fit / storage / queue / short video / more below — fit and short video only take their slot when there is something to act on (audio has no fit, a queue with no video has no short video). Volume gave up its slot: touch already has the right-edge swipe and the hardware keys, and the full slider is one tap away under **More → Volume**. The desktop row is unchanged (transport + fit / rate / volume + slider + queue / fullscreen / more), so its **More** keeps storage and short video and gains no volume entry. The two sides are complements, decided from the same width the bar lays itself out with — a system floating window cannot end up with two storage entries and no way to reach the volume
+* **The volume panel is a normal dialog now.** The old one came from the `popover` package, which wraps its contents in a **legacy** `Material`; `material_ui`'s Slider asserts `debugCheckHasMaterial`, and the compatibility bridge in `main()` only maps theme and localizations, so debug builds threw `No Material widget found` the moment the panel opened. `showVolumeDialog` uses `AlertDialog`: the Material and the theme are the ones the rest of the app already uses, and the hand-rolled `shadow: []` opt-out leaves with the package
+* **Tests.** `control_bar_layout_test` pins the second row as fit → storage → queue → short video → more and asserts volume is no longer on the bar; `control_bar_more_menu_test` pins the sheet's new order (no storage, volume in its place), opens **More → Volume** to check the dialog really carries the slider, and keeps the wide two-level menu on storage plus short video
+
+### 更新日志
+
+* **两排控制栏现在都是五个位置。** 手机 / 平板：上排是随机 / 上一个 / 播放 / 下一个 / 循环，下排是画面适配 / 存储 / 队列 / 短视频 / 更多 —— 画面适配与短视频只在真有对象可作用时占位（纯音频没有画面适配，队列里没有视频就没有短视频）。音量让出了自己的位置：触屏上有右侧上下滑和系统音量键，完整滑条在「更多 → 音量」里一步可达。桌面单行不变（传输键 + 画面适配 / 倍速 / 音量 + 进度条 + 队列 / 全屏 / 更多），所以那边的「更多」保留存储与短视频、不新增音量入口。两边互为补集，判定用的是控制栏排版时的同一个宽度 —— 系统小窗里不会出现两个「存储」却找不到音量
+* **音量面板换成普通对话框。** 旧面板来自 `popover` 包，它把内容塞进一颗**旧版** `Material`；`material_ui` 的 Slider 会 `debugCheckHasMaterial`，而 `main()` 里的兼容桥只映射主题与本地化，debug 下点开就断言 `No Material widget found`。`showVolumeDialog` 用 `AlertDialog`：Material / Theme 与全应用一致，包里那套手写的 `shadow: []` 也随依赖一起删掉
+* **测试。** `control_bar_layout_test` 钉住第二排是 画面适配 → 存储 → 队列 → 短视频 → 更多，并断言音量已不在栏上；`control_bar_more_menu_test` 钉住 sheet 的新顺序（没有存储、音量补位），真的点开「更多 → 音量」确认弹出的是带滑条的对话框，宽屏两级菜单则仍然保留存储与短视频
+
 ## v2.8.0
 
 ### Changelog

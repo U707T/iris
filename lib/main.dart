@@ -197,7 +197,7 @@ class MyApp extends HookWidget {
         themeMode: themeMode,
         home: const Home(),
         builder: (context, child) {
-          // 兼容尚未迁移到 material_ui 的第三方包 (popover / flutter_markdown 等)
+          // 兼容尚未迁移到 material_ui 的第三方包 (flutter_markdown 等)
           // ignore: deprecated_member_use
           final Widget content = MaterialUiCompatibilityBridge(child: child!);
           // 临时规避 Windows 引擎无障碍桥崩溃 (flutter/flutter#175041):

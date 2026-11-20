@@ -11,16 +11,18 @@ import 'package:iris/utils/short_video.dart';
 
 /// 播放器底部控制栏。
 ///
-/// 两行 (手机 / 平板 / 窄桌面): 第一行只有播放控制 —— 随机 · 上一个 ·
-/// 播放暂停 · 下一个 · 循环; 第二行只有四个入口 —— 画面适配 · 音量 ·
-/// 播放队列 · 更多。
+/// 两行 (手机 / 平板 / 窄桌面), 每行五个位置:
+/// - 第一行只有播放控制 —— 随机 · 上一个 · 播放暂停 · 下一个 · 循环;
+/// - 第二行是画面适配 · 存储 · 播放队列 · 短视频 · 更多 (音频 / 队列里
+///   没有视频时, 画面适配与短视频各自不占位)。
 ///
 /// 单行 (桌面 ≥1200): 播放控制 + 画面适配 / 倍速 / 音量 + 进度条 + 队列 /
 /// 全屏 / 更多。
 ///
-/// 刷新播放列表、横竖屏、短视频、音轨、存储、倍速都不再占控制栏的位置:
-/// 它们全在「更多」里 (窄屏是底部 sheet, 宽屏是 popup)。控制栏只保留
-/// 每次播放都会用到的动作。
+/// 音量不在两行布局里占位: 触屏上有右侧上下滑与系统音量键, 完整滑条从
+/// 「更多 → 音量」进 (桌面单行仍在进度条左边内联滑条)。刷新播放列表、
+/// 横竖屏、音轨、倍速也只在「更多」里 —— 窄屏是底部 sheet, 宽屏是两级
+/// 菜单。控制栏只保留每次播放都会用到的动作。
 class ControlBar extends HookWidget {
   const ControlBar({
     super.key,
@@ -120,9 +122,17 @@ class ControlBar extends HookWidget {
       overlayColor: overlayColor,
     );
     final volumeWidget = VolumeWidget(
-      width: width,
       showControl: showControl,
+      color: color,
+      overlayColor: overlayColor,
+    );
+    final storageButton = StorageButton(
       showControlForHover: showControlForHover,
+      color: color,
+      overlayColor: overlayColor,
+    );
+    final shortVideoButton = ShortVideoButton(
+      onPressed: enterShortVideo,
       color: color,
       overlayColor: overlayColor,
     );
@@ -167,11 +177,15 @@ class ControlBar extends HookWidget {
       repeatButton,
     ];
 
-    // 两行布局的第二行: 四个入口, 不再随宽度增删。
+    // 两行布局的第二行: 画面适配 · 存储 · 队列 · 短视频 · 更多。
+    // 和第一排一样五个位置；短视频只在这条队列里真有视频时占位。
+    // 音量在这里让位（桌面单行仍保留滑条）：触屏上有右侧上下滑与系统音量键，
+    // 需要面板时从「更多 → 音量」进。
     final List<Widget> toolButtons = [
       if (file?.type != ContentType.audio) fitButton,
-      volumeWidget,
+      storageButton,
       playQueueButton,
+      if (hasVideos) shortVideoButton,
       moreMenuButton,
     ];
 

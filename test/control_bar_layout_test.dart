@@ -135,15 +135,16 @@ void main() {
     expect(find.byIcon(Icons.zoom_in_rounded), findsNothing);
   });
 
-  testWidgets('360 宽的第二排只有四个: 画面 → 音量 → 队列 → 更多',
+  testWidgets('360 宽的第二排是五个: 画面 → 存储 → 队列 → 短视频 → 更多',
       (tester) async {
     await _pumpControlBar(tester, 360);
 
     // 按从左到右的预期顺序; 每一项都必须存在且 x 递增
     final List<Finder> row = [
       find.byIcon(Icons.fit_screen_rounded),
-      find.byIcon(Icons.volume_up_rounded),
+      find.byIcon(Icons.storage_rounded),
       find.byIcon(Icons.playlist_play_rounded),
+      find.byIcon(Icons.swipe_vertical_rounded),
       find.byIcon(Icons.more_vert_rounded),
     ];
 
@@ -152,14 +153,14 @@ void main() {
     ];
 
     expect(xs, orderedEquals([...xs]..sort()), reason: '第二排按钮顺序: $xs');
-    // 第一排只有五个: 随机 / 上一个 / 播放 / 下一个 / 循环
+    // 第一排也是五个: 随机 / 上一个 / 播放 / 下一个 / 循环
     expect(find.byIcon(Icons.shuffle_rounded), findsOneWidget);
     expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
 
-    // 刷新 / 横竖屏 / 短视频已经收进「更多」, 不再占控制栏
+    // 音量让位给存储; 刷新 / 横竖屏仍然只在「更多」里
+    expect(find.byIcon(Icons.volume_up_rounded), findsNothing);
     expect(find.byIcon(Icons.refresh_rounded), findsNothing);
     expect(find.byIcon(Icons.screen_rotation_rounded), findsNothing);
-    expect(find.byIcon(Icons.swipe_vertical_rounded), findsNothing);
   });
 
   testWidgets('小窗: 盒子比窗口窄时也按盒子排, 不溢出', (tester) async {

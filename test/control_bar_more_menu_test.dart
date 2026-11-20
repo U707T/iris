@@ -117,26 +117,44 @@ void main() {
     expect(find.byType(PopupMenuDivider), findsNothing);
 
     _expectInOrder(tester, const [
-      // 打开内容
+      // 打开内容（存储已占控制栏第二个位置，不再重复）
       '打开文件',
       '打开链接',
-      '存储',
       // 画面与方向
       '截图',
       '旋转 / 翻转',
       '缩放',
       '屏幕方向',
-      // 播放与队列
+      // 播放与队列（音量从控制栏收进来）
       '播放速度',
       '音轨',
-      '短视频模式',
+      '音量',
       '刷新播放列表',
       '播放统计',
-      // 应用
+      // 应用（短视频已占控制栏第四个位置）
       '历史',
       '设置',
       '退出',
     ]);
+  });
+
+  testWidgets('窄屏「更多 → 音量」打开滑条对话框', (tester) async {
+    await _pumpControlBar(tester, const Size(360, 1200));
+
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('音量'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('音量'));
+    await tester.pumpAndSettle();
+
+    // 控制栏自己还有一条进度 Slider；音量对话框里的那条 max 是 100
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(
+      find.byWidgetPredicate((w) => w is Slider && w.max == 100),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('宽屏「更多」是两级菜单, 一级四组 / 二级是动作', (tester) async {
@@ -149,7 +167,7 @@ void main() {
     // 一级：只有四个分组
     _expectInOrder(tester, const ['打开内容', '画面与方向', '播放与队列', '应用']);
 
-    // 二级：打开内容
+    // 二级：打开内容（桌面单行没有存储按钮，菜单里保留）
     await tester.tap(find.text('打开内容'));
     await tester.pumpAndSettle();
     _expectInOrder(tester, const ['打开文件', '打开链接', '存储']);

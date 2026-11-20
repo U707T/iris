@@ -11,6 +11,7 @@ import 'package:iris/models/store/app_state.dart';
 import 'package:iris/models/storages/local.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
+import 'package:iris/pages/player/control_bar/volume_control.dart';
 import 'package:iris/utils/exit_app.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/picture_in_picture.dart';
@@ -38,8 +39,10 @@ import 'package:provider/provider.dart';
 /// - 宽屏: 锚在按钮上的 popup 菜单，带快捷键提示。
 ///
 /// 以前是 15 项平铺在一个 popup 里，控制栏第二排还另外摆着刷新 / 横竖屏 /
-/// 短视频三个入口。现在控制栏只留「画面适配 / 音量 / 队列 / 更多」，其余
-/// 全部收进这里 —— 入口只有一个，顺序也只有一个来源。
+/// 短视频三个入口。现在控制栏第二排固定五个位置（画面适配 / 存储 / 队列 /
+/// 短视频 / 更多），两边**互为补集**：已经占位的动作这里不再重复，让位的
+/// 动作（窄屏的音量）补进来。判定用的是控制栏传进来的同一个宽度 ——
+/// 系统小窗里窗口比盒子宽时，两边不会各算各的。
 class MoreMenuButton extends HookWidget {
   const MoreMenuButton({
     super.key,
@@ -83,6 +86,9 @@ class MoreMenuButton extends HookWidget {
       context,
       (state) => state.orientation,
     );
+    final int volume = useAppStore().select(context, (state) => state.volume);
+    final bool isMuted =
+        useAppStore().select(context, (state) => state.isMuted);
     final orientationLabels = {
       ScreenOrientation.device: t.device,
       ScreenOrientation.landscape: t.landscape,
@@ -122,18 +128,20 @@ class MoreMenuButton extends HookWidget {
               showControl();
             },
           ),
-          _MoreAction(
-            icon: Icons.storage_rounded,
-            label: t.storage,
-            shortcut: 'F',
-            onTap: () => showControlForHover(
-              showPopup(
-                context: context,
-                child: const Storages(),
-                direction: PopupDirection.right,
+          // 两行布局里「存储」已经占控制栏第二个位置；桌面单行没有它，才在这里给。
+          if (width >= 1200)
+            _MoreAction(
+              icon: Icons.storage_rounded,
+              label: t.storage,
+              shortcut: 'F',
+              onTap: () => showControlForHover(
+                showPopup(
+                  context: context,
+                  child: const Storages(),
+                  direction: PopupDirection.right,
+                ),
               ),
             ),
-          ),
         ],
       ),
       _MoreGroup(
@@ -223,7 +231,22 @@ class MoreMenuButton extends HookWidget {
               ),
             ),
           ),
-          if (hasVideos)
+          // 两行布局里音量不再占控制栏，改从这里进。
+          // 桌面单行仍在进度条左边保留滑条，所以那边不重复给入口。
+          if (width < 1200)
+            _MoreAction(
+              icon: isMuted || volume == 0
+                  ? Icons.volume_off_rounded
+                  : volume < 50
+                      ? Icons.volume_down_rounded
+                      : Icons.volume_up_rounded,
+              label: t.volume,
+              value: isMuted ? t.mute : '$volume',
+              onTap: () => showControlForHover(
+                showVolumeDialog(context, showControl),
+              ),
+            ),
+          if (hasVideos && width >= 1200)
             _MoreAction(
               icon: Icons.swipe_vertical_rounded,
               label: t.short_video_mode,
