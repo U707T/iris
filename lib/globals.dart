@@ -30,7 +30,13 @@ bool pictureInPictureSupported = false;
 /// 主窗口的最小尺寸。普通模式下它是控制栏 / 标题栏不被挤坏的下限;
 /// 画中画小窗会临时放宽到更小, 退出时再恢复成这个值 (见 picture_in_picture.dart)。
 const Size minimumWindowSize = Size(427, 240);
-final moreMenuKey = GlobalKey<PopupMenuButtonState>();
+/// 由当前可见的「更多」按钮注册：窄屏打开底部 sheet，宽屏打开两级菜单。
+/// 键盘 / 右键菜单键只调这一个入口，不重复判断布局。
+///
+/// 注册方负责在卸载时清空（且只在仍指向自己时才清空），所以这里不会留着
+/// 一个指向已销毁 context 的闭包。
+VoidCallback? openMoreMenu;
+
 final rateMenuKey = GlobalKey<PopupMenuButtonState>();
 const double minZoom = 0.25;
 const double maxZoom = 5.0;

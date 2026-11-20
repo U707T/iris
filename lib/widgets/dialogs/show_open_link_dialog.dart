@@ -74,10 +74,6 @@ class OpenLinkDialog extends HookWidget {
       ),
       actions: <Widget>[
         TextButton(
-          onPressed: () => Navigator.pop(context, 'Cancel'),
-          child: Text(t.cancel),
-        ),
-        TextButton(
           onPressed: url.value.isNotEmpty &&
                   RegExp(r'^(http://|https://)').hasMatch(url.value)
               ? play

@@ -40,10 +40,16 @@ ThemeData _applyNoShadow(
     shadowColor: _noShadow,
     popupMenuTheme: _popupMenuTheme(),
     listTileTheme: _listTileTheme(),
+    dividerTheme: DividerThemeData(
+      color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+      thickness: 1,
+      space: 1,
+    ),
     dialogTheme: theme.dialogTheme.copyWith(
       elevation: 0,
       shadowColor: _noShadow,
       surfaceTintColor: _noShadow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     snackBarTheme: theme.snackBarTheme.copyWith(elevation: 0),
     bottomSheetTheme: theme.bottomSheetTheme.copyWith(

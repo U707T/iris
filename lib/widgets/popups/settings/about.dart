@@ -5,9 +5,12 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:iris/info.dart';
 import 'package:iris/widgets/dialogs/show_release_dialog.dart';
+import 'package:iris/widgets/popups/settings/dependencies.dart';
 import 'package:iris/utils/get_latest_release.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/url.dart';
+import 'package:iris/widgets/panel.dart';
+import 'package:iris/widgets/setting_row.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 bool isMsix() {
@@ -39,31 +42,58 @@ class About extends HookWidget {
       return null;
     }, []);
 
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          ListTile(
-            leading:
-                Image.asset('assets/images/logo.png', width: 24, height: 24),
-            title: const Text(INFO.title),
-            subtitle: Text(t.app_description),
+    final scheme = Theme.of(context).colorScheme;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Image.asset('assets/images/logo_transparent.png'),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    INFO.title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (packageInfo.value != null)
+                    Text(
+                      packageInfo.value!.version,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ),
-          ListTile(
-            leading: const Icon(Icons.info_rounded),
-            title: Text(t.version),
-            subtitle: Text(
-                packageInfo.value != null ? packageInfo.value!.version : ''),
-            onTap: () => launchURL(
-                '${INFO.githubUrl}/releases/tag/v${packageInfo.value?.version}'),
-          ),
-          ListTile(
-              leading: const Icon(Icons.update_rounded),
-              title: Text(t.check_update),
-              subtitle: noNewVersion.value ? Text(t.no_new_version) : null,
+        ),
+        PanelSection(
+          children: [
+            SettingRow(
+              icon: Icons.update_rounded,
+              label: t.check_update,
+              value: noNewVersion.value ? t.no_new_version : null,
               onTap: () async {
                 if (isMsix()) {
                   launchURL(
-                      'ms-windows-store://pdp/?ProductId=${INFO.msStoreId}');
+                    'ms-windows-store://pdp/?ProductId=${INFO.msStoreId}',
+                  );
                   return;
                 }
                 noNewVersion.value = false;
@@ -73,21 +103,28 @@ class About extends HookWidget {
                 } else {
                   noNewVersion.value = true;
                 }
-              }),
-          ListTile(
-            leading: const Icon(Icons.code_rounded),
-            title: Text(t.source_code),
-            subtitle: const Text(INFO.githubUrl),
-            onTap: () => launchURL(INFO.githubUrl),
-          ),
-          ListTile(
-            leading: const Icon(Icons.person_rounded),
-            title: Text(t.author),
-            subtitle: const Text(INFO.author),
-            onTap: () => launchURL(INFO.authorUrl),
-          ),
-        ],
-      ),
+              },
+            ),
+            SettingRow(
+              icon: Icons.code_rounded,
+              label: t.source_code,
+              value: 'GitHub',
+              onTap: () => launchURL(INFO.githubUrl),
+            ),
+            SettingRow(
+              icon: Icons.person_rounded,
+              label: t.author,
+              value: INFO.author,
+              onTap: () => launchURL(INFO.authorUrl),
+            ),
+            SettingRow(
+              icon: Icons.inventory_2_rounded,
+              label: t.dependencies,
+              onTap: () => showDependenciesDialog(context),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

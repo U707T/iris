@@ -135,24 +135,24 @@ class ShortVideoFeedFooter extends HookWidget {
           IgnorePointer(
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 40, 16, 10),
+              padding: const EdgeInsets.fromLTRB(16, 32, 16, 8),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     items[currentFeedIndex].file.name,
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                       decoration: TextDecoration.none,
                       shadows: [Shadow(color: Colors.black54, blurRadius: 2)],
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   ValueListenableBuilder<Duration?>(
                     valueListenable: scrubPreview,
                     builder: (context, preview, _) {
@@ -161,23 +161,17 @@ class ShortVideoFeedFooter extends HookWidget {
                         color: Colors.white
                             .withValues(alpha: preview != null ? 1.0 : 0.7),
                         fontSize: 12,
+                        fontFeatures: const [FontFeature.tabularFigures()],
                         decoration: TextDecoration.none,
                         shadows: const [
                           Shadow(color: Colors.black54, blurRadius: 2),
                         ],
                       );
-                      return Row(
-                        children: [
-                          Text(
-                            '${currentFeedIndex + 1}/${items.length}',
-                            style: metaStyle,
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            '${formatDurationToMinutes(display)} / ${formatDurationToMinutes(duration)}',
-                            style: metaStyle,
-                          ),
-                        ],
+                      return Text(
+                        '${currentFeedIndex + 1}/${items.length} · '
+                        '${formatDurationToMinutes(display)} / '
+                        '${formatDurationToMinutes(duration)}',
+                        style: metaStyle,
                       );
                     },
                   ),
@@ -185,7 +179,10 @@ class ShortVideoFeedFooter extends HookWidget {
               ),
             ),
           ),
-          progressBar,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: progressBar,
+          ),
         ],
       ),
     );
@@ -297,9 +294,6 @@ class ShortVideoFeedProgressBar extends HookWidget {
                           decoration: const BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(color: Colors.black38, blurRadius: 4),
-                            ],
                           ),
                         ),
                       ),
@@ -319,14 +313,15 @@ class ShortVideoFeedProgressBar extends HookWidget {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(6),
+                              color: Colors.black.withValues(alpha: 0.72),
+                              borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
                               '${formatDurationToMinutes(display)} / ${formatDurationToMinutes(duration)}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 13,
+                                fontSize: 12,
+                                fontFeatures: [FontFeature.tabularFigures()],
                                 decoration: TextDecoration.none,
                               ),
                             ),
@@ -361,12 +356,14 @@ class ShortVideoFeedIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.black38,
+      color: Colors.black.withValues(alpha: 0.32),
       shape: const CircleBorder(),
       clipBehavior: Clip.antiAlias,
       child: IconButton(
         tooltip: tooltip,
-        icon: Icon(icon, color: Colors.white, size: 22),
+        icon: Icon(icon, color: Colors.white, size: 20),
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints.tightFor(width: 44, height: 44),
         onPressed: onPressed,
       ),
     );

@@ -109,6 +109,17 @@ class WebDAVDialog extends HookWidget {
       isTested.value = isConnected;
     }
 
+    /// 切换 HTTPS：只在标准端口 80 / 443 之间跟随，自定义端口不动。
+    void setHttps(bool value) {
+      isTested.value = false;
+      if (value && portController.text == '80') {
+        portController.text = '443';
+      } else if (!value && portController.text == '443') {
+        portController.text = '80';
+      }
+      https.value = value;
+    }
+
     /// 读取默认网关（一般是路由器地址）填到主机框，省得手动查 IP
     Future<void> fillDefaultGateway() async {
       if (isGatewayLoading.value) return;
@@ -224,54 +235,25 @@ class WebDAVDialog extends HookWidget {
                           isTested.value = false;
                           if (value == '443') {
                             https.value = true;
+                          } else if (value == '80') {
+                            https.value = false;
                           }
                         },
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    SizedBox(
-                      width: 96,
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.fromLTRB(0, 0, 0, 0),
-                        visualDensity: const VisualDensity(
-                          horizontal: -4,
-                          vertical: 0,
+                    const SizedBox(width: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('HTTPS'),
+                        const SizedBox(width: 4),
+                        ExcludeFocus(
+                          child: Switch.adaptive(
+                            value: https.value,
+                            onChanged: setHttps,
+                          ),
                         ),
-                        title: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            const Text('https'),
-                            Focus(
-                              descendantsAreFocusable: false,
-                              canRequestFocus: false,
-                              child: Checkbox(
-                                value: https.value,
-                                onChanged: (_) {
-                                  isTested.value = false;
-                                  if (portController.text == '80' &&
-                                      https.value == false) {
-                                    portController.text = '443';
-                                  } else if (portController.text == '443' &&
-                                      https.value == true) {
-                                    portController.text = '80';
-                                  }
-                                  https.value = !https.value;
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                        onTap: () {
-                          isTested.value = false;
-                          if (!https.value) {
-                            portController.text = '443';
-                          } else {
-                            portController.text = '80';
-                          }
-                          https.value = !https.value;
-                        },
-                      ),
+                      ],
                     ),
                   ],
                 ),

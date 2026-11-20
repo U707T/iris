@@ -59,8 +59,15 @@ class PlaybackErrorOverlay extends StatelessWidget {
                   ),
                 ),
               ],
-              TextButton(
+              const SizedBox(height: 4),
+              FilledButton(
                 onPressed: onRetry,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black,
+                  minimumSize: const Size(0, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                ),
                 child: Text(t.retry),
               ),
             ],

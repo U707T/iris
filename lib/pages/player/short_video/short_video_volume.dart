@@ -253,7 +253,9 @@ class ShortVideoVolumeButton extends HookWidget {
               builder: (context, preview, _) {
                 final level = (preview ?? appVolume.toDouble()).round();
                 return Material(
-                  color: holding.value ? Colors.black54 : Colors.black38,
+                  color: holding.value
+                      ? Colors.black.withValues(alpha: 0.54)
+                      : Colors.black.withValues(alpha: 0.32),
                   shape: const CircleBorder(),
                   clipBehavior: Clip.antiAlias,
                   child: IconButton(
@@ -264,8 +266,11 @@ class ShortVideoVolumeButton extends HookWidget {
                               ? Icons.volume_down_rounded
                               : Icons.volume_up_rounded,
                       color: Colors.white,
-                      size: 22,
+                      size: 20,
                     ),
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints.tightFor(width: 44, height: 44),
                     onPressed: toggleMuteOrRestore,
                   ),
                 );
@@ -288,31 +293,56 @@ class ShortVideoVolumeIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     final level = volume.round();
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 18, 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(8),
+        color: Colors.black.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            level == 0
-                ? Icons.volume_off_rounded
-                : level < 50
-                    ? Icons.volume_down_rounded
-                    : Icons.volume_up_rounded,
-            color: Colors.white,
-            size: 24,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                level == 0
+                    ? Icons.volume_off_rounded
+                    : level < 50
+                        ? Icons.volume_down_rounded
+                        : Icons.volume_up_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$level%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Text(
-            '$level%',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              decoration: TextDecoration.none,
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 120,
+            height: 3,
+            child: Stack(
+              children: [
+                const Positioned.fill(
+                  child: ColoredBox(color: Colors.white24),
+                ),
+                Positioned(
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 120 * level / 100,
+                  child: const ColoredBox(color: Colors.white),
+                ),
+              ],
             ),
           ),
         ],

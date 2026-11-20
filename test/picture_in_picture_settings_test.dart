@@ -100,11 +100,11 @@ void main() {
 
     expect(find.text('画中画'), findsOneWidget);
 
-    final checkbox = find.descendant(
+    final toggle = find.descendant(
       of: find.widgetWithText(ListTile, '画中画'),
-      matching: find.byType(Checkbox),
+      matching: find.byType(Switch),
     );
-    expect(tester.widget<Checkbox>(checkbox).value, isFalse,
+    expect(tester.widget<Switch>(toggle).value, isFalse,
         reason: '默认不开启画中画');
 
     // 点整行, 而不是标题那几个字 —— 用户点的是一行。
@@ -114,18 +114,18 @@ void main() {
     expect(useAppStore().state.pictureInPicture, isTrue);
   });
 
-  testWidgets('状态为开时复选框是勾上的', (tester) async {
+  testWidgets('状态为开时开关是打开的', (tester) async {
     _resetStores(pictureInPicture: true);
     globals.pictureInPictureSupported = true;
 
     await tester.pumpWidget(_app(const Play()));
     await tester.pump();
 
-    final checkbox = find.descendant(
+    final toggle = find.descendant(
       of: find.widgetWithText(ListTile, '画中画'),
-      matching: find.byType(Checkbox),
+      matching: find.byType(Switch),
     );
-    expect(tester.widget<Checkbox>(checkbox).value, isTrue);
+    expect(tester.widget<Switch>(toggle).value, isTrue);
   });
 
   testWidgets('开关关着时「更多」菜单里没有入口', (tester) async {
@@ -133,7 +133,7 @@ void main() {
     globals.pictureInPictureSupported = true;
     await _pumpControlBar(tester);
 
-    await tester.tap(find.byKey(globals.moreMenuKey));
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
     await tester.pumpAndSettle();
 
     expect(find.text('进入画中画'), findsNothing);
@@ -144,7 +144,7 @@ void main() {
     globals.pictureInPictureSupported = true;
     await _pumpControlBar(tester);
 
-    await tester.tap(find.byKey(globals.moreMenuKey));
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
     await tester.pumpAndSettle();
 
     expect(find.text('进入画中画'), findsOneWidget);
@@ -177,7 +177,7 @@ void _resetStores({bool pictureInPicture = false}) {
 }
 
 Future<void> _pumpControlBar(WidgetTester tester) async {
-  await tester.binding.setSurfaceSize(const Size(360, 400));
+  await tester.binding.setSurfaceSize(const Size(360, 1000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
   await tester.pumpWidget(

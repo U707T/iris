@@ -1,23 +1,16 @@
 import 'package:material_ui/material_ui.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:iris/hooks/use_material_tab_controller.dart';
+import 'package:iris/utils/get_localizations.dart';
+import 'package:iris/widgets/panel.dart';
 import 'package:iris/widgets/popups/settings/about.dart';
 import 'package:iris/widgets/popups/settings/general.dart';
-import 'package:iris/widgets/popups/settings/dependencies.dart';
 import 'package:iris/widgets/popups/settings/play.dart';
-import 'package:iris/utils/get_localizations.dart';
 
-class ITab {
-  final String title;
-  final Widget child;
-
-  const ITab({
-    required this.title,
-    required this.child,
-  });
-}
-
-class Settings extends HookWidget {
+/// 设置：一页，从上到下 —— 通用、播放、关于。
+///
+/// 以前是四个页签 + 底部再一条标题栏。页签本身不是问题，问题在于页签把
+/// 每一页都撑成整块面板：通用页只有三行，下面空着 500px。现在一页滚到底，
+/// 面板按内容收缩；内容超过上限才滚动。
+class Settings extends StatelessWidget {
   const Settings({super.key});
 
   static const title = 'Settings';
@@ -26,57 +19,16 @@ class Settings extends HookWidget {
   Widget build(BuildContext context) {
     final t = getLocalizations(context);
 
-    List<ITab> tabs = [
-      ITab(title: t.general, child: const General()),
-      ITab(title: t.play, child: const Play()),
-      ITab(title: t.about, child: const About()),
-      ITab(title: t.dependencies, child: const Dependencies()),
-    ];
-
-    final tabController = useMaterialTabController(initialLength: tabs.length);
-
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(
-          child: TabBarView(
-            controller: tabController,
-            children: tabs
-                .map((e) => Card(
-                      color: Colors.transparent,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: e.child,
-                    ))
-                .toList(),
-          ),
-        ),
-        Divider(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.25),
-          height: 0,
-        ),
-        Container(
-          padding: EdgeInsets.zero,
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(0, 0, 4, 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              children: [
-                TabBar(
-                    controller: tabController,
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    dividerColor: Colors.transparent,
-                    tabs: tabs.map((e) => Tab(text: e.title)).toList()),
-                const Spacer(),
-                IconButton(
-                  tooltip: '${t.close} ( Escape )',
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-              ],
-            ),
+        PanelHeader(title: Text(t.settings)),
+        const PanelDivider(),
+        Flexible(
+          child: ListView(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: const [General(), Play(), About()],
           ),
         ),
       ],

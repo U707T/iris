@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'package:material_ui/material_ui.dart' hide Card;
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:iris/utils/platform.dart';
-import 'package:iris/widgets/card.dart';
+import 'package:iris/widgets/panel.dart';
 import 'package:window_manager/window_manager.dart';
 
 enum PopupDirection { left, right }
@@ -138,15 +138,14 @@ class Popup<T> extends PopupRoute<T> {
                           maxWidth: screenWidth / size - 16,
                           maxHeight:
                               isDesktop ? screenHeight - 56 : screenHeight - 16,
-                          child: Card(
-                            child: Material(
-                              color: Colors.transparent,
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Expanded(child: child),
-                                ],
-                              ),
+                          child: PanelSurface(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // loose: 内容少的面板 (设置 / 音轨) 可以按内容
+                                // 收缩; 列表类面板内部用 Expanded, 仍然铺满。
+                                Flexible(child: child),
+                              ],
                             ),
                           ),
                         ),

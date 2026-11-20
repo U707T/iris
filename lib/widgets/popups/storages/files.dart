@@ -12,6 +12,7 @@ import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/files_sort.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/request_storage_permission.dart';
+import 'package:iris/widgets/panel.dart';
 import 'package:iris/widgets/popups/storages/files_bottom_bar.dart';
 import 'package:iris/widgets/popups/storages/files_list_row.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -33,11 +34,15 @@ class Files extends HookWidget {
 
     final sortBy = useAppStore().select(context, (state) => state.sortBy);
     final sortOrder = useAppStore().select(context, (state) => state.sortOrder);
-    final folderFirst =
-        useAppStore().select(context, (state) => state.folderFirst);
+    final folderFirst = useAppStore().select(
+      context,
+      (state) => state.folderFirst,
+    );
 
-    final currentPath =
-        useStorageStore().select(context, (state) => state.currentPath);
+    final currentPath = useStorageStore().select(
+      context,
+      (state) => state.currentPath,
+    );
 
     useEffect(() {
       if (currentPath.isEmpty) {
@@ -47,44 +52,59 @@ class Files extends HookWidget {
     }, []);
 
     final getFiles = useMemoized(
-        () async => await storage.getFiles(currentPath),
-        [currentPath, refreshState.value]);
+      () async => await storage.getFiles(currentPath),
+      [currentPath, refreshState.value],
+    );
 
     final result = useFuture(getFiles);
     final isLoading = useMemoized(
-        () => result.connectionState == ConnectionState.waiting,
-        [result.connectionState]);
+      () => result.connectionState == ConnectionState.waiting,
+      [result.connectionState],
+    );
     final isError = result.error != null;
 
     final filteredFiles = useMemoized(
-        () => (result.data ?? [])
-            .where((file) =>
+      () => (result.data ?? [])
+          .where(
+            (file) =>
                 [ContentType.video, ContentType.audio].contains(file.type) ||
-                file.isDir)
-            .toList(),
-        [result.data]);
+                file.isDir,
+          )
+          .toList(),
+      [result.data],
+    );
 
     final files = useMemoized(
-        () => filesSort(
-              files: filteredFiles,
-              sortBy: sortBy,
-              sortOrder: sortOrder,
-              folderFirst: folderFirst,
-            ),
-        [filteredFiles, sortBy, sortOrder, folderFirst]);
+      () => filesSort(
+        files: filteredFiles,
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+        folderFirst: folderFirst,
+      ),
+      [filteredFiles, sortBy, sortOrder, folderFirst],
+    );
 
     final itemScrollController = useMemoized(() => ItemScrollController(), []);
-    final scrollOffsetController =
-        useMemoized(() => ScrollOffsetController(), []);
-    final itemPositionsListener = useMemoized(() => ItemPositionsListener.create(), []);
-    final scrollOffsetListener =
-        useMemoized(() => ScrollOffsetListener.create(), []);
+    final scrollOffsetController = useMemoized(
+      () => ScrollOffsetController(),
+      [],
+    );
+    final itemPositionsListener = useMemoized(
+      () => ItemPositionsListener.create(),
+      [],
+    );
+    final scrollOffsetListener = useMemoized(
+      () => ScrollOffsetListener.create(),
+      [],
+    );
 
     void play(List<FileItem> files, int index) async {
       final clickedFile = files[index];
       final List<FileItem> filteredFiles = files
-          .where((file) =>
-              [ContentType.video, ContentType.audio].contains(file.type))
+          .where(
+            (file) =>
+                [ContentType.video, ContentType.audio].contains(file.type),
+          )
           .toList();
 
       final List<PlayQueueItem> playQueue = filteredFiles
@@ -101,8 +121,9 @@ class Files extends HookWidget {
 
     void back() {
       if (currentPath.length > storage.basePath.length) {
-        useStorageStore()
-            .updateCurrentPath(currentPath.sublist(0, currentPath.length - 1));
+        useStorageStore().updateCurrentPath(
+          currentPath.sublist(0, currentPath.length - 1),
+        );
       } else {
         useStorageStore().updateCurrentStorage(null);
         useStorageStore().updateCurrentPath([]);
@@ -112,10 +133,12 @@ class Files extends HookWidget {
     /// 列表主体: 依次短路 (权限 → 加载中 → 出错 → 空 → 列表), 避免深层嵌套
     Widget buildFiles() {
       // SAF (content://) 目录走 SafUtil, 不需要「所有文件访问」权限。
-      final bool isSafStorage = storage is LocalStorage &&
+      final bool isSafStorage =
+          storage is LocalStorage &&
           storage.basePath.isNotEmpty &&
           storage.basePath.first.startsWith('content://');
-      final bool needsStoragePermission = Platform.isAndroid &&
+      final bool needsStoragePermission =
+          Platform.isAndroid &&
           storage is LocalStorage &&
           !isSafStorage &&
           globals.storagePermissionStatus != PermissionStatus.granted;
@@ -123,55 +146,50 @@ class Files extends HookWidget {
       if (needsStoragePermission) {
         return Center(
           child: ElevatedButton(
-              onPressed: () async {
-                final status = await requestStoragePermission();
-                // 永久拒绝后 request() 不会再弹框, 只能把用户送到系统设置。
-                if (status.isPermanentlyDenied || status.isRestricted) {
-                  await openAppSettings();
-                }
-                refresh();
-              },
-              child: Text(t.grant_storage_permission)),
+            onPressed: () async {
+              final status = await requestStoragePermission();
+              // 永久拒绝后 request() 不会再弹框, 只能把用户送到系统设置。
+              if (status.isPermanentlyDenied || status.isRestricted) {
+                await openAppSettings();
+              }
+              refresh();
+            },
+            child: Text(t.grant_storage_permission),
+          ),
         );
       }
       if (isLoading) {
         return const Center(child: CircularProgressIndicator());
       }
       if (isError) {
-        return Center(child: Text(t.unable_to_fetch_files));
+        return PanelEmpty(label: t.unable_to_fetch_files);
       }
       if (files.isEmpty) {
-        return const Center();
+        return PanelEmpty(label: t.folder_empty);
       }
-      return Card(
-        color: Colors.transparent,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: ScrollablePositionedList.builder(
-          itemScrollController: itemScrollController,
-          scrollOffsetController: scrollOffsetController,
-          itemPositionsListener: itemPositionsListener,
-          scrollOffsetListener: scrollOffsetListener,
-          itemCount: files.length,
-          itemBuilder: (context, index) => FilesListRow(
-            file: files[index],
-            onAddToPlayQueue: () => usePlayQueueStore().add([files[index]]),
-            onTap: () {
-              if (files[index].isDir == true &&
-                  files[index].name.isNotEmpty) {
-                useStorageStore().updateCurrentPath(
-                    [...currentPath, files[index].name]);
-              } else {
-                if (files[index].type == ContentType.video ||
-                    files[index].type == ContentType.audio) {
-                  play(files, index);
-                  Navigator.pop(context);
-                }
+      return ScrollablePositionedList.builder(
+        itemScrollController: itemScrollController,
+        scrollOffsetController: scrollOffsetController,
+        itemPositionsListener: itemPositionsListener,
+        scrollOffsetListener: scrollOffsetListener,
+        itemCount: files.length,
+        itemBuilder: (context, index) => FilesListRow(
+          file: files[index],
+          onAddToPlayQueue: () => usePlayQueueStore().add([files[index]]),
+          onTap: () {
+            if (files[index].isDir == true && files[index].name.isNotEmpty) {
+              useStorageStore().updateCurrentPath([
+                ...currentPath,
+                files[index].name,
+              ]);
+            } else {
+              if (files[index].type == ContentType.video ||
+                  files[index].type == ContentType.audio) {
+                play(files, index);
+                Navigator.pop(context);
               }
-            },
-          ),
+            }
+          },
         ),
       );
     }
@@ -186,7 +204,12 @@ class Files extends HookWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          PanelHeader(
+            title: FilesBreadcrumb(storage: storage, currentPath: currentPath),
+          ),
+          const PanelDivider(),
           Expanded(child: buildFiles()),
+          const PanelDivider(),
           FilesBottomBar(
             storage: storage,
             currentPath: currentPath,

@@ -37,8 +37,9 @@ Future<void> _pumpControlBar(
   double width, {
   int items = 2,
   bool constrainToOwnBox = false,
+  double height = 400,
 }) async {
-  await tester.binding.setSurfaceSize(Size(width, 400));
+  await tester.binding.setSurfaceSize(Size(width, height));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 
   usePlayQueueStore().set(
@@ -76,7 +77,9 @@ Future<void> _pumpControlBar(
                 // Activity 的窗口), 而控制栏只拿到 constrainToOwnBox 那一小块
                 // —— 正是 MIUI / HyperOS 小窗、分屏、侧边栏的形态。
                 data: MediaQueryData(
-                  size: constrainToOwnBox ? const Size(1280, 720) : Size(width, 400),
+                  size: constrainToOwnBox
+                      ? const Size(1280, 720)
+                      : Size(width, height),
                 ),
                 child: SizedBox(
                   width: width,
@@ -104,8 +107,8 @@ void main() {
   });
   tearDown(() => debugIsDesktopOverride = null);
 
-  // 320 是窄机下限; 360 / 411 是主流手机; 448 / 512 卡住「音轨 / 存储」收起
-  // 的临界点; 640 / 900 是平板与窄窗口; 1024 起是桌面单行。
+  // 320 是窄机下限; 360 / 411 是主流手机; 448 / 512 是分屏 / 小窗;
+  // 640 / 900 是平板与窄窗口; 1024 起是桌面单行。
   // 任何一档溢出都会让测试失败。
   for (final width in <double>[
     320,
@@ -132,7 +135,7 @@ void main() {
     expect(find.byIcon(Icons.zoom_in_rounded), findsNothing);
   });
 
-  testWidgets('360 宽的第二排: 画面 → 音量 → 队列 → 短视频 → 刷新 → 横竖屏 → 更多',
+  testWidgets('360 宽的第二排只有四个: 画面 → 音量 → 队列 → 更多',
       (tester) async {
     await _pumpControlBar(tester, 360);
 
@@ -141,9 +144,6 @@ void main() {
       find.byIcon(Icons.fit_screen_rounded),
       find.byIcon(Icons.volume_up_rounded),
       find.byIcon(Icons.playlist_play_rounded),
-      find.byIcon(Icons.swipe_vertical_rounded),
-      find.byIcon(Icons.refresh_rounded),
-      find.byIcon(Icons.screen_rotation_rounded),
       find.byIcon(Icons.more_vert_rounded),
     ];
 
@@ -152,11 +152,14 @@ void main() {
     ];
 
     expect(xs, orderedEquals([...xs]..sort()), reason: '第二排按钮顺序: $xs');
-    // 横竖屏是倒数第二个 (右边只剩「更多」), 刷新紧挨着它
-    expect(xs[xs.length - 2], lessThan(xs.last));
     // 第一排只有五个: 随机 / 上一个 / 播放 / 下一个 / 循环
     expect(find.byIcon(Icons.shuffle_rounded), findsOneWidget);
     expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
+
+    // 刷新 / 横竖屏 / 短视频已经收进「更多」, 不再占控制栏
+    expect(find.byIcon(Icons.refresh_rounded), findsNothing);
+    expect(find.byIcon(Icons.screen_rotation_rounded), findsNothing);
+    expect(find.byIcon(Icons.swipe_vertical_rounded), findsNothing);
   });
 
   testWidgets('小窗: 盒子比窗口窄时也按盒子排, 不溢出', (tester) async {
@@ -194,25 +197,31 @@ void main() {
     }
   });
 
-  testWidgets('第二排的横竖屏按钮一键在横 / 纵之间切换', (tester) async {
-    await _pumpControlBar(tester, 360);
+  testWidgets('更多 → 屏幕方向仍然一键在横 / 纵之间切换', (tester) async {
+    await _pumpControlBar(tester, 360, height: 1000);
 
-    final Finder toggle = find.byIcon(Icons.screen_rotation_rounded);
-    // 跟随设备时, 第一下默认切横向 (手机上竖着拿是常态)
-    expect(find.byTooltip('切换到横屏'), findsOneWidget);
+    // 横竖屏入口收进「更多」sheet
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('屏幕方向'), findsOneWidget);
 
-    await tester.tap(toggle);
-    await tester.pump();
+    await tester.tap(find.text('屏幕方向'));
+    await tester.pumpAndSettle();
+
+    // 选择器里选「横向」→ 立即生效并关闭
+    await tester.tap(find.text('横向'));
+    await tester.pumpAndSettle();
     expect(useAppStore().state.orientation, ScreenOrientation.landscape);
 
-    // 提示跟着状态走: 重新构建一棵树再断言 (flutter_zustand 的 StoreScope 每次
-    // dispose 都会关掉 StoreLocator 的 changes 流, 单测里连 pump 多棵树之后
-    // `select` 的变更通知就送不到了 —— 只影响测试, 不影响 App 里只有一个根)。
-    await _pumpControlBar(tester, 360);
-    expect(find.byTooltip('切换到竖屏'), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.screen_rotation_rounded));
-    await tester.pump();
-    expect(useAppStore().state.orientation, ScreenOrientation.portrait);
+    // 重新构建一棵树再打开「更多」: 行右侧显示当前值。
+    // (flutter_zustand 的 StoreScope 每次 dispose 都会关掉 StoreLocator 的
+    // changes 流, 单测里连 pump 多棵树之后 `select` 的变更通知就送不到了 ——
+    // 只影响测试, 不影响 App 里只有一个根。)
+    await _pumpControlBar(tester, 360, height: 1000);
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('屏幕方向'), findsOneWidget,
+        reason: '重新打开 sheet 后应能看到屏幕方向行');
+    expect(find.text('横向'), findsOneWidget);
   });
 }

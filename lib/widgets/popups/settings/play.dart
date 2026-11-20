@@ -4,12 +4,13 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/store/app_state.dart';
-import 'package:iris/widgets/dialogs/show_long_press_speed_dialog.dart';
-import 'package:iris/widgets/dialogs/show_orientation_dialog.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/picture_in_picture.dart';
 import 'package:iris/utils/platform.dart';
+import 'package:iris/widgets/dialogs/show_choice_dialog.dart';
+import 'package:iris/widgets/panel.dart';
+import 'package:iris/widgets/setting_row.dart';
 
 class Play extends HookWidget {
   const Play({super.key});
@@ -18,186 +19,155 @@ class Play extends HookWidget {
   Widget build(BuildContext context) {
     final t = getLocalizations(context);
 
-    final autoResize =
-        useAppStore().select(context, (state) => state.autoResize);
-    final bool alwaysPlayFromBeginning =
-        useAppStore().select(context, (state) => state.alwaysPlayFromBeginning);
-    final orientation =
-        useAppStore().select(context, (state) => state.orientation);
-    final longPressSpeed =
-        useAppStore().select(context, (state) => state.longPressSpeed);
-    final rememberWindowSize =
-        useAppStore().select(context, (state) => state.rememberWindowSize);
-    final seekStepSeconds =
-        useAppStore().select(context, (state) => state.seekStepSeconds);
-    final seekStepLargeSeconds =
-        useAppStore().select(context, (state) => state.seekStepLargeSeconds);
-    final bool autoHideControls =
-        useAppStore().select(context, (state) => state.autoHideControls);
-    final int controlHideDelaySeconds =
-        useAppStore().select(context, (state) => state.controlHideDelaySeconds);
-    final bool pictureInPicture =
-        useAppStore().select(context, (state) => state.pictureInPicture);
+    final autoResize = useAppStore().select(
+      context,
+      (state) => state.autoResize,
+    );
+    final bool alwaysPlayFromBeginning = useAppStore().select(
+      context,
+      (state) => state.alwaysPlayFromBeginning,
+    );
+    final orientation = useAppStore().select(
+      context,
+      (state) => state.orientation,
+    );
+    final longPressSpeed = useAppStore().select(
+      context,
+      (state) => state.longPressSpeed,
+    );
+    final rememberWindowSize = useAppStore().select(
+      context,
+      (state) => state.rememberWindowSize,
+    );
+    final seekStepSeconds = useAppStore().select(
+      context,
+      (state) => state.seekStepSeconds,
+    );
+    final seekStepLargeSeconds = useAppStore().select(
+      context,
+      (state) => state.seekStepLargeSeconds,
+    );
+    final bool autoHideControls = useAppStore().select(
+      context,
+      (state) => state.autoHideControls,
+    );
+    final int controlHideDelaySeconds = useAppStore().select(
+      context,
+      (state) => state.controlHideDelaySeconds,
+    );
+    final bool pictureInPicture = useAppStore().select(
+      context,
+      (state) => state.pictureInPicture,
+    );
 
-    final orientationMap = {
+    final orientationLabels = {
       ScreenOrientation.device: t.device,
       ScreenOrientation.landscape: t.landscape,
       ScreenOrientation.portrait: t.portrait,
     };
 
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.touch_app_rounded),
-            title: Text(t.long_press_speed),
-            subtitle: Text('${longPressSpeed}X'),
-            onTap: () => showLongPressSpeedDialog(context),
-          ),
-          ListTile(
-            leading: const Icon(Icons.fast_forward_rounded),
-            title: Text(t.seek_step),
-            subtitle: Text(t.seek_step_seconds(seekStepSeconds)),
-            trailing: DropdownButton<int>(
-              // DropdownButton 的菜单阴影不走 ColorScheme.shadow —— 它画的是
-              // kElevationToShadow[elevation] 里写死的黑色 BoxShadow, 主题层
-              // 关不掉, 只能逐个传 0。
-              elevation: 0,
-              borderRadius: BorderRadius.circular(12),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              value: seekStepSeconds,
-              onChanged: (value) {
-                if (value != null) useAppStore().updateSeekStep(value);
-              },
-              items: const [1, 3, 5, 10, 15, 30, 60]
-                  .map((e) => DropdownMenuItem<int>(
-                        value: e,
-                        child: Text('${e}s'),
-                      ))
-                  .toList(),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        PanelSection(
+          children: [
+            SettingRow(
+              icon: Icons.touch_app_rounded,
+              label: t.long_press_speed,
+              value: '${longPressSpeed}X',
+              onTap: () =>
+                  showLongPressSpeedDialog(context, value: longPressSpeed),
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.fast_rewind_rounded),
-            title: Text(t.seek_step_large),
-            subtitle: Text(t.seek_step_seconds(seekStepLargeSeconds)),
-            trailing: DropdownButton<int>(
-              // DropdownButton 的菜单阴影不走 ColorScheme.shadow —— 它画的是
-              // kElevationToShadow[elevation] 里写死的黑色 BoxShadow, 主题层
-              // 关不掉, 只能逐个传 0。
-              elevation: 0,
-              borderRadius: BorderRadius.circular(12),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              value: seekStepLargeSeconds,
-              onChanged: (value) {
-                if (value != null) useAppStore().updateSeekStepLarge(value);
-              },
-              items: const [10, 15, 30, 60, 120, 300]
-                  .map((e) => DropdownMenuItem<int>(
-                        value: e,
-                        child: Text('${e}s'),
-                      ))
-                  .toList(),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.visibility_off_rounded),
-            title: Text(t.auto_hide_controls),
-            subtitle: Text(t.auto_hide_controls_description),
-            onTap: () => useAppStore().toggleAutoHideControls(),
-            trailing: Checkbox(
-              value: autoHideControls,
-              onChanged: (_) => useAppStore().toggleAutoHideControls(),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.timer_outlined),
-            title: Text(t.auto_hide_delay),
-            trailing: DropdownButton<int>(
-              // DropdownButton 的菜单阴影不走 ColorScheme.shadow —— 它画的是
-              // kElevationToShadow[elevation] 里写死的黑色 BoxShadow, 主题层
-              // 关不掉, 只能逐个传 0。
-              elevation: 0,
-              borderRadius: BorderRadius.circular(12),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              value: const [2, 3, 5, 10, 15, 30]
-                      .contains(controlHideDelaySeconds)
-                  ? controlHideDelaySeconds
-                  : 5,
-              onChanged: autoHideControls
-                  ? (value) {
-                      if (value != null) {
-                        useAppStore().updateControlHideDelay(value);
-                      }
-                    }
-                  : null,
-              items: const [2, 3, 5, 10, 15, 30]
-                  .map((e) => DropdownMenuItem<int>(
-                        value: e,
-                        child: Text('${e}s'),
-                      ))
-                  .toList(),
-            ),
-          ),
-          // 画中画: 能力不支持时整项不出现 (Android < 8.0 / iOS),
-          // 而不是留一个点了没反应的开关。
-          if (PictureInPicture.isSupported)
-            ListTile(
-              leading: const Icon(Icons.picture_in_picture_alt_rounded),
-              title: Text(t.picture_in_picture),
-              subtitle: Text(isDesktop
-                  ? t.picture_in_picture_description_desktop
-                  : t.picture_in_picture_description),
-              onTap: () => useAppStore().togglePictureInPicture(),
-              trailing: Checkbox(
-                value: pictureInPicture,
-                onChanged: (_) => useAppStore().togglePictureInPicture(),
+            SettingRow(
+              icon: Icons.fast_forward_rounded,
+              label: t.seek_step,
+              value: t.seek_step_seconds(seekStepSeconds),
+              onTap: () => showSeekStepDialog(
+                context,
+                title: t.seek_step,
+                value: seekStepSeconds,
+                options: const [1, 3, 5, 10, 15, 30, 60],
+                onChanged: (value) => useAppStore().updateSeekStep(value),
               ),
             ),
-          Visibility(
-            visible: isDesktop,
-            child: ListTile(
-              leading: const Icon(Icons.aspect_ratio_rounded),
-              title: Text(t.auto_resize),
-              onTap: () => useAppStore().toggleAutoResize(),
-              trailing: Checkbox(
-                value: autoResize,
-                onChanged: (_) => useAppStore().toggleAutoResize(),
+            SettingRow(
+              icon: Icons.fast_rewind_rounded,
+              label: t.seek_step_large,
+              value: t.seek_step_seconds(seekStepLargeSeconds),
+              onTap: () => showSeekStepDialog(
+                context,
+                title: t.seek_step_large,
+                value: seekStepLargeSeconds,
+                options: const [10, 15, 30, 60, 120, 300],
+                onChanged: (value) => useAppStore().updateSeekStepLarge(value),
               ),
             ),
-          ),
-          Visibility(
-            visible: isDesktop,
-            child: ListTile(
-              leading: const Icon(Icons.photo_size_select_large_rounded),
-              title: Text(t.remember_window_size),
-              subtitle: Text(t.remember_window_size_description),
-              onTap: () => useAppStore().toggleRememberWindowSize(),
-              trailing: Checkbox(
-                value: rememberWindowSize,
-                onChanged: (_) => useAppStore().toggleRememberWindowSize(),
+            SettingRow(
+              icon: Icons.visibility_off_rounded,
+              label: t.auto_hide_controls,
+              toggle: autoHideControls,
+              onToggle: (_) => useAppStore().toggleAutoHideControls(),
+            ),
+            SettingRow(
+              icon: Icons.timer_outlined,
+              label: t.auto_hide_delay,
+              value: t.seek_step_seconds(controlHideDelaySeconds),
+              enabled: autoHideControls,
+              onTap: () => showSeekStepDialog(
+                context,
+                title: t.auto_hide_delay,
+                value: controlHideDelaySeconds,
+                options: const [2, 3, 5, 10, 15, 30],
+                onChanged: (value) =>
+                    useAppStore().updateControlHideDelay(value),
               ),
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.restart_alt_rounded),
-            title: Text(t.always_play_from_beginning),
-            subtitle: Text(t.always_play_from_beginning_description),
-            onTap: () => useAppStore().toggleAlwaysPlayFromBeginning(),
-            trailing: Checkbox(
-              value: alwaysPlayFromBeginning,
-              onChanged: (_) => useAppStore().toggleAlwaysPlayFromBeginning(),
+            // 画中画: 能力不支持时整项不出现 (Android < 8.0 / iOS),
+            // 而不是留一个点了没反应的开关。
+            if (PictureInPicture.isSupported)
+              SettingRow(
+                icon: Icons.picture_in_picture_alt_rounded,
+                label: t.picture_in_picture,
+                toggle: pictureInPicture,
+                onToggle: (_) => useAppStore().togglePictureInPicture(),
+              ),
+            SettingRow(
+              icon: Icons.restart_alt_rounded,
+              label: t.always_play_from_beginning,
+              toggle: alwaysPlayFromBeginning,
+              onToggle: (_) => useAppStore().toggleAlwaysPlayFromBeginning(),
             ),
+          ],
+        ),
+        if (isDesktop)
+          PanelSection(
+            children: [
+              SettingRow(
+                icon: Icons.aspect_ratio_rounded,
+                label: t.auto_resize,
+                toggle: autoResize,
+                onToggle: (_) => useAppStore().toggleAutoResize(),
+              ),
+              SettingRow(
+                icon: Icons.photo_size_select_large_rounded,
+                label: t.remember_window_size,
+                toggle: rememberWindowSize,
+                onToggle: (_) => useAppStore().toggleRememberWindowSize(),
+              ),
+            ],
           ),
-          if (Platform.isAndroid || Platform.isIOS)
-            ListTile(
-              leading: const Icon(Icons.screen_rotation_rounded),
-              title: Text(t.screen_orientation),
-              subtitle: Text(orientationMap[orientation] ?? orientation.name),
-              onTap: () => showOrientationDialog(context),
-            )
-        ],
-      ),
+        if (Platform.isAndroid || Platform.isIOS)
+          PanelSection(
+            children: [
+              SettingRow(
+                icon: Icons.screen_rotation_rounded,
+                label: t.screen_orientation,
+                value: orientationLabels[orientation] ?? orientation.name,
+                onTap: () => showOrientationDialog(context, value: orientation),
+              ),
+            ],
+          ),
+      ],
     );
   }
 }

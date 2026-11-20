@@ -1,3 +1,27 @@
+## v2.8.0
+
+### Changelog
+
+* **One set of UI primitives instead of five copies.** `panel.dart` owns the panel chrome (48 dp header, hairline divider, grouped section, opaque surface, empty state); `setting_row.dart` owns the one-line setting row; `media_row.dart` owns the media row. Settings is a single page (General → Play → About) that sizes to its content — the four tabs and the second title bar at the bottom are gone, and the license list moved behind one row. The five pick-one dialogs (language / theme / long-press speed / orientation / rate) collapsed into `showChoiceDialog` (checkmark list, no Cancel). Every popup is opaque and unblurred: `BackdropFilter` is gone
+* **The first screen was a control bar that could not do anything.** With no media the player showed 00:00 / 00:00, a play button that did nothing, greyed shuffle / repeat and a row of tools. `EmptyPlayer` replaces it with one white **Open file**, one **Open link**, and a bottom row of **Storage / History / Settings**. `ControlsOverlay` gained `showControlBar`; the title bar stays, the bar does not
+* **The control bar lost its second-row toolbox.** Phones / tablets now show exactly four tools: fit / volume / queue / more. Refresh playlist, orientation, short video, audio track, storage and rate moved into **More**. The desktop row is transport + fit / rate / volume + slider + queue / fullscreen / more
+* **More is a bottom sheet on narrow screens, a two-level menu on wide ones.** Under 600 dp: a modal sheet with four `PanelSection` groups, a drag handle and a close button. At 600 dp and above: a `MenuAnchor` with four `SubmenuButton`s (Open / Picture / Playback / App); the submenu carries the shortcuts and current values. Both render the same `_MoreGroup` / `_MoreAction` data, so an entry cannot exist in one and not the other. The context-menu key opens whichever is mounted through `openMoreMenu`
+* **Refresh playlist has one feedback path.** The scan stays pure logic in `utils/refresh_play_queue.dart`; the snack bar moved to `widgets/refresh_playlist_action.dart` (with a re-entry guard) so `utils` no longer imports Material. The old control-bar button and its spinner are gone
+* **Short video speaks the same language.** One-line 14 px title, one 12 px tabular index / time line, a progress bar inset 16 dp with no thumb shadow, 44 dp action buttons with 20 px icons, and a volume indicator card (12 dp radius, icon + percentage + a 120×3 bar). The playback-error retry is the same white filled button as the empty state
+* **Smaller clean-ups.** The player title bar no longer carries a 32 px logo; the filename is 14 px medium. WebDAV's HTTPS checkbox became a Switch and only follows the 80 / 443 ports. The theme owns the hairline divider and the 16 dp dialog shape
+* **Tests.** `ui_cleanliness_test` pins the one-line settings, Switch-not-Checkbox, the choice dialog, the empty state and the NaN / 100% progress rules. `control_bar_layout_test` pins the four-tool row; `control_bar_more_menu_test` pins the sheet order and the two-level menu. Seven files deleted, seven added; `flutter analyze` clean, 248 tests pass
+
+### 更新日志
+
+* **一套 UI 原语，不再各写五份。** `panel.dart` 管面板骨架（48dp 标题栏、发丝分隔线、分组底板、不透明面板、空状态）；`setting_row.dart` 管单行设置项；`media_row.dart` 管媒体行。设置合并成一页（通用 → 播放 → 关于），面板按内容收缩 —— 四个页签和底部第二条标题栏都没了，开源库收成关于页的一行。五个“选一个”的对话框（语言 / 主题 / 长按倍速 / 屏幕方向 / 倍速）合并成 `showChoiceDialog`（右侧对勾，没有取消按钮）。所有浮层改成不透明、无模糊，`BackdropFilter` 全部移除
+* **第一屏不再是一条什么都做不了的控制栏。** 没有媒体时，以前会显示 `00:00 / 00:00`、按了没反应的播放键、置灰的随机 / 循环和一排工具。现在换成 `EmptyPlayer`：一个白色**打开文件**、一个**打开链接**，底部是**存储 / 历史 / 设置**。`ControlsOverlay` 新增 `showControlBar`：标题栏保留，控制栏不出现
+* **控制栏去掉第二排工具箱。** 手机 / 平板只剩四个：画面适配 / 音量 / 队列 / 更多。刷新播放列表、横竖屏、短视频、音轨、存储、倍速全部收进「更多」。桌面单行是传输键 + 画面适配 / 倍速 / 音量 + 进度条 + 队列 / 全屏 / 更多
+* **「更多」窄屏是底部 sheet，宽屏是两级菜单。** 600dp 以下：带拖拽把手和关闭按钮的底部 sheet，四块 `PanelSection` 分组。600dp 及以上：`MenuAnchor` + 四个 `SubmenuButton`（打开 / 画面 / 播放 / 应用），二级里带快捷键和当前值。两种呈现共用同一份 `_MoreGroup` / `_MoreAction` 数据，不会出现“手机有、桌面没有”。右键菜单键通过 `openMoreMenu` 打开当前那一套
+* **刷新播放列表只有一条反馈路径。** 回扫是纯逻辑（`utils/refresh_play_queue.dart`），反馈收进 `widgets/refresh_playlist_action.dart`（带连点保护）—— utils 不再 import material；原来的控制栏按钮和它的转圈一起删掉
+* **短视频换成同一套语言。** 标题一行 14px；序号与时间合成一行 12px 等宽数字；进度条左右内缩 16dp、圆点不再带阴影；操作按钮 44dp、图标 20px；音量指示器是 12dp 圆角深色卡片（图标 + 百分比 + 120×3 进度条）。播放失败的「重试」也换成与空状态一致的白色实心按钮
+* **一些顺手的清理。** 播放器标题栏不再放 32px logo，文件名 14px medium。WebDAV 的 HTTPS 复选框改成 Switch，只在 80 / 443 端口之间跟随。主题层统一了发丝分隔线与 16dp 对话框圆角
+* **测试。** `ui_cleanliness_test` 钉住单行设置、Switch 不是 Checkbox、选择器、空状态、进度 `NaN` / 100%；`control_bar_layout_test` 钉住四按钮工具栏；`control_bar_more_menu_test` 钉住 sheet 顺序与两级菜单。删 7 个文件、加 7 个；`flutter analyze` 干净，248 个测试全部通过
+
 ## v2.7.0
 
 ### Changelog

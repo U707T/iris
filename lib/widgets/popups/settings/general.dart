@@ -4,8 +4,9 @@ import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/l10n/languages.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/utils/get_localizations.dart';
-import 'package:iris/widgets/dialogs/show_language_dialog.dart';
-import 'package:iris/widgets/dialogs/show_theme_mode_dialog.dart';
+import 'package:iris/widgets/dialogs/show_choice_dialog.dart';
+import 'package:iris/widgets/panel.dart';
+import 'package:iris/widgets/setting_row.dart';
 
 class General extends HookWidget {
   const General({super.key});
@@ -16,52 +17,46 @@ class General extends HookWidget {
 
     final language = useAppStore().select(context, (state) => state.language);
     final themeMode = useAppStore().select(context, (state) => state.themeMode);
-    final pureBlackTheme =
-        useAppStore().select(context, (state) => state.pureBlackTheme);
+    final pureBlackTheme = useAppStore().select(
+      context,
+      (state) => state.pureBlackTheme,
+    );
 
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.translate_rounded),
-            title: Text(t.language),
-            subtitle: Text(language == 'system'
-                ? t.system
-                : languages[language] ?? language),
-            onTap: () => showLanguageDialog(context),
+    final languageLabel = language == 'system'
+        ? t.system
+        : languages[language] ?? language;
+    final themeLabel = switch (themeMode) {
+      ThemeMode.system => t.system,
+      ThemeMode.light => t.light,
+      ThemeMode.dark => t.dark,
+    };
+
+    return PanelSection(
+      children: [
+        SettingRow(
+          icon: Icons.translate_rounded,
+          label: t.language,
+          value: languageLabel,
+          onTap: () => showLanguageDialog(context, value: language),
+        ),
+        SettingRow(
+          icon: themeMode == ThemeMode.light
+              ? Icons.light_mode_rounded
+              : themeMode == ThemeMode.dark
+              ? Icons.dark_mode_rounded
+              : Icons.contrast_rounded,
+          label: t.theme_mode,
+          value: themeLabel,
+          onTap: () => showThemeModeDialog(context, value: themeMode),
+        ),
+        if (themeMode != ThemeMode.light)
+          SettingRow(
+            icon: Icons.contrast_rounded,
+            label: t.pure_black_theme,
+            toggle: pureBlackTheme,
+            onToggle: (_) => useAppStore().togglePureBlackTheme(),
           ),
-          ListTile(
-            leading: Icon(themeMode == ThemeMode.light
-                ? Icons.light_mode_rounded
-                : themeMode == ThemeMode.dark
-                    ? Icons.dark_mode_rounded
-                    : Icons.contrast_rounded),
-            title: Text(t.theme_mode),
-            subtitle: Text(() {
-              switch (themeMode) {
-                case ThemeMode.system:
-                  return t.system;
-                case ThemeMode.light:
-                  return t.light;
-                case ThemeMode.dark:
-                  return t.dark;
-              }
-            }()),
-            onTap: () => showThemeModeDialog(context),
-          ),
-          if (themeMode != ThemeMode.light)
-            ListTile(
-              leading: const Icon(Icons.contrast_rounded),
-              title: Text(t.pure_black_theme),
-              subtitle: Text(t.pure_black_theme_description),
-              onTap: () => useAppStore().togglePureBlackTheme(),
-              trailing: Checkbox(
-                value: pureBlackTheme,
-                onChanged: (_) => useAppStore().togglePureBlackTheme(),
-              ),
-            ),
-        ],
-      ),
+      ],
     );
   }
 }

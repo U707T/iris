@@ -28,12 +28,16 @@ class ControlsOverlay extends HookWidget {
     required this.title,
     required this.showControl,
     required this.showControlForHover,
+    this.showControlBar = true,
   });
 
   final FileItem? file;
   final String title;
   final Function() showControl;
   final Future<void> Function(Future<void> callback) showControlForHover;
+
+  /// 没有媒体时只留标题栏: 空屏上一条 00:00 的控制栏没有任何可做的事。
+  final bool showControlBar;
 
   static const Duration animationDuration = Duration(milliseconds: 200);
   static const Curve animationCurve = Curves.easeInOutCubicEmphasized;
@@ -113,29 +117,30 @@ class ControlsOverlay extends HookWidget {
           ),
         ),
         // 控制栏
-        Positioned(
-          bottom: 0,
-          left: 0,
-          right: 0,
-          child: _SlideHide(
-            visible: visible,
-            begin: const Offset(0, 1),
-            child: MouseRegion(
-              onEnter: (_) => usePlayerUiStore().updateIsHovering(true),
-              onExit: (_) => usePlayerUiStore().updateIsHovering(false),
-              onHover: onHover,
-              child: GestureDetector(
-                onTap: () => showControl(),
-                child: ControlBar(
-                  showControl: showControl,
-                  showControlForHover: showControlForHover,
-                  color: contentColor,
-                  overlayColor: overlayColor,
+        if (showControlBar)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _SlideHide(
+              visible: visible,
+              begin: const Offset(0, 1),
+              child: MouseRegion(
+                onEnter: (_) => usePlayerUiStore().updateIsHovering(true),
+                onExit: (_) => usePlayerUiStore().updateIsHovering(false),
+                onHover: onHover,
+                child: GestureDetector(
+                  onTap: () => showControl(),
+                  child: ControlBar(
+                    showControl: showControl,
+                    showControlForHover: showControlForHover,
+                    color: contentColor,
+                    overlayColor: overlayColor,
+                  ),
                 ),
               ),
             ),
           ),
-        ),
       ],
     );
   }

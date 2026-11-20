@@ -37,8 +37,7 @@ class ShortcutsDialog extends StatelessWidget {
           ('Enter / F11', '${t.enter_fullscreen} / ${t.exit_fullscreen}'),
           ('F10', t.always_on_top),
           ('Ctrl + M', t.mute),
-          ('Tab', t.menu),
-          ('Shift + ?', t.shortcuts),
+          ('Menu', t.menu),          ('Shift + ?', t.shortcuts),
           ('Ctrl + P', t.settings),
           ('Ctrl + H', t.history),
           ('F', t.storage),
@@ -118,12 +117,7 @@ class ShortcutsDialog extends StatelessWidget {
           ],
         ),
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(t.ok),
-        ),
-      ],
+
     );
   }
 }

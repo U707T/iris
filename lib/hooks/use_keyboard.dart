@@ -237,6 +237,8 @@ KeyboardEvent useKeyboard({
           }
           break;
         case LogicalKeyboardKey.tab:
+          // 只唤出控制栏, 不接管焦点遍历 —— Tab 仍是系统的焦点键,
+          // 「更多」菜单请用 Shift + ? 旁边的菜单键 / 右键 (contextMenu)。
           showControl();
           break;
         // 快捷键参考面板
@@ -258,7 +260,7 @@ KeyboardEvent useKeyboard({
           break;
         case LogicalKeyboardKey.contextMenu:
           showControl();
-          moreMenuKey.currentState?.showButtonMenu();
+          openMoreMenu?.call();
           break;
         default:
           break;

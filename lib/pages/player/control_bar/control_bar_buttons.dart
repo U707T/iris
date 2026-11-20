@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
@@ -11,12 +9,9 @@ import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/utils/get_localizations.dart';
-import 'package:iris/utils/refresh_play_queue.dart';
 import 'package:iris/utils/toggle_shuffle.dart';
 import 'package:iris/widgets/popup.dart';
 import 'package:iris/widgets/popups/play_queue.dart';
-import 'package:iris/widgets/popups/storages/storages.dart';
-import 'package:iris/widgets/popups/track/track_panel.dart';
 import 'package:provider/provider.dart';
 
 /// 播放 / 暂停按钮 (含初始化指示与拖动保护)
@@ -390,47 +385,6 @@ class VolumeWidget extends HookWidget {
   }
 }
 
-/// 音轨
-class AudioTrackButton extends HookWidget {
-  const AudioTrackButton({
-    super.key,
-    required this.showControlForHover,
-    this.color,
-    this.overlayColor,
-  });
-
-  final Future<void> Function(Future<void> callback) showControlForHover;
-  final Color? color;
-  final WidgetStateProperty<Color?>? overlayColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = getLocalizations(context);
-
-    return IconButton(
-      tooltip: '${t.audio_track} ( S )',
-      icon: Icon(
-        Icons.graphic_eq_rounded,
-        size: 20,
-        color: color,
-      ),
-      onPressed: () async {
-        showControlForHover(
-          showPopup(
-            context: context,
-            child: Provider<MediaPlayer>.value(
-              value: context.read<MediaPlayer>(),
-              child: const TrackPanel(),
-            ),
-            direction: PopupDirection.right,
-          ),
-        );
-      },
-      style: ButtonStyle(overlayColor: overlayColor),
-    );
-  }
-}
-
 /// 播放队列
 class PlayQueueButton extends HookWidget {
   const PlayQueueButton({
@@ -466,177 +420,6 @@ class PlayQueueButton extends HookWidget {
             direction: PopupDirection.right,
           ),
         );
-      },
-      style: ButtonStyle(overlayColor: overlayColor),
-    );
-  }
-}
-
-/// 存储 (打开文件)
-class StorageButton extends HookWidget {
-  const StorageButton({
-    super.key,
-    required this.showControlForHover,
-    this.color,
-    this.overlayColor,
-  });
-
-  final Future<void> Function(Future<void> callback) showControlForHover;
-  final Color? color;
-  final WidgetStateProperty<Color?>? overlayColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = getLocalizations(context);
-
-    return IconButton(
-      tooltip: '${t.storage} ( F )',
-      icon: Icon(
-        Icons.storage_rounded,
-        size: 18,
-        color: color,
-      ),
-      onPressed: () => showControlForHover(
-        showPopup(
-          context: context,
-          child: const Storages(),
-          direction: PopupDirection.right,
-        ),
-      ),
-      style: ButtonStyle(overlayColor: overlayColor),
-    );
-  }
-}
-
-/// 进入短视频模式
-class ShortVideoButton extends HookWidget {
-  const ShortVideoButton({
-    super.key,
-    required this.onPressed,
-    this.color,
-    this.overlayColor,
-  });
-
-  final VoidCallback onPressed;
-  final Color? color;
-  final WidgetStateProperty<Color?>? overlayColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = getLocalizations(context);
-
-    return IconButton(
-      tooltip: t.short_video_mode,
-      icon: Icon(
-        Icons.swipe_vertical_rounded,
-        size: 20,
-        color: color,
-      ),
-      onPressed: onPressed,
-      style: ButtonStyle(overlayColor: overlayColor),
-    );
-  }
-}
-
-/// 一键切换横 / 竖屏
-///
-/// 改的是设置里那份 `ScreenOrientation` (与「更多 → 屏幕方向」同一字段),
-/// 所以在系统小窗 / 分屏里想按横屏铺开时, 不用再翻进菜单点三层。
-/// 规则: 当前是横向就切纵向, 其余 (纵向 / 跟随设备) 一律切横向 ——
-/// 手机上绝大多数时候是竖着拿的, "切横向"才是那个想要的默认动作。
-class OrientationButton extends HookWidget {
-  const OrientationButton({
-    super.key,
-    required this.showControl,
-    this.color,
-    this.overlayColor,
-  });
-
-  final void Function() showControl;
-  final Color? color;
-  final WidgetStateProperty<Color?>? overlayColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = getLocalizations(context);
-    final ScreenOrientation orientation =
-        useAppStore().select(context, (state) => state.orientation);
-    final bool toLandscape = orientation != ScreenOrientation.landscape;
-
-    return IconButton(
-      tooltip: toLandscape ? t.switch_to_landscape : t.switch_to_portrait,
-      icon: Icon(
-        Icons.screen_rotation_rounded,
-        size: 20,
-        color: color,
-      ),
-      onPressed: () {
-        showControl();
-        useAppStore().updateOrientation(
-          toLandscape ? ScreenOrientation.landscape : ScreenOrientation.portrait,
-        );
-      },
-      style: ButtonStyle(overlayColor: overlayColor),
-    );
-  }
-}
-
-/// 刷新播放列表: 回扫当前目录, 增删队列成员 (不动正在播的那一条)
-class RefreshPlayQueueButton extends HookWidget {
-  const RefreshPlayQueueButton({
-    super.key,
-    required this.showControl,
-    this.color,
-    this.overlayColor,
-  });
-
-  final void Function() showControl;
-  final Color? color;
-  final WidgetStateProperty<Color?>? overlayColor;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = getLocalizations(context);
-    // 大目录 (上千项) 的回扫要几百毫秒: 期间换成转圈并拒绝连点,
-    // 否则连敲两下就是两次并发扫描 + 两次落盘。
-    final isRefreshing = useState(false);
-
-    Future<void> refresh() async {
-      if (isRefreshing.value) return;
-      isRefreshing.value = true;
-      final int? count = await refreshPlayQueue();
-      isRefreshing.value = false;
-      if (!context.mounted) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(
-            count == null
-                ? t.play_queue_refresh_failed
-                : t.play_queue_refreshed(count),
-          ),
-        ),
-      );
-    }
-
-    return IconButton(
-      tooltip: t.refresh_play_queue,
-      icon: isRefreshing.value
-          ? SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: color,
-              ),
-            )
-          : Icon(
-              Icons.refresh_rounded,
-              size: 20,
-              color: color,
-            ),
-      onPressed: () {
-        showControl();
-        unawaited(refresh());
       },
       style: ButtonStyle(overlayColor: overlayColor),
     );

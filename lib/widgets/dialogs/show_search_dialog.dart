@@ -10,6 +10,7 @@ import 'package:iris/utils/file_size_convert.dart';
 import 'package:iris/utils/get_localizations.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/search_files.dart';
+import 'package:iris/widgets/media_row.dart';
 
 /// 在当前存储的当前目录中递归搜索媒体文件
 Future<void> showSearchDialog(
@@ -141,19 +142,13 @@ class SearchDialog extends HookWidget {
                               itemCount: results.value.length,
                               itemBuilder: (context, index) {
                                 final file = results.value[index];
-                                return ListTile(
-                                  dense: true,
-                                  leading: Icon(file.type == ContentType.audio
+                                return MediaRow(
+                                  icon: file.type == ContentType.audio
                                       ? Icons.audiotrack_rounded
-                                      : Icons.movie_rounded),
-                                  title: Text(
-                                    file.name,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: file.size != 0
-                                      ? Text(
-                                          '${fileSizeConvert(file.size)} MB')
+                                      : Icons.movie_rounded,
+                                  title: file.name,
+                                  meta: file.size != 0
+                                      ? '${fileSizeConvert(file.size)} MB'
                                       : null,
                                   onTap: () {
                                     Navigator.pop(context);
@@ -167,10 +162,6 @@ class SearchDialog extends HookWidget {
         ),
       ),
       actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(t.cancel),
-        ),
         FilledButton(
           onPressed: search,
           child: Text(t.search),

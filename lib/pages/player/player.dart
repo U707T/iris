@@ -11,6 +11,7 @@ import 'package:iris/info.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/audio.dart';
+import 'package:iris/pages/player/empty_player.dart';
 import 'package:iris/pages/player/overlays/controls_auto_hide.dart';
 import 'package:iris/pages/player/overlays/controls_overlay.dart';
 import 'package:iris/pages/player/overlays/gesture_overlay.dart';
@@ -345,7 +346,9 @@ class Player extends HookWidget {
                   const Positioned.fill(
                     child: PictureInPictureOverlay(),
                   )
-                else
+                // 没有媒体时连手势层都不装: 空屏上的双击 / 横滑只会落到
+                // 一个空的播放器上, 既没有反馈也不该有反馈。
+                else if (file != null)
                   Positioned.fill(
                     child: GestureOverlay(
                       showControl: showControl,
@@ -353,6 +356,9 @@ class Player extends HookWidget {
                       showProgress: showProgress,
                     ),
                   ),
+                // 没有媒体: 空状态自己带操作, 不再显示一条空控制栏
+                if (file == null)
+                  const Positioned.fill(child: EmptyPlayer()),
               ],
               // 快进 / 快退提示 (双击步长 + 拖动读数): 两个模式共用同一份,
               // 放在分支之外, 主窗口与短视频模式的视觉/文案完全一致。
@@ -399,6 +405,7 @@ class Player extends HookWidget {
                     title: title,
                     showControl: showControl,
                     showControlForHover: showControlForHover,
+                    showControlBar: file != null,
                   ),
                 ),
               // 播放失败提示 (装载超时 / 解码失败 / 网络错误)

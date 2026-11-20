@@ -77,19 +77,14 @@ class TitleBar extends HookWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Image.asset(
-              'assets/images/logo_transparent.png',
-              width: 32,
-              height: 32,
-            ),
-            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title!.isEmpty ? INFO.title : title!,
                 maxLines: 1,
                 textAlign: TextAlign.start,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
                   overflow: TextOverflow.ellipsis,
                   color: color,
                 ),

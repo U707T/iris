@@ -31,9 +31,9 @@ IRIS is a lightweight video player built with Flutter. This repository is an enh
 ### Highlights added by this fork
 
 - **Picture-in-picture**: one switch under Settings → Play. On Android, leaving the app while a video plays enters the system PiP window (smoothly handed over by the system on Android 12+, entered at the same moment on older releases); it can also be entered from **More → Picture-in-picture**. Desktop has no system PiP protocol, so the window shrinks to an always-on-top mini window anchored to the bottom-right, restored with `Esc` or the button in its corner. Only tap-to-play/pause survives inside it — a 240 dp picture has no room for a control bar
-- **Short video mode**: enter it from the control bar button; a preloaded player pool makes vertical swiping seamless; the progress bar can be tapped / dragged; double-tapping the left / right side seeks with a brief "±Ns" pill; long-press speed-up shows a breathing light effect; hold the volume button and slide to adjust the device volume (hover + wheel to fine-tune on desktop)
-- **Control bar rework**: the two rows now have separate jobs — transport only (shuffle / previous / play / next / repeat) on top, tools below (fit / volume / queue / short video / refresh playlist / landscape-portrait / more). Stop and the zoom magnifier are gone (`Ctrl + C` still stops, zoom lives on pinch and `Ctrl` + wheel with a precise panel under **More → Zoom**); refresh rescans the current folder and edits the queue without touching what is playing, and manual zoom snaps back to the original size near 100%
-- **Screen orientation, one tap away**: the tool row has a landscape ↔ portrait toggle; the more menu still offers all three choices (device / landscape / portrait) for system floating windows and split screen
+- **Short video mode**: enter it from **More → Short video mode**; a preloaded player pool makes vertical swiping seamless; the progress bar can be tapped / dragged; double-tapping the left / right side seeks with a brief "±Ns" pill; long-press speed-up shows a breathing light effect; hold the volume button and slide to adjust the device volume (hover + wheel to fine-tune on desktop)
+- **The control bar only keeps high-frequency actions**: transport only (shuffle / previous / play / next / repeat) on top, four tools below (fit / volume / queue / more). Audio track, storage, short video, refresh playlist, orientation and rate moved into **More** — a bottom sheet on phones, a two-level menu on desktop. Stop and the zoom magnifier are gone (`Ctrl + C` still stops, zoom lives on pinch and `Ctrl` + wheel with a precise panel under **More → Zoom**); refresh rescans the current folder and edits the queue without touching what is playing, and manual zoom snaps back to the original size near 100%
+- **Screen orientation lives under More**: device / landscape / portrait, no longer occupying a control-bar slot (it used to sit four levels deep under Settings → Play) — useful in system floating windows and split screen
 - **More reliable playback start**: videos open paused and wait for the first frame before playing, so sound and picture appear together instead of starting with a black screen; preloaded neighbours decode their first frame too
 - **Shuffle rework**: switching shuffle on reshuffles the queue (the current video stays first), and the queue is reshuffled on launch while shuffle is on; switching it off restores the original file order
 - **Windows fixes**: the workaround for the Flutter engine accessibility crash ([flutter/flutter#175041](https://github.com/flutter/flutter/issues/175041)) is built in and enabled by default (see "Troubleshooting")
@@ -105,7 +105,7 @@ IRIS is a lightweight video player built with Flutter. This repository is an enh
 
 ### Short Video Mode
 
-Enter from the control bar button or the "⋮" menu; press `Esc` / back to exit.
+Enter from **More → Short video mode**; press `Esc` / back to exit.
 
 | Action                                | Description                                          |
 | ------------------------------------- | ---------------------------------------------------- |

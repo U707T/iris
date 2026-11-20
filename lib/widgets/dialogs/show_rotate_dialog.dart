@@ -73,10 +73,6 @@ class RotateDialog extends HookWidget {
           },
           child: Text(t.reset),
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(t.cancel),
-        ),
       ],
     );
   }

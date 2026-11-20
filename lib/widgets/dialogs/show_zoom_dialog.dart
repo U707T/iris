@@ -54,12 +54,7 @@ class ZoomDialog extends HookWidget {
           ),
         ],
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: Text(t.ok),
-        ),
-      ],
+
     );
   }
 }

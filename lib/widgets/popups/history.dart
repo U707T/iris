@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:material_ui/material_ui.dart' hide Chip;
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/file.dart';
@@ -9,9 +9,11 @@ import 'package:iris/models/storages/storage.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_history_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
-import 'package:iris/utils/file_size_convert.dart';
+import 'package:iris/utils/format_date_time.dart';
 import 'package:iris/utils/get_localizations.dart';
-import 'package:iris/widgets/chip.dart';
+import 'package:iris/utils/playback_progress.dart';
+import 'package:iris/widgets/media_row.dart';
+import 'package:iris/widgets/panel.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 class History extends HookWidget {
@@ -20,8 +22,10 @@ class History extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final t = getLocalizations(context);
-    final Map<String, Progress> history =
-        useHistoryStore().select(context, (state) => state.history);
+    final Map<String, Progress> history = useHistoryStore().select(
+      context,
+      (state) => state.history,
+    );
 
     final List<MapEntry<String, Progress>> historyList = useMemoized(() {
       final entries = history.entries.toList();
@@ -34,8 +38,12 @@ class History extends HookWidget {
 
       final playQueue = historyList
           .asMap()
-          .map((index, entry) => MapEntry(
-              index, PlayQueueItem(file: entry.value.file, index: index)))
+          .map(
+            (index, entry) => MapEntry(
+              index,
+              PlayQueueItem(file: entry.value.file, index: index),
+            ),
+          )
           .values
           .toList();
 
@@ -44,158 +52,96 @@ class History extends HookWidget {
 
     return Column(
       children: [
-        Expanded(
-          child: Card(
-            color: Colors.transparent,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: historyList.isEmpty
-                ? Center(
-                    child: Text(
-                      t.history_empty,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+        PanelHeader(
+          title: Text(t.history),
+          actions: [
+            if (historyList.isNotEmpty)
+              IconButton(
+                tooltip: t.clear_history,
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.delete_sweep_rounded, size: 20),
+                onPressed: () async {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: Text(t.clear_history),
+                      content: Text(t.clear_history_confirm),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text(t.cancel),
+                        ),
+                        FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: Text(t.ok),
+                        ),
+                      ],
                     ),
-                  )
-                : ScrollablePositionedList.builder(
-              itemCount: historyList.length,
-              itemBuilder: (context, index) => ListTile(
-                contentPadding: const EdgeInsets.fromLTRB(12, 0, 8, 0),
-                visualDensity:
-                    const VisualDensity(horizontal: -4, vertical: -4),
-                leading: Text(
-                  (index + 1).toString(),
-                  style: const TextStyle(
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                minLeadingWidth: 14,
-                title: Text(
-                  historyList[index].value.file.name,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Row(
-                  children: [
-                    if (historyList[index].value.file.size > 0)
-                      Text(
-                          "${fileSizeConvert(historyList[index].value.file.size)} MB"),
-                    const Spacer(),
-                    () {
-                      final Progress? progress = useHistoryStore()
-                          .findById(historyList[index].value.file.getID());
-                      if (progress != null &&
-                          progress.file.type == ContentType.video) {
-                        if ((progress.duration.inMilliseconds -
-                                progress.position.inMilliseconds) <=
-                            5000) {
-                          return Chip(text: '100%');
-                        }
-                        final String progressString =
-                            (progress.position.inMilliseconds /
-                                    progress.duration.inMilliseconds *
-                                    100)
-                                .toStringAsFixed(0);
-                        return Chip(text: '$progressString %');
-                      } else {
-                        return const SizedBox();
-                      }
-                    }(),
-                  ],
-                ),
-                trailing: PopupMenuButton<FileOptions>(
-                  clipBehavior: Clip.hardEdge,
-                  constraints: const BoxConstraints(minWidth: 200),
-                  onSelected: (value) async {
-                    switch (value) {
-                      case FileOptions.addToPlayQueue:
-                        usePlayQueueStore()
-                            .add([historyList[index].value.file]);
-                        break;
-                      case FileOptions.remove:
-                        useHistoryStore().remove(historyList[index].value);
-                        break;
-                      case FileOptions.openInFolder:
-                        await openInFolder(
-                            context, historyList[index].value.file);
-                        break;
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: FileOptions.addToPlayQueue,
-                      child: Text(t.add_to_play_queue),
-                    ),
-                    PopupMenuItem(
-                      value: FileOptions.remove,
-                      child: Text(t.remove),
-                    ),
-                    if (historyList[index].value.file.path.isNotEmpty)
-                      PopupMenuItem(
-                        value: FileOptions.openInFolder,
-                        child: Text(t.open_in_folder),
-                      ),
-                  ],
-                ),
-                onTap: () {
-                  play(index);
-                  Navigator.of(context).pop();
+                  );
+                  if (confirmed == true) {
+                    await useHistoryStore().clear();
+                  }
                 },
               ),
-            ),
-          ),
+          ],
         ),
-        Divider(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.25),
-          height: 0,
-        ),
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
-          child: Row(
-            children: [
-              Text(
-                t.history,
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              const Spacer(),
-              if (historyList.isNotEmpty)
-                IconButton(
-                  tooltip: t.clear_history,
-                  icon: const Icon(Icons.delete_sweep_rounded),
-                  onPressed: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: Text(t.clear_history),
-                        content: Text(t.clear_history_confirm),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: Text(t.cancel),
+        const PanelDivider(),
+        Expanded(
+          child: historyList.isEmpty
+              ? PanelEmpty(label: t.history_empty)
+              : ScrollablePositionedList.builder(
+                  itemCount: historyList.length,
+                  itemBuilder: (context, index) {
+                    final entry = historyList[index].value;
+
+                    return MediaRow(
+                      icon: entry.file.type == ContentType.audio
+                          ? Icons.audiotrack_rounded
+                          : Icons.movie_rounded,
+                      title: entry.file.name,
+                      meta: formatShortDateTime(entry.dateTime),
+                      progress: playbackProgressLabel(entry),
+                      menu: PopupMenuButton<FileOptions>(
+                        clipBehavior: Clip.hardEdge,
+                        constraints: const BoxConstraints(minWidth: 200),
+                        onSelected: (value) async {
+                          switch (value) {
+                            case FileOptions.addToPlayQueue:
+                              usePlayQueueStore().add([entry.file]);
+                              break;
+                            case FileOptions.remove:
+                              useHistoryStore().remove(
+                                historyList[index].value,
+                              );
+                              break;
+                            case FileOptions.openInFolder:
+                              await openInFolder(context, entry.file);
+                              break;
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: FileOptions.addToPlayQueue,
+                            child: Text(t.add_to_play_queue),
                           ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: Text(t.ok),
+                          PopupMenuItem(
+                            value: FileOptions.remove,
+                            child: Text(t.remove),
                           ),
+                          if (entry.file.path.isNotEmpty)
+                            PopupMenuItem(
+                              value: FileOptions.openInFolder,
+                              child: Text(t.open_in_folder),
+                            ),
                         ],
                       ),
+                      onTap: () {
+                        play(index);
+                        Navigator.of(context).pop();
+                      },
                     );
-                    if (confirmed == true) {
-                      await useHistoryStore().clear();
-                    }
                   },
                 ),
-              IconButton(
-                tooltip: '${t.close} ( Escape )',
-                icon: const Icon(Icons.close_rounded),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
         ),
       ],
     );
