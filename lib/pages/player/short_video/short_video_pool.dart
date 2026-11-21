@@ -47,6 +47,13 @@ class ShortVideoSlot {
   /// 是否有等待执行的装载请求
   bool pendingOpen = false;
 
+  // A slot has one native operation at a time. Reconcile replaces pendingOpen's
+  // target in place; it never queues an open for every intermediate feed item.
+  bool _busy = false;
+  bool _stopping = false;
+  bool _pendingStop = false;
+  bool _hasMedia = false;
+
   /// 装载失败原因 (null = 正常), 由界面显示 + 重试
   String? error;
   StreamSubscription<String>? errorSubscription;
@@ -94,6 +101,43 @@ class ShortVideoPool extends ChangeNotifier {
   bool _ensureActivePending = false;
   bool _applyScheduled = false;
   bool disposed = false;
+  bool _preloadingEnabled = true;
+
+  /// Whether adjacent media may be kept loaded (the current slot is unaffected).
+  bool get preloadingEnabled => _preloadingEnabled;
+
+  /// Backgrounding unloads media, retaining the three reusable players/outputs.
+  /// Native stop and subsequent open share the slot's busy gate, so a late stop
+  /// cannot clear a newly opened item after the app resumes.
+  void setPreloadingEnabled(bool enabled) {
+    if (disposed || enabled == _preloadingEnabled) return;
+    _preloadingEnabled = enabled;
+    reconcile(currentFeedIndex, items);
+    // hidden/paused disables frames. A post-frame callback alone would defer
+    // unloading until resume; a microtask also keeps native work out of build
+    // when this policy changes from an initial hook effect or a PiP update.
+    scheduleMicrotask(applyPending);
+  }
+
+  void _releaseSlot(ShortVideoSlot slot) {
+    _collectSlotSave(slot);
+    if (identical(slot, _active)) {
+      _active = null;
+      userPaused = false;
+    }
+    slot.token++;
+    slot.feedIndex = null;
+    slot.loadedFile = null;
+    slot.pendingOpen = false;
+    slot.initializing = false;
+    slot.played = false;
+    slot.error = null;
+    if (!slot._stopping && (slot._hasMedia || slot._busy)) {
+      slot._pendingStop = true;
+    }
+    unawaited(slot.errorSubscription?.cancel());
+    slot.errorSubscription = null;
+  }
 
   /// 待保存的进度 (在 build 中收集, 帧后执行)
   final List<({FileItem file, Duration position, Duration duration})>
@@ -119,20 +163,7 @@ class ShortVideoPool extends ChangeNotifier {
         final index = slot.feedIndex;
         if (index == null) continue;
         if (index >= items.length || items[index].file != slot.loadedFile) {
-          _collectSlotSave(slot);
-          if (identical(slot, _active)) {
-            _active = null;
-            userPaused = false;
-          }
-          slot.pendingOpen = false;
-          slot.played = false;
-          slot.error = null;
-          slot.feedIndex = null;
-          // 立即作废仍在飞行中的装载 / 尺寸同步 (token 递增), 并复位装载标记:
-          // 槽位随后可能被重新分配给别的下标, 旧一代的异步结果不能落到新一代上
-          // (先播放旧视频 / 提前熄灭加载指示)。
-          slot.token++;
-          slot.initializing = false;
+          _releaseSlot(slot);
         }
       }
     }
@@ -142,19 +173,30 @@ class ShortVideoPool extends ChangeNotifier {
 
     if (items.isEmpty || current < 0 || current >= items.length) {
       silence();
+      for (final slot in slots) {
+        _releaseSlot(slot);
+      }
+      _active = null;
       _maybeSchedule();
       return;
     }
 
+    if (!_preloadingEnabled) {
+      for (final slot in slots) {
+        if (slot.feedIndex != current) _releaseSlot(slot);
+      }
+    }
+    final offsets = _preloadingEnabled ? const [0, 1, -1] : const [0];
+
     // 需要就绪的下标: 当前 / 下一条 / 上一条
     final needed = <int>{};
-    for (final offset in const [0, 1, -1]) {
+    for (final offset in offsets) {
       final index = current + offset;
       if (index >= 0 && index < items.length) needed.add(index);
     }
 
     // 为缺失的下标分配槽位 (当前视频优先)
-    for (final offset in const [0, 1, -1]) {
+    for (final offset in offsets) {
       final want = current + offset;
       if (want < 0 || want >= items.length) continue;
       if (slotFor(want) != null) continue;
@@ -195,7 +237,7 @@ class ShortVideoPool extends ChangeNotifier {
     if (_applyScheduled || disposed) return;
     if (!_ensureActivePending &&
         _pendingSaves.isEmpty &&
-        !slots.any((slot) => slot.pendingOpen)) {
+        !slots.any((slot) => slot.pendingOpen || slot._pendingStop)) {
       return;
     }
     _applyScheduled = true;
@@ -216,24 +258,14 @@ class ShortVideoPool extends ChangeNotifier {
       }),
     );
 
-    // 打开待装载的槽位, 当前视频优先
-    final pending = slots.where((slot) => slot.pendingOpen).toList()
-      ..sort(
-        (a, b) => (a.feedIndex == currentFeedIndex ? 0 : 1).compareTo(
-          b.feedIndex == currentFeedIndex ? 0 : 1,
-        ),
-      );
-    for (final slot in pending) {
-      slot.pendingOpen = false;
-      unawaited(_openSlot(slot));
-    }
-
     final active = slotFor(currentFeedIndex);
 
     // 活动槽位已就绪则立即开始播放 (用户主动暂停过则跳过)
     if (_ensureActivePending) {
       _ensureActivePending = false;
       if (active != null &&
+          !active._busy &&
+          !active._pendingStop &&
           !active.initializing &&
           active.error == null &&
           !userPaused) {
@@ -254,9 +286,100 @@ class ShortVideoPool extends ChangeNotifier {
         }
       }
     }
+    _drainLoads();
+  }
+
+  /// Start the current item first; speculation waits for its load to finish,
+  /// including media_kit_video's controller output-ready wait (not a guaranteed
+  /// new first frame on reused controllers). NativePlayer may serialize native
+  /// commands globally; this only avoids additional waiting in the Dart pool.
+  /// Count all busy slots before starting another speculative adjacent load.
+  void _drainLoads() {
+    if (disposed) return;
+    for (final slot in slots) {
+      if (slot._pendingStop && !slot._busy) _startStop(slot);
+    }
+    final active = slotFor(currentFeedIndex);
+    if (active == null) return;
+    if (active.pendingOpen && !active._busy && !active._pendingStop) {
+      _startOpen(active);
+    }
+    if (!_preloadingEnabled ||
+        active.initializing ||
+        active.error != null ||
+        slots.any((slot) => slot._busy)) {
+      return;
+    }
+    for (final index in [currentFeedIndex + 1, currentFeedIndex - 1]) {
+      final slot = slotFor(index);
+      if (slot != null && slot.pendingOpen && !slot._pendingStop) {
+        _startOpen(slot);
+        return;
+      }
+    }
+  }
+
+  void _startOpen(ShortVideoSlot slot) {
+    slot.pendingOpen = false;
+    slot._busy = true;
+    slot._hasMedia = true;
+    unawaited(() async {
+      try {
+        await _openSlot(slot);
+      } finally {
+        slot._busy = false;
+        _drainLoads();
+      }
+    }());
+  }
+
+  void _startStop(ShortVideoSlot slot) {
+    slot._pendingStop = false;
+    slot._busy = true;
+    slot._stopping = true;
+    unawaited(() async {
+      try {
+        // stop unloads the media/playlist but retains the reusable native player
+        // and video output; full resource disposal remains the host's cleanup.
+        await slot.player.stop();
+        slot._hasMedia = false;
+      } catch (e) {
+        logger('Unload short video neighbour failed: $e');
+      } finally {
+        slot._stopping = false;
+        slot._busy = false;
+        if (!disposed) {
+          notifyListeners();
+          _drainLoads();
+        }
+      }
+    }());
   }
 
   ShortVideoSlot? _pickReusable(Set<int> needed) {
+    // A distant jump must not put the current item behind an old speculative
+    // open/stop while another reusable slot could start immediately.
+    for (final slot in slots) {
+      if (slot.feedIndex == null && !slot._busy && !slot._pendingStop) {
+        return slot;
+      }
+    }
+    for (final slot in slots) {
+      if (slot != _active &&
+          !needed.contains(slot.feedIndex) &&
+          !slot._busy &&
+          !slot._pendingStop) {
+        return slot;
+      }
+    }
+    for (final slot in slots) {
+      if (!needed.contains(slot.feedIndex) &&
+          !slot._busy &&
+          !slot._pendingStop) {
+        return slot;
+      }
+    }
+    // All candidates are busy: retain the pending target and wait for its slot.
     // 优先空闲槽位
     for (final slot in slots) {
       if (slot.feedIndex == null) return slot;
@@ -330,9 +453,8 @@ class ShortVideoPool extends ChangeNotifier {
         await slot.player.open(buildMedia(file), play: false);
         if (disposed || token != slot.token) return;
 
-        // 等视频输出出首帧再往下走 (包含"成为当前视频后开始播放"),
-        // 否则会出现"先响声音、画面还黑着"; 预载槽位也顺手把首帧解出来,
-        // 滑动切过去时画面是现成的。
+        // 使用包提供的输出就绪等待（有超时）后再放行播放与邻项。
+        // 此信号绑定 controller lifetime，复用槽位时不保证是新媒体首帧。
         await waitForFirstFrame(slot.controller);
       }
       if (disposed || token != slot.token) return;
@@ -536,6 +658,13 @@ class ShortVideoPool extends ChangeNotifier {
       }
       unawaited(slot.player.dispose().catchError((_) {}));
     }
+    // Reconcile may already have collected progress and cleared played. Its
+    // scheduled frame may never arrive when the host is disposed immediately.
+    unawaited(
+      flushPendingSaves().catchError((Object e) {
+        logger('Flush short video progress on dispose failed: $e');
+      }),
+    );
     super.dispose();
   }
 }

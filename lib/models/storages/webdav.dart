@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:iris/models/storages/directory_scan.dart';
 import 'package:iris/models/storages/storage.dart';
 import 'package:iris/utils/check_content_type.dart';
 import 'package:iris/utils/logger.dart';
@@ -68,19 +69,15 @@ Future<bool> testWebDAV(WebDAVStorage storage) async {
 
 Future<List<FileItem>> getWebDAVFiles(
   WebDAVStorage storage,
-  List<String> path,
-) async {
-  final id = storage.id;
-  final host = storage.host;
-  final port = storage.port;
-  final username = storage.username;
-  final password = storage.password;
-  final https = storage.https;
-
-  var client = webdav.newClient(
-    "http${https ? 's' : ''}://$host:$port",
-    user: username,
-    password: password,
+  List<String> path, {
+  bool mediaOnly = false,
+  DirectoryScan? scan,
+}) async {
+  if (scan?.isCancelled == true) return [];
+  final client = webdav.newClient(
+    "http${storage.https ? 's' : ''}://${storage.host}:${storage.port}",
+    user: storage.username,
+    password: storage.password,
     debug: false,
   );
 
@@ -89,36 +86,58 @@ Future<List<FileItem>> getWebDAVFiles(
   client.setSendTimeout(8000);
   client.setReceiveTimeout(8000);
 
-  var files = await client.readDir(path.join('/'));
-
-  List<FileItem> fileItems = [];
-
-  for (final file in files) {
-    final fileName = file.name;
-
-    if (fileName == null) continue;
-
-    final isDir = file.isDir;
-    fileItems.add(
-      FileItem(
-        storageId: id,
-        storageType: StorageType.webdav,
-        name: fileName,
-        uri: buildWebDAVFileUri(
-          storage: storage,
-          path: path,
-          fileName: fileName,
-        ),
-        path: [...path, fileName],
-        isDir: isDir ?? false,
-        size: file.size ?? 0,
-        lastModified: file.mTime,
-        type: isDir ?? false ? ContentType.other : checkContentType(fileName),
-      ),
-    );
+  // Each listing owns its client, so closing it only aborts this request.
+  var closed = false;
+  void closeClient() {
+    if (closed) return;
+    closed = true;
+    client.c.close(force: true);
   }
 
-  return fileItems;
+  final unregister = scan?.onCancel(closeClient);
+  try {
+    final files = await client.readDir(path.join('/'));
+    if (scan?.isCancelled == true) return [];
+
+    final fileItems = <FileItem>[];
+    for (final file in files) {
+      final fileName = file.name;
+      if (fileName == null) continue;
+
+      final isDir = file.isDir ?? false;
+      final type = isDir ? ContentType.other : checkContentType(fileName);
+      if (mediaOnly &&
+          !isDir &&
+          type != ContentType.video &&
+          type != ContentType.audio) {
+        continue;
+      }
+      fileItems.add(
+        FileItem(
+          storageId: storage.id,
+          storageType: StorageType.webdav,
+          name: fileName,
+          uri: buildWebDAVFileUri(
+            storage: storage,
+            path: path,
+            fileName: fileName,
+          ),
+          path: [...path, fileName],
+          isDir: isDir,
+          size: file.size ?? 0,
+          lastModified: file.mTime,
+          type: type,
+        ),
+      );
+    }
+    return fileItems;
+  } catch (_) {
+    if (scan?.isCancelled == true) return [];
+    rethrow;
+  } finally {
+    unregister?.call();
+    closeClient();
+  }
 }
 
 /// Return credentials only for this connection's exact HTTP origin.

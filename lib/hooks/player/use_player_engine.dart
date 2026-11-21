@@ -61,8 +61,9 @@ PlayerEngine usePlayerEngine(BuildContext context) {
     context,
     (state) => state.currentIndex,
   );
-  final currentPlayIndex = playQueue.indexWhere(
-    (element) => element.index == currentIndex,
+  final currentPlayIndex = useMemoized(
+    () => playQueue.indexWhere((element) => element.index == currentIndex),
+    [playQueue, currentIndex],
   );
   final file = currentPlayIndex < 0 ? null : playQueue[currentPlayIndex].file;
 

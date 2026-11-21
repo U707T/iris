@@ -2,6 +2,7 @@ import 'package:collection/collection.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:iris/models/file.dart';
+import 'package:iris/models/storages/directory_scan.dart';
 import 'package:iris/models/storages/local.dart';
 import 'package:iris/models/storages/webdav.dart';
 import 'package:iris/utils/platform.dart';
@@ -26,7 +27,11 @@ abstract class _Storage {
 
   Map<String, dynamic> toJson();
 
-  Future<List<FileItem>> getFiles(List<String> path);
+  Future<List<FileItem>> getFiles(
+    List<String> path, {
+    bool mediaOnly = false,
+    DirectoryScan? scan,
+  });
 
   String? getAuth();
 
@@ -60,20 +65,37 @@ sealed class Storage with _$Storage implements _Storage {
       _$StorageFromJson(json);
 
   @override
-  Future<List<FileItem>> getFiles(List<String> path) async {
-    if (path.isEmpty) return [];
+  Future<List<FileItem>> getFiles(
+    List<String> path, {
+    bool mediaOnly = false,
+    DirectoryScan? scan,
+  }) async {
+    if (path.isEmpty || scan?.isCancelled == true) return [];
     switch (type) {
       case StorageType.internal:
       case StorageType.network:
       case StorageType.usb:
       case StorageType.sdcard:
         if (isAndroid && path[0].startsWith('content://')) {
-          return await getContentFiles(path.join('%2F'));
-        } else {
-          return await getLocalFiles(this as LocalStorage, path);
+          return getContentFiles(
+            path.join('%2F'),
+            mediaOnly: mediaOnly,
+            scan: scan,
+          );
         }
+        return getLocalFiles(
+          this as LocalStorage,
+          path,
+          mediaOnly: mediaOnly,
+          scan: scan,
+        );
       case StorageType.webdav:
-        return await getWebDAVFiles(this as WebDAVStorage, path);
+        return getWebDAVFiles(
+          this as WebDAVStorage,
+          path,
+          mediaOnly: mediaOnly,
+          scan: scan,
+        );
       case StorageType.none:
         return [];
     }

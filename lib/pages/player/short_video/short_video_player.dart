@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
@@ -5,6 +7,7 @@ import 'package:iris/models/player.dart';
 import 'package:iris/pages/player/short_video/short_video_pool.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
+import 'package:iris/store/use_player_ui_store.dart';
 import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/short_video.dart';
@@ -54,6 +57,41 @@ class ShortVideoMediaKitPlayer extends MediaKitPlayer {
   });
 }
 
+/// Keep the current player's playback intent while dropping background neighbours.
+/// Inactive can be a focus change or a transient PiP transition: wait for an
+/// actual hidden/paused state, and restore only on resumed (or confirmed PiP).
+void useShortVideoPoolLifecycle(
+  ShortVideoPool pool, {
+  PlayerUiStore? playerUiStore,
+}) {
+  final ui = playerUiStore ?? usePlayerUiStore();
+  void sync(AppLifecycleState? lifecycle) {
+    if (ui.state.isPictureInPicture ||
+        lifecycle == null ||
+        lifecycle == AppLifecycleState.resumed) {
+      pool.setPreloadingEnabled(true);
+    } else if (lifecycle == AppLifecycleState.hidden ||
+        lifecycle == AppLifecycleState.paused ||
+        lifecycle == AppLifecycleState.detached) {
+      pool.setPreloadingEnabled(false);
+    }
+  }
+
+  // useAppLifecycleState only rebuilds its host. Hidden/paused disables frames,
+  // so resource work must run from the observer callback, not a build effect.
+  useOnAppLifecycleStateChange((_, state) => sync(state));
+  useEffect(() {
+    sync(WidgetsBinding.instance.lifecycleState);
+    // A late native PiP callback can also arrive with frames disabled. Observe
+    // the store directly rather than waiting for a context.select rebuild.
+    final subscription = ui.stream
+        .map((state) => state.isPictureInPicture)
+        .distinct()
+        .listen((_) => sync(WidgetsBinding.instance.lifecycleState));
+    return () => unawaited(subscription.cancel());
+  }, [pool, ui]);
+}
+
 /// 短视频模式的 Media Kit 播放器池宿主
 MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
   final playQueue = usePlayQueueStore().select(
@@ -92,6 +130,7 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
   useListenable(pool);
 
   pool.reconcile(currentFeedIndex, items);
+  useShortVideoPoolLifecycle(pool);
 
   final rate = useAppStore().select(context, (state) => state.rate);
   final volume = useAppStore().select(context, (state) => state.volume);
@@ -142,6 +181,9 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
       return;
     }
     pool.userPaused = false;
+    // Loading (including a background stop ahead of this open) owns playback:
+    // record intent now and let its current generation play after the load.
+    if (slot.initializing) return;
     // 播放器可能正在销毁 (模式刚退出), 失败时忽略
     try {
       await slot.player.play();

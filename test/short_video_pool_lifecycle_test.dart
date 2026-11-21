@@ -48,6 +48,11 @@ class _Player implements Player {
   }
 
   @override
+  Future<void> stop() async {
+    _state.playing = false;
+  }
+
+  @override
   Future<void> dispose() async {
     await errors.close();
   }

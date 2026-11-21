@@ -160,7 +160,7 @@ Future<int?> refreshPlayQueue() async {
 
   final List<FileItem> listed;
   try {
-    listed = await storage.getFiles(folder);
+    listed = await storage.getFiles(folder, mediaOnly: true);
   } catch (e) {
     // 目录被拔掉 / 网络盘断了 / SAF 授权过期: 报错但不动现有队列
     logger('Refresh play queue failed: $e');

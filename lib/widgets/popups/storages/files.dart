@@ -5,6 +5,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/globals.dart' as globals;
 import 'package:iris/models/file.dart';
+import 'package:iris/models/storages/directory_scan.dart';
 import 'package:iris/models/storages/storage.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
@@ -51,37 +52,29 @@ class Files extends HookWidget {
       return null;
     }, []);
 
+    final scan = useMemoized(DirectoryScan.new, [
+      storage,
+      currentPath,
+      refreshState.value,
+    ]);
+    useEffect(() => scan.cancel, [scan]);
     final getFiles = useMemoized(
-      () async => await storage.getFiles(currentPath),
-      [currentPath, refreshState.value],
+      () => storage.getFiles(currentPath, mediaOnly: true, scan: scan),
+      [scan],
     );
 
-    final result = useFuture(getFiles);
-    final isLoading = useMemoized(
-      () => result.connectionState == ConnectionState.waiting,
-      [result.connectionState],
-    );
+    final result = useFuture(getFiles, preserveState: false);
+    final isLoading = result.connectionState == ConnectionState.waiting;
     final isError = result.error != null;
-
-    final filteredFiles = useMemoized(
-      () => (result.data ?? [])
-          .where(
-            (file) =>
-                [ContentType.video, ContentType.audio].contains(file.type) ||
-                file.isDir,
-          )
-          .toList(),
-      [result.data],
-    );
 
     final files = useMemoized(
       () => filesSort(
-        files: filteredFiles,
+        files: result.data ?? [],
         sortBy: sortBy,
         sortOrder: sortOrder,
         folderFirst: folderFirst,
       ),
-      [filteredFiles, sortBy, sortOrder, folderFirst],
+      [result.data, sortBy, sortOrder, folderFirst],
     );
 
     final itemScrollController = useMemoized(() => ItemScrollController(), []);

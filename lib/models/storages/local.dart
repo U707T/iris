@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:android_x_storage/android_x_storage.dart';
@@ -5,6 +6,7 @@ import 'package:disks_desktop/disks_desktop.dart';
 import 'package:drives_windows/drives_windows.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:iris/models/storages/directory_scan.dart';
 import 'package:iris/models/storages/storage.dart';
 import 'package:iris/models/store/play_queue_state.dart';
 import 'package:iris/store/use_app_store.dart';
@@ -151,7 +153,7 @@ Future<PlayQueueState?> getLocalPlayQueue(String filePath) async {
     type: StorageType.internal,
     name: convedPath.last,
     basePath: dirPath,
-  ).getFiles(dirPath);
+  ).getFiles(dirPath, mediaOnly: true);
   final List<FileItem> sortedFiles = filesSort(
     files: files,
     // 跟文件浏览器用同一套排序: 否则"按修改时间/大小"排序的目录,
@@ -206,25 +208,46 @@ Future<void> pickLocalFile() async {
 
 Future<List<FileItem>> getLocalFiles(
   LocalStorage storage,
-  List<String> path,
-) async {
+  List<String> path, {
+  bool mediaOnly = false,
+  DirectoryScan? scan,
+}) async {
+  if (scan?.isCancelled == true) return [];
   final directoryPath = p.joinAll(path);
   final directory = Directory(directoryPath);
-
-  if (!await directory.exists()) {
+  final exists = await directory.exists();
+  if (scan?.isCancelled == true) return [];
+  if (!exists) {
     logger('Error: Directory does not exist at $directoryPath');
     return [];
   }
 
-  final allEntities = await directory.list().toList();
+  return scanLocalDirectoryEntries(
+    storage,
+    path,
+    directory.list(),
+    mediaOnly: mediaOnly,
+    scan: scan,
+  );
+}
 
-  Future<FileItem?> toItem(FileSystemEntity entity) async {
-    final name = p.basename(entity.path);
-    final isDir = entity is Directory;
+Future<List<FileItem>> scanLocalDirectoryEntries(
+  LocalStorage storage,
+  List<String> path,
+  Stream<FileSystemEntity> entries, {
+  bool mediaOnly = false,
+  DirectoryScan? scan,
+}) async {
+  if (scan?.isCancelled == true) return [];
 
+  Future<FileItem?> toItem(
+    FileSystemEntity entity,
+    String name,
+    bool isDir,
+    ContentType type,
+  ) async {
     try {
-      // 单个条目读不到 (坏软链接 / 权限 / 文件被占用) 不应让整个目录失败:
-      // 跳过它, 其余文件照常显示。
+      // 单个条目读不到时仍显示其余条目。
       final stat = await entity.stat();
       return FileItem(
         storageId: storage.id,
@@ -235,7 +258,7 @@ Future<List<FileItem>> getLocalFiles(
         isDir: isDir,
         size: isDir ? 0 : stat.size,
         lastModified: stat.modified,
-        type: isDir ? ContentType.other : checkContentType(entity.path),
+        type: type,
       );
     } catch (e) {
       logger('Skipping unreadable directory entry ${entity.path}: $e');
@@ -243,19 +266,43 @@ Future<List<FileItem>> getLocalFiles(
     }
   }
 
-  // stat 是 I/O: 小批量并发, 既不串行等 N 次, 也不会一次打爆网络盘。
-  const int chunkSize = 16;
-  final List<FileItem> fileItems = [];
-  for (var start = 0; start < allEntities.length; start += chunkSize) {
-    final end = start + chunkSize < allEntities.length
-        ? start + chunkSize
-        : allEntities.length;
-    final chunk = allEntities.sublist(start, end);
-    final items = await Future.wait(chunk.map(toItem));
-    fileItems.addAll(items.whereType<FileItem>());
+  const batchSize = 16;
+  final fileItems = <FileItem>[];
+  final batch = <Future<FileItem?>>[];
+  final iterator = StreamIterator(entries);
+  final unregister = scan?.onCancel(() {
+    unawaited(
+      iterator.cancel().catchError((Object error) {
+        logger('Unable to cancel directory enumeration: $error');
+      }),
+    );
+  });
+  try {
+    while (scan?.isCancelled != true && await iterator.moveNext()) {
+      if (scan?.isCancelled == true) break;
+      final entry = iterator.current;
+      final name = p.basename(entry.path);
+      final isDir = entry is Directory;
+      final type = isDir ? ContentType.other : checkContentType(name);
+      if (mediaOnly &&
+          !isDir &&
+          type != ContentType.video &&
+          type != ContentType.audio) {
+        continue;
+      }
+      batch.add(toItem(entry, name, isDir, type));
+      if (batch.length == batchSize) {
+        fileItems.addAll((await Future.wait(batch)).whereType<FileItem>());
+        batch.clear();
+      }
+    }
+    if (scan?.isCancelled == true) return [];
+    fileItems.addAll((await Future.wait(batch)).whereType<FileItem>());
+    return scan?.isCancelled == true ? [] : fileItems;
+  } finally {
+    unregister?.call();
+    await iterator.cancel();
   }
-
-  return fileItems;
 }
 
 Future<void> pickContentFile() async {
@@ -274,12 +321,25 @@ Future<void> pickContentFile() async {
   }
 }
 
-Future<List<FileItem>> getContentFiles(String uri) async {
+Future<List<FileItem>> getContentFiles(
+  String uri, {
+  bool mediaOnly = false,
+  DirectoryScan? scan,
+}) async {
+  if (scan?.isCancelled == true) return [];
+  // SafUtil.list uses a single platform-channel call with no abort API.
   final files = await SafUtil().list(uri);
+  if (scan?.isCancelled == true) return [];
 
-  List<FileItem> fileItems = [];
-
+  final fileItems = <FileItem>[];
   for (final file in files) {
+    final type = file.isDir ? ContentType.other : checkContentType(file.name);
+    if (mediaOnly &&
+        !file.isDir &&
+        type != ContentType.video &&
+        type != ContentType.audio) {
+      continue;
+    }
     fileItems.add(
       FileItem(
         name: file.name,
@@ -288,7 +348,7 @@ Future<List<FileItem>> getContentFiles(String uri) async {
         isDir: file.isDir,
         size: file.isDir ? 0 : file.length,
         lastModified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
-        type: file.isDir ? ContentType.other : checkContentType(file.name),
+        type: type,
       ),
     );
   }

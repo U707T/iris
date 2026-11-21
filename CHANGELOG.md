@@ -1,3 +1,21 @@
+## v2.8.3
+
+### 更新日志
+
+* **短视频当前项优先。** 先完成当前项装载及现有视频输出就绪等待，再逐个装载相邻视频；同一槽位的装载和卸载串行执行，尚未开始的过期目标只保留最新一项。快速跳页优先使用无需等待的可复用槽位。
+* **后台减少预载工作。** 非画中画进入后台时卸载相邻媒体，回到前台再补齐，保留当前视频的播放/暂停意图。生命周期处理不依赖后台已停止的界面帧；保留可复用播放器和视频输出，不等同于销毁整个播放器池。
+* **大目录少做无用读取。** 浏览、搜索和队列扫描在读取本地元数据前筛除非媒体文件，目录仍可进入，封面查找保留完整列表。切换目录、刷新和关闭/重发搜索会取消旧扫描；WebDAV 请求主动终止，SAF 平台调用在返回后丢弃过期结果。
+* **小幅减负。** 普通播放按队列/当前项缓存定位结果，避免进度更新反复遍历队列；Flutter 资源只包含运行时需要的透明图标，MSIX 安装图标继续保留。未新增依赖或裁剪媒体格式。
+* **回归与审查。** 补充调度、后台禁帧、快速切换、清空队列保存和目录取消回归。真实解码器/纹理内存、弱网首帧与平台交互仍需设备验证，详见 [开发验证与 CI](docs/TESTING.md)。
+
+### Changes
+
+* Prioritize the active short-video load before serial adjacent preloads, coalesce pending targets, and serialize each slot's open/unload operations. Prefer immediately reusable slots for distant navigation.
+* Unload adjacent media in the background outside PiP, restoring preloads on resume without changing the current playback intent. Lifecycle handling works without UI frames; reusable players and video outputs remain allocated.
+* Filter non-media entries before local metadata I/O for browsing, search and queue scans, while retaining full listings for cover discovery. Cancel stale enumeration and WebDAV requests; discard stale SAF results after the platform call returns.
+* Memoize normal-player queue lookup and exclude the packaging-only logo from Flutter runtime assets. No dependencies or media formats removed.
+* Add scheduling, lifecycle, history and directory cancellation regressions. Native performance and platform checks remain required as documented in [testing notes](docs/TESTING.md).
+
 ## v2.8.2
 
 ### 更新日志

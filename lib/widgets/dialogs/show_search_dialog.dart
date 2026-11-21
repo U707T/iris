@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/file.dart';
+import 'package:iris/models/storages/directory_scan.dart';
 import 'package:iris/models/storages/storage.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
@@ -16,11 +17,10 @@ import 'package:iris/widgets/media_row.dart';
 Future<void> showSearchDialog(
   BuildContext context, {
   required Storage storage,
-}) async =>
-    await showDialog<void>(
-      context: context,
-      builder: (context) => SearchDialog(storage: storage),
-    );
+}) async => await showDialog<void>(
+  context: context,
+  builder: (context) => SearchDialog(storage: storage),
+);
 
 class SearchDialog extends HookWidget {
   const SearchDialog({super.key, required this.storage});
@@ -31,25 +31,28 @@ class SearchDialog extends HookWidget {
   Widget build(BuildContext context) {
     final t = getLocalizations(context);
 
-    final currentPath =
-        useStorageStore().select(context, (state) => state.currentPath);
+    final currentPath = useStorageStore().select(
+      context,
+      (state) => state.currentPath,
+    );
 
     final controller = useTextEditingController();
     final isSearching = useState(false);
     final results = useState<List<FileItem>>([]);
     final hasSearched = useState(false);
-    final searchSession = useRef(0);
+    final activeScan = useRef<DirectoryScan?>(null);
 
     useEffect(() {
-      // 关闭对话框时让仍在跑的搜索在下一个目录前退出, 不再扫网络存储
-      return () => searchSession.value++;
+      return () => activeScan.value?.cancel();
     }, const []);
 
     Future<void> search() async {
       final keyword = controller.text.trim();
       if (keyword.isEmpty) return;
 
-      final session = ++searchSession.value;
+      activeScan.value?.cancel();
+      final scan = DirectoryScan();
+      activeScan.value = scan;
       isSearching.value = true;
       hasSearched.value = true;
 
@@ -59,17 +62,16 @@ class SearchDialog extends HookWidget {
           storage: storage,
           basePath: currentPath,
           query: keyword,
-          isCancelled: () =>
-              searchSession.value != session || !context.mounted,
+          scan: scan,
         );
       } catch (e) {
         logger('Search failed: $e');
         files = const [];
       }
 
-      // 期间又发起了新搜索 / 对话框已关闭: 丢弃这次结果
-      if (searchSession.value != session || !context.mounted) return;
+      if (scan.isCancelled || !context.mounted) return;
 
+      activeScan.value = null;
       results.value = files;
       isSearching.value = false;
     }
@@ -112,8 +114,11 @@ class SearchDialog extends HookWidget {
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear_rounded),
                   onPressed: () {
+                    activeScan.value?.cancel();
+                    activeScan.value = null;
                     controller.clear();
                     results.value = [];
+                    isSearching.value = false;
                     hasSearched.value = false;
                   },
                 ),
@@ -135,38 +140,33 @@ class SearchDialog extends HookWidget {
                       ),
                     )
                   : !hasSearched.value
-                      ? const Center(child: SizedBox())
-                      : results.value.isEmpty
-                          ? Center(child: Text(t.no_search_results))
-                          : ListView.builder(
-                              itemCount: results.value.length,
-                              itemBuilder: (context, index) {
-                                final file = results.value[index];
-                                return MediaRow(
-                                  icon: file.type == ContentType.audio
-                                      ? Icons.audiotrack_rounded
-                                      : Icons.movie_rounded,
-                                  title: file.name,
-                                  meta: file.size != 0
-                                      ? '${fileSizeConvert(file.size)} MB'
-                                      : null,
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    play(file);
-                                  },
-                                );
-                              },
-                            ),
+                  ? const Center(child: SizedBox())
+                  : results.value.isEmpty
+                  ? Center(child: Text(t.no_search_results))
+                  : ListView.builder(
+                      itemCount: results.value.length,
+                      itemBuilder: (context, index) {
+                        final file = results.value[index];
+                        return MediaRow(
+                          icon: file.type == ContentType.audio
+                              ? Icons.audiotrack_rounded
+                              : Icons.movie_rounded,
+                          title: file.name,
+                          meta: file.size != 0
+                              ? '${fileSizeConvert(file.size)} MB'
+                              : null,
+                          onTap: () {
+                            Navigator.pop(context);
+                            play(file);
+                          },
+                        );
+                      },
+                    ),
             ),
           ],
         ),
       ),
-      actions: <Widget>[
-        FilledButton(
-          onPressed: search,
-          child: Text(t.search),
-        ),
-      ],
+      actions: <Widget>[FilledButton(onPressed: search, child: Text(t.search))],
     );
   }
 }
