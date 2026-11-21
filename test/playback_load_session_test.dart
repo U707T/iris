@@ -96,6 +96,7 @@ void main() {
     final session = PlaybackLoadSession();
     final played = <String>[];
     final first = session.load(
+      identity: 'old',
       errors: errors.stream,
       ready: () async {},
       open: () async {},
@@ -107,6 +108,7 @@ void main() {
     );
     await Future<void>.delayed(Duration.zero);
     await session.load(
+      identity: 'new',
       errors: errors.stream,
       ready: () async {},
       open: () async {},
@@ -119,6 +121,9 @@ void main() {
     frame.complete();
     await first;
     expect(played, ['new']);
+    expect(session.loadedIdentity, 'new');
+    session.invalidate();
+    expect(session.loadedIdentity, isNull);
     session.dispose();
     await errors.close();
   });

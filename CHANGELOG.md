@@ -1,3 +1,19 @@
+## v2.8.4
+
+### 更新日志
+
+* **修复主模式切换视频无效。** 点击上一条/下一条后，旧条目的清理回调会取消刚启动的新装载。现在先完成旧清理，再启动仍有效的新条目装载；自动连播、键盘和播放列表选择共用此修复，保留重复文件条目的独立装载。
+* **续播与保存绑定当前装载。** 新视频慢加载时不再向旧视频应用新历史进度，也不会把旧视频进度保存成新视频历史；只有对应文件及队列条目成功装载后才恢复或保存。同文件不同条目各自恢复一次，后续历史保存不会反复拉回进度。
+* **修复同类清理时序。** 播放统计开关只清理自己创建的定时器，开启后可持续刷新；普通/短视频模式切换时，旧宿主不会清空新宿主的画中画状态回调。
+* **回归与复核。** 新增队列导航、真实 hook/装载会话、慢加载续播、统计开关和画中画宿主替换回归，现有性能优化和依赖保持不变。原生播放与系统画中画仍需设备验收，见 [开发验证与 CI](docs/TESTING.md)。
+
+### Changes
+
+* Fix normal-mode previous/next navigation being cancelled by the previous entry's effect cleanup. Start the current load after cleanup, preserving stale-load cancellation and repeated queue entries. Completion, keyboard and queue selection share this load path.
+* Restore or save history only for the matching successfully loaded file and queue entry, preserving an unopened item's history during slow navigation. Make restoration a single decision for each loaded entry.
+* Keep statistics polling timers owned by their effect, and preserve the replacement host's PiP callback when the old host unmounts.
+* Add navigation and lifecycle regressions without changing dependencies or removing the previous performance improvements. Native playback and system PiP still require device validation.
+
 ## v2.8.3
 
 ### 更新日志

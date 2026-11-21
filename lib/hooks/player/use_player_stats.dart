@@ -13,9 +13,9 @@ Map<String, String> Function() usePlayerStats(
   required bool isShowStats,
 }) {
   final stats = useRef<Map<String, String>?>(null);
-  final timer = useRef<Timer?>(null);
 
   useEffect(() {
+    Timer? timer;
     Future<void> refresh() async {
       try {
         final nativePlayer = player.platform;
@@ -47,16 +47,14 @@ Map<String, String> Function() usePlayerStats(
       } catch (_) {}
     }
 
-    timer.value?.cancel();
+    // Each effect owns its timer: an older keyed cleanup runs after the new
+    // effect starts, and must not cancel the replacement timer.
     // 仅在需要时启用, 每秒刷新一次
     if (isShowStats) {
-      timer.value = Timer.periodic(
-        const Duration(seconds: 1),
-        (_) => refresh(),
-      );
+      timer = Timer.periodic(const Duration(seconds: 1), (_) => refresh());
       refresh();
     }
-    return () => timer.value?.cancel();
+    return () => timer?.cancel();
   }, [isShowStats]);
 
   return () => stats.value ?? const {};

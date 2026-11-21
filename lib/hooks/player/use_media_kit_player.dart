@@ -61,6 +61,9 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   final saveProgress = usePlayerProgress(
     player: player,
     file: file,
+    entryIndex: engine.entryIndex,
+    isReady: engine.isReady,
+    ownsCurrentMedia: engine.ownsCurrentMedia,
     duration: streams.duration,
     alwaysPlayFromBeginning: alwaysPlayFromBeginning,
     history: history,

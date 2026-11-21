@@ -21,6 +21,9 @@ class PlayerEngine {
     required this.controller,
     required this.playQueue,
     required this.currentPlayIndex,
+    required this.entryIndex,
+    required this.isReady,
+    required this.ownsCurrentMedia,
     required this.file,
     required this.isInitializing,
     required this.error,
@@ -31,6 +34,9 @@ class PlayerEngine {
   final VideoController controller;
   final List<PlayQueueItem> playQueue;
   final int currentPlayIndex;
+  final int entryIndex;
+  final bool isReady;
+  final bool Function() ownsCurrentMedia;
   final FileItem? file;
   final bool isInitializing;
   final String? error;
@@ -70,6 +76,7 @@ PlayerEngine usePlayerEngine(BuildContext context) {
   Future<void> init(FileItem file) async {
     if (file.uri.isEmpty) return;
     await session.load(
+      identity: (file, currentIndex),
       errors: player.stream.error,
       ready: () async {
         try {
@@ -114,6 +121,14 @@ PlayerEngine usePlayerEngine(BuildContext context) {
     controller: controller,
     playQueue: playQueue,
     currentPlayIndex: currentPlayIndex,
+    entryIndex: currentIndex,
+    isReady:
+        file != null &&
+        !session.initializing &&
+        session.error == null &&
+        session.loadedIdentity == (file, currentIndex),
+    ownsCurrentMedia: () =>
+        file != null && session.loadedIdentity == (file, currentIndex),
     file: file,
     isInitializing: session.initializing,
     error: session.error,

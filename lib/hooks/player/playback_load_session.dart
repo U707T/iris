@@ -12,13 +12,22 @@ void usePlaybackEntryEffect({
   required VoidCallback invalidate,
 }) {
   useEffect(() {
-    if (file == null) {
+    var alive = true;
+    // Keyed hooks initialize their replacement before disposing the old effect
+    // at the end of build. Let that cleanup invalidate the old session first.
+    scheduleMicrotask(() {
+      if (!alive) return;
+      if (file == null) {
+        invalidate();
+        stop();
+      } else {
+        load();
+      }
+    });
+    return () {
+      alive = false;
       invalidate();
-      stop();
-    } else {
-      load();
-    }
-    return invalidate;
+    };
   }, [file, entryIndex]);
 }
 
@@ -31,6 +40,9 @@ class PlaybackLoadSession extends ChangeNotifier {
   bool initializing = false;
   String? error;
 
+  /// Identity of the last successfully loaded entry; invalidation clears it.
+  Object? loadedIdentity;
+
   void invalidate() {
     _generation++;
     final subscription = _errors;
@@ -38,9 +50,11 @@ class PlaybackLoadSession extends ChangeNotifier {
     if (subscription != null) unawaited(subscription.cancel());
     initializing = false;
     error = null;
+    loadedIdentity = null;
   }
 
   Future<void> load({
+    Object? identity,
     required Stream<String> errors,
     required Future<void> Function() ready,
     required Future<void> Function() open,
@@ -76,6 +90,7 @@ class PlaybackLoadSession extends ChangeNotifier {
       if (current()) error = e.toString();
     } finally {
       if (current()) {
+        loadedIdentity = error == null ? identity : null;
         initializing = false;
         notifyListeners();
       }

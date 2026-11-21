@@ -18,66 +18,81 @@ import 'package:provider/provider.dart';
 ///
 /// 这里**不**负责进入 / 退出的手动入口 —— 那在「更多」菜单和小窗里的退出
 /// 按钮, 走的是 [PictureInPicture.enter] / [PictureInPicture.exit]。
-void usePictureInPicture({
-  required FileItem? file,
-  required bool hasOverlay,
-}) {
+void usePictureInPicture({required FileItem? file, required bool hasOverlay}) {
   final context = useContext();
 
-  final bool enabled =
-      useAppStore().select(context, (state) => state.pictureInPicture);
-  final bool isShortVideoMode =
-      usePlayerUiStore().select(context, (state) => state.isShortVideoMode);
-  final double aspectRatio =
-      usePlayerUiStore().select(context, (state) => state.aspectRatio);
+  final bool enabled = useAppStore().select(
+    context,
+    (state) => state.pictureInPicture,
+  );
+  final bool isShortVideoMode = usePlayerUiStore().select(
+    context,
+    (state) => state.isShortVideoMode,
+  );
+  final double aspectRatio = usePlayerUiStore().select(
+    context,
+    (state) => state.aspectRatio,
+  );
 
-  final bool isPlaying =
-      context.select<MediaPlayer, bool>((player) => player.isPlaying);
+  final bool isPlaying = context.select<MediaPlayer, bool>(
+    (player) => player.isPlaying,
+  );
   final bool hasError =
       context.select<MediaPlayer, String?>((player) => player.error) != null;
 
   // 平台 -> store。原生回调可能在任意时刻到, 写 store 是最稳的落点:
   // 界面层只需要订阅一个 bool, 不用和通道打交道。
   useEffect(() {
-    PictureInPicture.onModeChanged = (isInPictureInPicture) {
+    void onModeChanged(bool isInPictureInPicture) {
       usePlayerUiStore().updatePictureInPicture(isInPictureInPicture);
       if (!isInPictureInPicture) {
         // 从小窗回来: 控制栏应该立刻在, 而不是留一块空画面等用户点一下。
         usePlayerUiStore().updateIsShowControl(true);
       }
+    }
+
+    PictureInPicture.onModeChanged = onModeChanged;
+    return () {
+      // A replacement host mounts before the old subtree finally unmounts.
+      // Only unregister this host's callback, never its replacement's.
+      if (identical(PictureInPicture.onModeChanged, onModeChanged)) {
+        PictureInPicture.onModeChanged = null;
+      }
     };
-    return () => PictureInPicture.onModeChanged = null;
   }, const []);
 
   // Android: 武装 / 解除自动进入。
   //
   // 条件由 [shouldArmAutoPictureInPicture] 统一判定 —— 测试盯的是那个纯函数,
   // 不是这里的某一行 effect。
-  useEffect(() {
-    if (!isAndroid) return null;
+  useEffect(
+    () {
+      if (!isAndroid) return null;
 
-    unawaited(
-      PictureInPicture.setAutoEnter(
-        enabled: shouldArmAutoPictureInPicture(
-          enabled: enabled,
-          supported: PictureInPicture.isSupported,
-          isVideo: file?.type == ContentType.video,
-          isPlaying: isPlaying,
-          isShortVideoMode: isShortVideoMode,
-          hasError: hasError,
-          hasOverlay: hasOverlay,
+      unawaited(
+        PictureInPicture.setAutoEnter(
+          enabled: shouldArmAutoPictureInPicture(
+            enabled: enabled,
+            supported: PictureInPicture.isSupported,
+            isVideo: file?.type == ContentType.video,
+            isPlaying: isPlaying,
+            isShortVideoMode: isShortVideoMode,
+            hasError: hasError,
+            hasOverlay: hasOverlay,
+          ),
+          aspectRatio: aspectRatio,
         ),
-        aspectRatio: aspectRatio,
-      ),
-    );
-    return null;
-  }, [
-    enabled,
-    file?.type,
-    isPlaying,
-    isShortVideoMode,
-    hasError,
-    hasOverlay,
-    aspectRatio,
-  ]);
+      );
+      return null;
+    },
+    [
+      enabled,
+      file?.type,
+      isPlaying,
+      isShortVideoMode,
+      hasError,
+      hasOverlay,
+      aspectRatio,
+    ],
+  );
 }
