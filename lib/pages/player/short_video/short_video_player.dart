@@ -56,10 +56,14 @@ class ShortVideoMediaKitPlayer extends MediaKitPlayer {
 
 /// 短视频模式的 Media Kit 播放器池宿主
 MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
-  final playQueue =
-      usePlayQueueStore().select(context, (state) => state.playQueue);
-  final currentIndex =
-      usePlayQueueStore().select(context, (state) => state.currentIndex);
+  final playQueue = usePlayQueueStore().select(
+    context,
+    (state) => state.playQueue,
+  );
+  final currentIndex = usePlayQueueStore().select(
+    context,
+    (state) => state.currentIndex,
+  );
 
   final items = useMemoized(() => getVideoItems(playQueue), [playQueue]);
   final currentFeedIndex = useMemoized(
@@ -67,12 +71,11 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
     [items, currentIndex],
   );
 
-
   final pool = useMemoized(
     () => ShortVideoPool(
       buildMedia: (file) {
         final storage = useStorageStore().findById(file.storageId);
-        final auth = storage?.getAuth();
+        final auth = storage?.getAuthForUri(file.uri);
         return Media(
           file.uri,
           httpHeaders: auth != null ? {'authorization': auth} : {},
@@ -116,24 +119,18 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
 
   // 注意: media_kit 的流不重放历史事件, 订阅开始前发生的事件会错过
   // (预载槽位在激活前就已经打开完毕), 因此用同步的 state 做兜底。
-  final playing = useStream(
-        activePlayer.stream.playing,
-        preserveState: false,
-      ).data ??
+  final playing =
+      useStream(activePlayer.stream.playing, preserveState: false).data ??
       activePlayer.state.playing;
-  final position = useStream(
-        activePlayer.stream.position,
-        preserveState: false,
-      ).data ??
+  final position =
+      useStream(activePlayer.stream.position, preserveState: false).data ??
       activePlayer.state.position;
   final duration = _preferNonZero(
     useStream(activePlayer.stream.duration, preserveState: false).data,
     activePlayer.state.duration,
   );
-  final videoParams = useStream(
-        activePlayer.stream.videoParams,
-        preserveState: false,
-      ).data ??
+  final videoParams =
+      useStream(activePlayer.stream.videoParams, preserveState: false).data ??
       activePlayer.state.videoParams;
 
   Future<void> play() async {
@@ -173,8 +170,8 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
       newPosition.inMilliseconds < 0
           ? await slot.player.seek(Duration.zero)
           : liveDuration > Duration.zero && newPosition > liveDuration
-              ? await slot.player.seek(liveDuration)
-              : await slot.player.seek(newPosition);
+          ? await slot.player.seek(liveDuration)
+          : await slot.player.seek(newPosition);
     } catch (e) {
       logger('Short video seek error: $e');
     }
@@ -210,7 +207,8 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
 
   Future<void> saveProgress() async {
     final slot = pool.slotFor(pool.currentFeedIndex);
-    if (slot != null && slot.played) pool.saveSlotProgress(slot);
+    if (slot != null && slot.played) await pool.saveSlotProgress(slot);
+    await pool.flushPendingSaves();
   }
 
   return ShortVideoMediaKitPlayer(
@@ -237,9 +235,7 @@ MediaPlayer useShortVideoMediaKitPlayer(BuildContext context) {
     saveProgress: saveProgress,
     screenshot: () async {
       try {
-        return await activePlayer.screenshot(
-          format: 'image/jpeg',
-        );
+        return await activePlayer.screenshot(format: 'image/jpeg');
       } catch (e) {
         logger('Error taking screenshot: $e');
         return null;

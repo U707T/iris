@@ -1,221 +1,191 @@
 name: ci
 on:
   push:
-    branches: 
-      - main
-      - dev
-    paths-ignore:
-      - README.md
-      - README_EN.md
-      - LICENSE
+    branches: [main, dev, 'fix/**']
+    paths-ignore: [README.md, README_EN.md, LICENSE]
   pull_request:
-    paths-ignore:
-      - README.md
-      - README_EN.md
-      - LICENSE
+    paths-ignore: [README.md, README_EN.md, LICENSE]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
-  # 静态检查 + 单元测试: 以前 CI 只构建不测试, 编译得过就等于"通过",
-  # 逻辑错误 (空队列越界 / 版本号解析抛异常) 只有发版后才会被发现。
   analyze-and-test:
     runs-on: ubuntu-latest
     steps:
-      - name: Clone repository
-        uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           flutter-version: 3.47.5
           cache: true
-      - name: Provide legacy flutter version file
-        run: |
-          FT=$(command -v flutter)
-          FLUTTER_ROOT_DIR="$(cd "$(dirname "$FT")/.." && pwd)"
-          echo "FLUTTER_ROOT_DIR=$FLUTTER_ROOT_DIR"
-          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.5" > "$FLUTTER_ROOT_DIR/version"; fi
-          cat "$FLUTTER_ROOT_DIR/version"
+      - name: Provide legacy Flutter version file
+        run: echo '3.47.5' > "$FLUTTER_ROOT/version"
       - name: Generate code
-        run: flutter pub get && dart run build_runner build
+        run: |
+          flutter pub get --enforce-lockfile
+          dart run build_runner build
       - name: Analyze
         run: flutter analyze
       - name: Test
         run: flutter test --no-pub
+      - name: Test CI signing helpers
+        run: python -m unittest discover -s test -p '*_test.py'
+      - name: Check updater PowerShell syntax
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/windows/iris-updater.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { throw ($errors | Out-String) }
 
   build-windows:
-    needs:
-      - analyze-and-test
+    needs: analyze-and-test
     runs-on: windows-2022
     steps:
-      - name: Clone repository
-        uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           flutter-version: 3.47.5
           cache: true
-      - name: Provide legacy flutter version file
-        shell: bash
-        run: |
-          FT=$(command -v flutter)
-          FLUTTER_ROOT_DIR="$(cd "$(dirname "$FT")/.." && pwd)"
-          echo "FLUTTER_ROOT_DIR=$FLUTTER_ROOT_DIR"
-          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.5" > "$FLUTTER_ROOT_DIR/version"; fi
-          cat "$FLUTTER_ROOT_DIR/version"
+      - name: Provide legacy Flutter version file
+        shell: pwsh
+        run: Set-Content -LiteralPath "$env:FLUTTER_ROOT/version" -Value '3.47.5'
       - name: Generate code
-        run: flutter pub get && dart run build_runner build
+        run: |
+          flutter pub get --enforce-lockfile
+          dart run build_runner build
+      - name: Test portable updater transactions
+        shell: pwsh
+        run: ./test/updater_test.ps1
       - name: Build Flutter application for Windows
         run: flutter build windows
       - name: Create ZIP archive
         run: |
-          # Create a directory to hold the files
-          mkdir IRIS
-          # Copy the build output to the IRIS directory
-          Copy-Item -Path "build\windows\x64\runner\Release\*" -Destination "IRIS" -Recurse -Force
-          # Create a ZIP file
-          Compress-Archive -Path "IRIS" -DestinationPath "IRIS-windows.zip"
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          New-Item -ItemType Directory IRIS | Out-Null
+          Copy-Item 'build/windows/x64/runner/Release/*' IRIS -Recurse
+          Compress-Archive IRIS IRIS-windows.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: IRIS-windows.zip
           path: IRIS-windows.zip
-      - name: Remove updater
-        run: Remove-Item -Path build\windows\x64\runner\Release\iris-updater.bat -Force
+      - name: Remove portable updater
+        run: Remove-Item build/windows/x64/runner/Release/iris-updater.bat,build/windows/x64/runner/Release/iris-updater.ps1
       - name: Create installer
         run: iscc inno.iss
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: IRIS-windows-installer.exe
-          path: build\windows\x64\runner\Release\IRIS-windows-installer.exe
-      - name: Clean up
-        run: Remove-Item -Path build\windows\x64\runner\Release\ -Recurse -Force
-      - name: Build store msix
-        run: dart run msix:build --store true
-      - name: Remove updater
-        run: Remove-Item -Path build\windows\x64\runner\Release\iris-updater.bat -Force
-      - name: Pack store msix
+          path: build/windows/x64/runner/Release/IRIS-windows-installer.exe
+      - name: Build store MSIX
+        run: |
+          Remove-Item build/windows/x64/runner/Release/IRIS-windows-installer.exe
+          dart run msix:build --store true
+      - name: Remove portable updater from MSIX
+        run: Remove-Item build/windows/x64/runner/Release/iris-updater.bat,build/windows/x64/runner/Release/iris-updater.ps1
+      - name: Pack store MSIX
         run: dart run msix:pack --store true --output-name IRIS-windows-store
-      - name: Upload msix
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: IRIS-windows-store.msix
-          path: build\windows\x64\runner\Release\IRIS-windows-store.msix
+          path: build/windows/x64/runner/Release/IRIS-windows-store.msix
 
   build-android:
-    needs:
-      - analyze-and-test
+    needs: analyze-and-test
     runs-on: ubuntu-latest
     steps:
-      - name: Clone repository
-        uses: actions/checkout@v4
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: stable
           flutter-version: 3.47.5
           cache: true
-      - name: Provide legacy flutter version file
-        run: |
-          FT=$(command -v flutter)
-          FLUTTER_ROOT_DIR="$(cd "$(dirname "$FT")/.." && pwd)"
-          echo "FLUTTER_ROOT_DIR=$FLUTTER_ROOT_DIR"
-          if [ ! -f "$FLUTTER_ROOT_DIR/version" ]; then echo "3.47.5" > "$FLUTTER_ROOT_DIR/version"; fi
-          cat "$FLUTTER_ROOT_DIR/version"
+      - name: Provide legacy Flutter version file
+        run: echo '3.47.5' > "$FLUTTER_ROOT/version"
       - name: Generate code
-        run: flutter pub get && dart run build_runner build
-      - name: Set up Java
-        uses: actions/setup-java@v4
+        run: |
+          flutter pub get --enforce-lockfile
+          dart run build_runner build
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: zulu
           java-version: 21
-      - name: Decode and save keystore
+      - name: Build PR validation APK without release secrets
+        if: github.event_name == 'pull_request'
+        run: flutter build apk --debug --target-platform android-arm64
+      - name: Prepare release signing
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: python .github/scripts/prepare_signing.py
+      - name: Build signed release APKs
+        if: github.event_name != 'pull_request'
         run: |
-          echo "${{ secrets.KEYSTORE }}" | base64 --decode > android/app/keystore.jks
-      - name: Save key.properties
-        run: |
-          echo "storePassword=${{ secrets.STORE_PASSWORD }}" >> android/key.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
-          echo "storeFile=keystore.jks" >> android/key.properties
-      - name: Build Flutter application for Android
-        run: flutter build apk --split-per-abi
-      - name: Rename armeabi-v7a APK
-        run: mv build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk IRIS-android-armeabi-v7a.apk
-      - name: Rename arm64-v8a APK
-        run: mv build/app/outputs/flutter-apk/app-arm64-v8a-release.apk IRIS-android-arm64-v8a.apk
-      - name: Rename x86_64 APK
-        run: mv build/app/outputs/flutter-apk/app-x86_64-release.apk IRIS-android-x86_64.apk
-      - name: Upload armeabi-v7a APK
-        uses: actions/upload-artifact@v4
+          flutter build apk --split-per-abi
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk IRIS-android-armeabi-v7a.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk IRIS-android-arm64-v8a.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk IRIS-android-x86_64.apk
+      - name: Upload APKs
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: IRIS-android-armeabi-v7a.apk
-          path: IRIS-android-armeabi-v7a.apk
-      - name: Upload arm64-v8a APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: IRIS-android-arm64-v8a.apk
-          path: IRIS-android-arm64-v8a.apk
-      - name: Upload x86_64 APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: IRIS-android-x86_64.apk
-          path: IRIS-android-x86_64.apk
+          name: IRIS-android
+          path: IRIS-android-*.apk
+      - name: Remove signing material
+        if: always()
+        run: rm -f android/app/keystore.jks android/key.properties
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build-windows, build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    needs:
-      - build-windows
-      - build-android
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Get version
-        id: yq
-        uses: mikefarah/yq@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          cmd: yq '.version' 'pubspec.yaml'
-      - name: Print version
-        run: echo ${{ steps.yq.outputs.result }}
-      - name: Prepare tag name
-        id: tag_name
-        run: |
-          VERSION="${{ steps.yq.outputs.result }}"
-          TAG_NAME="v${VERSION%%+*}"
-          echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_OUTPUT"
-          case "$TAG_NAME" in
-            *-*) echo "PRERELEASE=true" >> "$GITHUB_OUTPUT" ;;
-            *)   echo "PRERELEASE=false" >> "$GITHUB_OUTPUT" ;;
-          esac
-      - name: Check tag
-        uses: mukunku/tag-exists-action@v1.6.0
-        id: check-tag
-        with:
-          tag: ${{ steps.tag_name.outputs.TAG_NAME }}
-      - name: Eextract log
-        if: steps.check-tag.outputs.exists == 'false'
-        run: python extract_log.py ${{ steps.tag_name.outputs.TAG_NAME }}
-      - name: Download artifact
-        if: steps.check-tag.outputs.exists == 'false'
-        uses: actions/download-artifact@v4
+          persist-credentials: false
+      - name: Resolve version and verify existing tag
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BUILD_SHA: ${{ github.sha }}
+        run: python .github/scripts/release_metadata.py
+      - name: Extract changelog
+        if: steps.version.outputs.exists == 'false'
+        env:
+          TAG_NAME: ${{ steps.version.outputs.tag }}
+        run: python extract_log.py "$TAG_NAME"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        if: steps.version.outputs.exists == 'false'
         with:
           path: artifacts
           merge-multiple: true
-      - name: Release
-        if: steps.check-tag.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish release for the exact build commit
+        if: steps.version.outputs.exists == 'false'
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          tag_name: ${{ steps.tag_name.outputs.TAG_NAME }}
-          body_path: CHANGELOG_${{ steps.tag_name.outputs.TAG_NAME }}.md
+          target_commitish: ${{ github.sha }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          body_path: CHANGELOG_${{ steps.version.outputs.tag }}.md
           draft: false
-          prerelease: ${{ steps.tag_name.outputs.PRERELEASE == 'true' }}
+          prerelease: ${{ steps.version.outputs.prerelease == 'true' }}
+          fail_on_unmatched_files: true
           files: |
             artifacts/IRIS-windows.zip
             artifacts/IRIS-windows-installer.exe

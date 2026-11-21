@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:iris/models/storages/storage.dart';
 import 'package:iris/utils/check_content_type.dart';
 import 'package:iris/utils/logger.dart';
@@ -11,10 +12,10 @@ import 'package:iris/models/file.dart';
 /// 而 `Uri(pathSegments: ...)` 需要的是 `['dav', 'movies']`。直接去掉斜杠会
 /// 变成 `davmovies`, 导致媒体 URL 少一层目录。
 List<String> webDAVPathSegments(List<String> path) => [
-      for (final part in path)
-        for (final segment in part.split('/'))
-          if (segment.isNotEmpty) segment,
-    ];
+  for (final part in path)
+    for (final segment in part.split('/'))
+      if (segment.isNotEmpty) segment,
+];
 
 /// 生成 WebDAV 上某个文件的完整 URL。
 ///
@@ -98,24 +99,54 @@ Future<List<FileItem>> getWebDAVFiles(
     if (fileName == null) continue;
 
     final isDir = file.isDir;
-    fileItems.add(FileItem(
-      storageId: id,
-      storageType: StorageType.webdav,
-      name: fileName,
-      uri: buildWebDAVFileUri(
-        storage: storage,
-        path: path,
-        fileName: fileName,
+    fileItems.add(
+      FileItem(
+        storageId: id,
+        storageType: StorageType.webdav,
+        name: fileName,
+        uri: buildWebDAVFileUri(
+          storage: storage,
+          path: path,
+          fileName: fileName,
+        ),
+        path: [...path, fileName],
+        isDir: isDir ?? false,
+        size: file.size ?? 0,
+        lastModified: file.mTime,
+        type: isDir ?? false ? ContentType.other : checkContentType(fileName),
       ),
-      path: [...path, fileName],
-      isDir: isDir ?? false,
-      size: file.size ?? 0,
-      lastModified: file.mTime,
-      type: isDir ?? false ? ContentType.other : checkContentType(fileName),
-    ));
+    );
   }
 
   return fileItems;
+}
+
+/// Return credentials only for this connection's exact HTTP origin.
+/// A persisted media URL may predate an edit to the connection configuration.
+String getWebDAVAuthForUri(WebDAVStorage storage, String mediaUri) {
+  final target = Uri.tryParse(mediaUri);
+  final origin = Uri(
+    scheme: storage.https ? 'https' : 'http',
+    host: storage.host,
+    port: storage.port.isEmpty ? null : int.tryParse(storage.port),
+  );
+  final configuredPort = int.tryParse(storage.port);
+  if ((storage.port.isNotEmpty &&
+          (configuredPort == null ||
+              configuredPort < 1 ||
+              configuredPort > 65535)) ||
+      target == null ||
+      !target.hasAuthority ||
+      target.userInfo.isNotEmpty ||
+      target.scheme != origin.scheme ||
+      target.host.toLowerCase() != origin.host.toLowerCase() ||
+      target.port != origin.port ||
+      target.host.isEmpty) {
+    throw StateError(
+      'The media URL no longer belongs to this WebDAV connection',
+    );
+  }
+  return getWebDAVAuth(storage);
 }
 
 String getWebDAVAuth(WebDAVStorage storage) =>

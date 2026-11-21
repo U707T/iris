@@ -13,24 +13,24 @@ import 'package:iris/utils/platform.dart';
 import 'package:provider/provider.dart';
 
 MediaPlayer _dummyPlayer() => MediaPlayer(
-      isInitializing: false,
-      isPlaying: false,
-      position: Duration.zero,
-      duration: Duration.zero,
-      buffer: Duration.zero,
-      width: 0,
-      height: 0,
-      saveProgress: () async {},
-      play: () async {},
-      pause: () async {},
-      backward: (_) async {},
-      forward: (_) async {},
-      stepBackward: () async {},
-      stepForward: () async {},
-      seek: (_) async {},
-      screenshot: () async => null,
-      getStats: () => const {},
-    );
+  isInitializing: false,
+  isPlaying: false,
+  position: Duration.zero,
+  duration: Duration.zero,
+  buffer: Duration.zero,
+  width: 0,
+  height: 0,
+  saveProgress: () async {},
+  play: () async {},
+  pause: () async {},
+  backward: (_) async {},
+  forward: (_) async {},
+  stepBackward: () async {},
+  stepForward: () async {},
+  seek: (_) async {},
+  screenshot: () async => null,
+  getStats: () => const {},
+);
 
 Future<void> _pumpControlBar(
   WidgetTester tester,
@@ -100,6 +100,10 @@ Future<void> _pumpControlBar(
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    await Future.wait([useAppStore().ready, usePlayQueueStore().ready]);
+  });
   setUp(() {
     // 控制栏里的「横竖屏」按钮 (以及更多菜单里的移动端条目) 只在移动端出现,
     // 但测试跑在 Linux 宿主上 —— 不覆盖平台判定, 测到的永远是桌面布局。
@@ -135,8 +139,7 @@ void main() {
     expect(find.byIcon(Icons.zoom_in_rounded), findsNothing);
   });
 
-  testWidgets('360 宽的第二排是五个: 画面 → 存储 → 队列 → 短视频 → 更多',
-      (tester) async {
+  testWidgets('360 宽的第二排是五个: 画面 → 存储 → 队列 → 短视频 → 更多', (tester) async {
     await _pumpControlBar(tester, 360);
 
     // 按从左到右的预期顺序; 每一项都必须存在且 x 递增
@@ -168,11 +171,7 @@ void main() {
     // 按窗口宽度排 10 个按钮 = 608dp, 在这三档里都必然溢出。
     for (final width in <double>[512, 560, 600, 639, 640, 700]) {
       await _pumpControlBar(tester, width, constrainToOwnBox: true);
-      expect(
-        tester.takeException(),
-        isNull,
-        reason: '小窗 ${width.toInt()} 宽溢出',
-      );
+      expect(tester.takeException(), isNull, reason: '小窗 ${width.toInt()} 宽溢出');
     }
   });
 
@@ -185,15 +184,18 @@ void main() {
       await _pumpControlBar(tester, 360, items: items);
 
       final double center = tester.getRect(find.byType(ControlBar)).center.dx;
-      final double play =
-          tester.getCenter(find.byIcon(Icons.play_arrow_rounded)).dx;
+      final double play = tester
+          .getCenter(find.byIcon(Icons.play_arrow_rounded))
+          .dx;
       expect(play, closeTo(center, 0.5), reason: '队列 $items 条: play=$play');
 
       // 两侧的模式键对称, 进一步确认隐藏按钮没有把整排推偏
-      final double shuffle =
-          tester.getCenter(find.byIcon(Icons.shuffle_rounded)).dx;
-      final double repeat =
-          tester.getCenter(find.byIcon(Icons.repeat_rounded)).dx;
+      final double shuffle = tester
+          .getCenter(find.byIcon(Icons.shuffle_rounded))
+          .dx;
+      final double repeat = tester
+          .getCenter(find.byIcon(Icons.repeat_rounded))
+          .dx;
       expect(shuffle + repeat, closeTo(center * 2, 1), reason: '队列 $items 条');
     }
   });
@@ -221,8 +223,7 @@ void main() {
     await _pumpControlBar(tester, 360, height: 1000);
     await tester.tap(find.byIcon(Icons.more_vert_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('屏幕方向'), findsOneWidget,
-        reason: '重新打开 sheet 后应能看到屏幕方向行');
+    expect(find.text('屏幕方向'), findsOneWidget, reason: '重新打开 sheet 后应能看到屏幕方向行');
     expect(find.text('横向'), findsOneWidget);
   });
 }

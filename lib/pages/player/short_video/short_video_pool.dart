@@ -1,11 +1,14 @@
+import 'package:iris/hooks/player/playback_tls.dart';
+import 'package:iris/hooks/player/playback_history.dart';
+
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/progress.dart';
 import 'package:iris/store/use_app_store.dart';
-import 'package:iris/store/use_history_store.dart';
 import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/wait_for_first_frame.dart';
 import 'package:media_kit/media_kit.dart';
@@ -15,9 +18,9 @@ import 'package:media_kit_video/media_kit_video.dart';
 const int _shortVideoPoolSize = 3;
 
 /// media_kit_video 的视频输出通道 (Android 兜底校正画面尺寸用, 见 [_syncVideoOutputSize])
-const MethodChannel _videoOutputChannel =
-    MethodChannel('com.alexmercerind/media_kit_video');
-
+const MethodChannel _videoOutputChannel = MethodChannel(
+  'com.alexmercerind/media_kit_video',
+);
 
 /// 单个播放器槽位
 class ShortVideoSlot {
@@ -46,13 +49,23 @@ class ShortVideoSlot {
 
   /// 装载失败原因 (null = 正常), 由界面显示 + 重试
   String? error;
+  StreamSubscription<String>? errorSubscription;
 }
 
 /// 短视频模式使用的预载播放器池:
 /// 同时保持 3 个播放器实例 (上一条 / 当前 / 下一条),
 /// 滑动切换时直接复用已装载的实例, 实现无缝切换。
 class ShortVideoPool extends ChangeNotifier {
-  ShortVideoPool({required this.buildMedia}) {
+  ShortVideoPool({
+    required this.buildMedia,
+    List<ShortVideoSlot>? initialSlots,
+    this.loadSlot,
+    Future<void> Function(Progress)? writeProgress,
+  }) : writeProgress = writeProgress ?? savePlaybackHistory {
+    if (initialSlots != null) {
+      slots.addAll(initialSlots);
+      return;
+    }
     for (var i = 0; i < _shortVideoPoolSize; i++) {
       // 字幕功能已移除: 和普通模式保持同一份 PlayerConfiguration,
       // 避免 3 个池实例各自初始化 libass。
@@ -66,6 +79,9 @@ class ShortVideoPool extends ChangeNotifier {
   }
 
   final Media Function(FileItem file) buildMedia;
+  final Future<void> Function(ShortVideoSlot, FileItem)? loadSlot;
+  final Future<void> Function(Progress) writeProgress;
+  Future<void> _saving = Future<void>.value();
   final List<ShortVideoSlot> slots = [];
 
   List<PlayQueueItem> items = const [];
@@ -81,7 +97,7 @@ class ShortVideoPool extends ChangeNotifier {
 
   /// 待保存的进度 (在 build 中收集, 帧后执行)
   final List<({FileItem file, Duration position, Duration duration})>
-      _pendingSaves = [];
+  _pendingSaves = [];
 
   ShortVideoSlot? slotFor(int feedIndex) {
     for (final slot in slots) {
@@ -104,6 +120,10 @@ class ShortVideoPool extends ChangeNotifier {
         if (index == null) continue;
         if (index >= items.length || items[index].file != slot.loadedFile) {
           _collectSlotSave(slot);
+          if (identical(slot, _active)) {
+            _active = null;
+            userPaused = false;
+          }
           slot.pendingOpen = false;
           slot.played = false;
           slot.error = null;
@@ -121,6 +141,7 @@ class ShortVideoPool extends ChangeNotifier {
     currentFeedIndex = current;
 
     if (items.isEmpty || current < 0 || current >= items.length) {
+      silence();
       _maybeSchedule();
       return;
     }
@@ -189,12 +210,19 @@ class ShortVideoPool extends ChangeNotifier {
     if (disposed) return;
 
     // 保存队列变化时收集的进度
-    _flushPendingSaves();
+    unawaited(
+      flushPendingSaves().catchError((Object e) {
+        logger('Save short video progress failed: $e');
+      }),
+    );
 
     // 打开待装载的槽位, 当前视频优先
     final pending = slots.where((slot) => slot.pendingOpen).toList()
-      ..sort((a, b) => (a.feedIndex == currentFeedIndex ? 0 : 1)
-          .compareTo(b.feedIndex == currentFeedIndex ? 0 : 1));
+      ..sort(
+        (a, b) => (a.feedIndex == currentFeedIndex ? 0 : 1).compareTo(
+          b.feedIndex == currentFeedIndex ? 0 : 1,
+        ),
+      );
     for (final slot in pending) {
       slot.pendingOpen = false;
       unawaited(_openSlot(slot));
@@ -205,7 +233,10 @@ class ShortVideoPool extends ChangeNotifier {
     // 活动槽位已就绪则立即开始播放 (用户主动暂停过则跳过)
     if (_ensureActivePending) {
       _ensureActivePending = false;
-      if (active != null && !active.initializing && !userPaused) {
+      if (active != null &&
+          !active.initializing &&
+          active.error == null &&
+          !userPaused) {
         unawaited(active.player.play().catchError((_) {}));
         active.played = true;
       }
@@ -246,34 +277,64 @@ class ShortVideoPool extends ChangeNotifier {
 
     final token = ++slot.token;
     slot.error = null;
+    final previousErrors = slot.errorSubscription;
+    slot.errorSubscription = null;
+    if (previousErrors != null) {
+      unawaited(
+        previousErrors.cancel().catchError((Object error) {
+          logger('Cancel old short video error stream failed: $error');
+        }),
+      );
+    }
+    if (disposed || token != slot.token) return;
+    void listenForErrors() {
+      slot.errorSubscription = slot.player.stream.error.listen((message) {
+        if (disposed || token != slot.token) return;
+        slot.token++;
+        slot.initializing = false;
+        slot.played = false;
+        slot.error = message;
+        notifyListeners();
+      });
+    }
+
     try {
       // 视频输出必须先于 open 就绪。
       // 播放器刚创建时 VideoController 的视频输出 (纹理 / 画面尺寸) 与 open 是
       // 并行初始化的; 若视频先打开, 包内基于 videoParams 的尺寸同步会因为视频
       // 输出还不存在而丢失, 之后画面一直按初始的 1x1 比例显示 —— 表现为
       // "短视频模式比例很奇怪", 切换视频或重进模式才恢复。这里显式等待。
-      await _ensureVideoOutputReady(slot.controller);
-      if (disposed || token != slot.token) return;
+      if (loadSlot != null) {
+        listenForErrors();
+        await loadSlot!(slot, file);
+      } else {
+        await _ensureVideoOutputReady(slot.controller);
+        if (disposed || token != slot.token) return;
 
-      // 先应用循环 / 倍速 / 音量等设置, 避免开始播放时短暂使用默认值
-      final appState = useAppStore().state;
-      await slot.player.setPlaylistMode(PlaylistMode.loop);
-      await slot.player.setRate(appState.rate);
-      await slot.player.setVolume(
-          appState.isMuted ? 0 : appState.volume.toDouble());
-      if (disposed || token != slot.token) return;
+        // 先应用循环 / 倍速 / 音量等设置, 避免开始播放时短暂使用默认值
+        final appState = useAppStore().state;
+        await slot.player.setPlaylistMode(PlaylistMode.loop);
+        await slot.player.setRate(appState.rate);
+        await slot.player.setVolume(
+          appState.isMuted ? 0 : appState.volume.toDouble(),
+        );
+        if (disposed || token != slot.token) return;
 
-      // 一律以暂停方式打开: 由下面的显式 play() 决定是否开始播放。
-      // 不能依赖 open(play: true) —— 打开是异步的, 若这期间退出短视频模式,
-      // 视频仍会在装载完成后自动出声, 与新模式的播放器重叠 (操作过快时
-      // "主模式和短视频模式同时出声" 的成因之一)。
-      await slot.player.open(buildMedia(file), play: false);
-      if (disposed || token != slot.token) return;
+        // 一律以暂停方式打开: 由下面的显式 play() 决定是否开始播放。
+        // 不能依赖 open(play: true) —— 打开是异步的, 若这期间退出短视频模式,
+        // 视频仍会在装载完成后自动出声, 与新模式的播放器重叠 (操作过快时
+        // "主模式和短视频模式同时出声" 的成因之一)。
+        await ensurePlaybackTls(slot.player, file.uri);
+        if (disposed || token != slot.token) return;
+        listenForErrors();
+        await slot.player.open(buildMedia(file), play: false);
+        if (disposed || token != slot.token) return;
 
-      // 等视频输出出首帧再往下走 (包含"成为当前视频后开始播放"),
-      // 否则会出现"先响声音、画面还黑着"; 预载槽位也顺手把首帧解出来,
-      // 滑动切过去时画面是现成的。
-      await waitForFirstFrame(slot.controller);
+        // 等视频输出出首帧再往下走 (包含"成为当前视频后开始播放"),
+        // 否则会出现"先响声音、画面还黑着"; 预载槽位也顺手把首帧解出来,
+        // 滑动切过去时画面是现成的。
+        await waitForFirstFrame(slot.controller);
+      }
       if (disposed || token != slot.token) return;
 
       slot.initializing = false;
@@ -392,7 +453,9 @@ class ShortVideoPool extends ChangeNotifier {
       }
       if (attempt == 1) {
         // 温和触发一次属性刷新 (跳到当前位置)
-        unawaited(slot.player.seek(slot.player.state.position).catchError((_) {}));
+        unawaited(
+          slot.player.seek(slot.player.state.position).catchError((_) {}),
+        );
       }
     }
   }
@@ -400,7 +463,9 @@ class ShortVideoPool extends ChangeNotifier {
   /// 收集槽位的播放进度 (在 reconcile 中调用, 帧后统一写入)
   void _collectSlotSave(ShortVideoSlot slot) {
     final file = slot.loadedFile;
-    if (file == null || !slot.played) return;
+    if (file == null || !slot.played || !canPersistPlaybackUri(file.uri)) {
+      return;
+    }
 
     final state = slot.player.state;
     if (state.duration == Duration.zero) return;
@@ -412,24 +477,34 @@ class ShortVideoPool extends ChangeNotifier {
     ));
   }
 
-  /// 写入已收集的进度
-  void _flushPendingSaves() {
-    if (_pendingSaves.isEmpty) return;
-    for (final save in _pendingSaves) {
-      useHistoryStore().add(Progress(
-        dateTime: DateTime.now().toUtc(),
-        position: save.position,
-        duration: save.duration,
-        file: save.file,
-      ));
-    }
+  /// Includes already in-flight writes, so closing the window really waits.
+  Future<void> flushPendingSaves() {
+    final saves = List.of(_pendingSaves);
     _pendingSaves.clear();
+    if (saves.isNotEmpty) {
+      _saving = _saving
+          .catchError((Object e) {
+            logger('Previous short video save failed: $e');
+          })
+          .then((_) async {
+            for (final save in saves) {
+              await writeProgress(
+                Progress(
+                  dateTime: DateTime.now().toUtc(),
+                  position: save.position,
+                  duration: save.duration,
+                  file: save.file,
+                ),
+              );
+            }
+          });
+    }
+    return _saving;
   }
 
-  /// 保存某个槽位的播放进度 (立即写入, 调用方需保证不在 build 期间)
-  void saveSlotProgress(ShortVideoSlot slot) {
+  Future<void> saveSlotProgress(ShortVideoSlot slot) {
     _collectSlotSave(slot);
-    _flushPendingSaves();
+    return flushPendingSaves();
   }
 
   /// 立即静音所有槽位 (模式切换前调用, 见 player_handoff.dart)。
@@ -446,7 +521,15 @@ class ShortVideoPool extends ChangeNotifier {
   void dispose() {
     disposed = true;
     for (final slot in slots) {
-      if (slot.played) saveSlotProgress(slot);
+      slot.token++;
+      unawaited(slot.errorSubscription?.cancel());
+      if (slot.played) {
+        unawaited(
+          saveSlotProgress(slot).catchError((Object e) {
+            logger('Save short video progress on dispose failed: $e');
+          }),
+        );
+      }
       // 先立即静音, 再异步销毁
       if (slot.player.state.playing) {
         unawaited(slot.player.pause().catchError((_) {}));
@@ -456,4 +539,3 @@ class ShortVideoPool extends ChangeNotifier {
     super.dispose();
   }
 }
-

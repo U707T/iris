@@ -23,6 +23,7 @@ import 'package:provider/provider.dart';
 
 /// 记录设备音量调用 (setVolume 的值, 0.0~1.0)
 final List<double> deviceVolumeSets = [];
+
 /// 记录设备音量 + 系统音量条开关的调用
 final List<String> deviceVolumeCalls = [];
 
@@ -33,47 +34,48 @@ void _mockVolumeController({double volume = 0.5, Completer<String>? readGate}) {
   deviceVolumeSets.clear();
   deviceVolumeCalls.clear();
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .setMockMethodCallHandler(FlutterVolumeController.methodChannel,
-          (call) async {
-    deviceVolumeCalls.add(call.method);
-    switch (call.method) {
-      case 'getVolume': // 插件读回来的是字符串
-        if (readGate != null) return await readGate.future;
-        return '$volume';
-      case 'setVolume':
-        deviceVolumeSets.add((call.arguments as Map)['volume'] as double);
-        return null;
-      default:
-        return null;
-    }
-  });
+      .setMockMethodCallHandler(FlutterVolumeController.methodChannel, (
+        call,
+      ) async {
+        deviceVolumeCalls.add(call.method);
+        switch (call.method) {
+          case 'getVolume': // 插件读回来的是字符串
+            if (readGate != null) return await readGate.future;
+            return '$volume';
+          case 'setVolume':
+            deviceVolumeSets.add((call.arguments as Map)['volume'] as double);
+            return null;
+          default:
+            return null;
+        }
+      });
 }
 
 MediaPlayer _fakePlayer() => MediaPlayer(
-      isInitializing: false,
-      isPlaying: true,
-      position: Duration.zero,
-      duration: const Duration(minutes: 5),
-      buffer: Duration.zero,
-      width: 0,
-      height: 0,
-      saveProgress: () async {},
-      play: () async {},
-      pause: () async {},
-      backward: (_) async {},
-      forward: (_) async {},
-      stepBackward: () async {},
-      stepForward: () async {},
-      seek: (_) async {},
-    );
+  isInitializing: false,
+  isPlaying: true,
+  position: Duration.zero,
+  duration: const Duration(minutes: 5),
+  buffer: Duration.zero,
+  width: 0,
+  height: 0,
+  saveProgress: () async {},
+  play: () async {},
+  pause: () async {},
+  backward: (_) async {},
+  forward: (_) async {},
+  stepBackward: () async {},
+  stepForward: () async {},
+  seek: (_) async {},
+);
 
 List<PlayQueueItem> _queue() => [
-      for (var i = 0; i < 3; i++)
-        PlayQueueItem(
-          file: FileItem(name: 'v$i', uri: 'v$i', type: ContentType.video),
-          index: i,
-        ),
-    ];
+  for (var i = 0; i < 3; i++)
+    PlayQueueItem(
+      file: FileItem(name: 'v$i', uri: 'v$i', type: ContentType.video),
+      index: i,
+    ),
+];
 
 Future<void> _setQueue(WidgetTester tester, int index) async {
   await tester.runAsync(() async {
@@ -188,7 +190,9 @@ void main() {
     await _pumpView(tester);
 
     final size = tester.getSize(find.byType(ShortVideoView));
-    final gesture = await tester.startGesture(Offset(size.width / 2, size.height / 2));
+    final gesture = await tester.startGesture(
+      Offset(size.width / 2, size.height / 2),
+    );
     await tester.pump(const Duration(milliseconds: 600));
     await gesture.moveBy(const Offset(0, -52));
     await tester.pump();
@@ -313,14 +317,12 @@ void main() {
     await _pumpView(tester);
 
     final center = tester.getCenter(find.byIcon(Icons.volume_down_rounded));
-    await tester.sendEventToBinding(PointerScrollEvent(
-      position: center,
-      scrollDelta: const Offset(0, -20),
-    ));
-    await tester.sendEventToBinding(PointerScrollEvent(
-      position: center,
-      scrollDelta: const Offset(0, -20),
-    ));
+    await tester.sendEventToBinding(
+      PointerScrollEvent(position: center, scrollDelta: const Offset(0, -20)),
+    );
+    await tester.sendEventToBinding(
+      PointerScrollEvent(position: center, scrollDelta: const Offset(0, -20)),
+    );
     await tester.pump();
 
     // 放行读取: 两次微调应各 +1% (设备音量 50% -> 52%), 不互相覆盖
@@ -330,8 +332,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(deviceVolumeSets, isNotEmpty);
-    expect(deviceVolumeSets.last, closeTo(0.52, 0.001),
-        reason: '两次滚动各 +1%, 不应丢步');
+    expect(
+      deviceVolumeSets.last,
+      closeTo(0.52, 0.001),
+      reason: '两次滚动各 +1%, 不应丢步',
+    );
 
     // 让"预览值保留 320ms"的收起计时器走完, 避免测试结束时还有挂起的 Timer
     await tester.pump(const Duration(milliseconds: 400));
@@ -339,6 +344,27 @@ void main() {
 
     await _setVolume(tester, 20);
     await _setQueue(tester, 0);
+  });
+
+  testWidgets('wheel read completing after view disposal cannot write volume', (
+    tester,
+  ) async {
+    await _setQueue(tester, 0);
+    await _setVolume(tester, 20);
+    final gate = Completer<String>();
+    _mockVolumeController(readGate: gate);
+    await _pumpView(tester);
+    final center = tester.getCenter(find.byIcon(Icons.volume_down_rounded));
+    await tester.sendEventToBinding(
+      PointerScrollEvent(position: center, scrollDelta: const Offset(0, -20)),
+    );
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    gate.complete('0.5');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(tester.takeException(), isNull);
+    expect(deviceVolumeSets, isEmpty);
   });
 
   testWidgets('音量按钮在暂停按钮上方, 位于屏幕右下区域', (tester) async {
@@ -351,7 +377,9 @@ void main() {
 
     final volume = tester.getCenter(find.byIcon(Icons.volume_down_rounded));
     final playPause = tester.getCenter(find.byIcon(Icons.pause_rounded));
-    final screenshot = tester.getCenter(find.byIcon(Icons.photo_camera_rounded));
+    final screenshot = tester.getCenter(
+      find.byIcon(Icons.photo_camera_rounded),
+    );
 
     // 音量 → 暂停 → 截图, 自上而下
     expect(volume.dy, lessThan(playPause.dy));

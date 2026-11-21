@@ -4,7 +4,8 @@ publish_to: none
 version: 2.8.1+48
 
 environment:
-  sdk: ^3.10.0
+  sdk: ^3.13.0
+  flutter: '>=3.47.0'
 
 dependencies:
   flutter:
@@ -50,7 +51,7 @@ dependencies:
   drives_windows:
     git:
       url: https://github.com/nini22P/drives_windows
-      ref: main
+      ref: 70379fc76840c09af91c04f29cf5bfde3c3390ac
 
 dev_dependencies:
   flutter_test:

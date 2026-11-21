@@ -44,6 +44,7 @@ class ShortVideoDeviceVolumeController {
   Future<void>? _writeChain;
 
   Future<void> _apply(double value) async {
+    if (!_alive) return;
     try {
       await FlutterVolumeController.setVolume(value / 100);
     } catch (e) {
@@ -76,7 +77,7 @@ class ShortVideoDeviceVolumeController {
     try {
       final value = await pending;
       // 读取期间可能已有新的调节落地, 以最新值为准
-      return preview.value ?? value;
+      return _alive ? (preview.value ?? value) : value;
     } finally {
       if (identical(_pendingRead, pending)) {
         _pendingRead = null;
@@ -94,6 +95,7 @@ class ShortVideoDeviceVolumeController {
   }
 
   void adjustStart(Offset globalPosition) {
+    if (!_alive) return;
     _session++;
     _active = true;
     _ready = false;
@@ -113,7 +115,7 @@ class ShortVideoDeviceVolumeController {
   }
 
   void adjustUpdate(Offset globalPosition) {
-    if (!_active || !_ready) return;
+    if (!_alive || !_active || !_ready) return;
     // 应用处于静音时, 一旦真的开始滑动就先取消静音, 否则调了也听不到
     // (按住不滑动松手 = 点击, 不在这里处理, 免得把点击语义吃掉)
     if (useAppStore().state.isMuted) {
@@ -137,10 +139,12 @@ class ShortVideoDeviceVolumeController {
 
   /// PC: 指针悬停在音量按钮上滚轮 = 微调设备音量 (同时取代翻页)
   Future<void> wheel(double deltaPercent) async {
+    if (!_alive) return;
     if (useAppStore().state.isMuted) {
       unawaited(useAppStore().updateMute(false));
     }
     final base = await _base();
+    if (!_alive) return;
     final value = (base + deltaPercent).clamp(0.0, 100.0);
     preview.value = value;
     _write(value);
@@ -224,22 +228,24 @@ class ShortVideoVolumeButton extends HookWidget {
           // PageView 的翻页 / 外层的手势都会在竞争中被拒绝
           gestures: <Type, GestureRecognizerFactory>{
             LongPressGestureRecognizer:
-                GestureRecognizerFactoryWithHandlers<LongPressGestureRecognizer>(
-              () => LongPressGestureRecognizer(duration: _longPressDelay),
-              (instance) {
-                instance.onLongPressStart = onPressStart;
-                instance.onLongPressMoveUpdate = onPressMove;
-                instance.onLongPressEnd = (details) => onPressEnd();
-                instance.onLongPressCancel = onPressEnd;
-              },
-            ),
+                GestureRecognizerFactoryWithHandlers<
+                  LongPressGestureRecognizer
+                >(() => LongPressGestureRecognizer(duration: _longPressDelay), (
+                  instance,
+                ) {
+                  instance.onLongPressStart = onPressStart;
+                  instance.onLongPressMoveUpdate = onPressMove;
+                  instance.onLongPressEnd = (details) => onPressEnd();
+                  instance.onLongPressCancel = onPressEnd;
+                }),
           },
           child: Listener(
             // PC: 指针悬停在按钮上滚轮 = 微调设备音量 (拦截并取代翻页)
             onPointerSignal: (event) {
               if (event is! PointerScrollEvent) return;
-              GestureBinding.instance.pointerSignalResolver
-                  .register(event, (resolved) {
+              GestureBinding.instance.pointerSignalResolver.register(event, (
+                resolved,
+              ) {
                 final scrollEvent = resolved as PointerScrollEvent;
                 final dy = scrollEvent.scrollDelta.dy;
                 if (dy == 0) return;
@@ -263,14 +269,16 @@ class ShortVideoVolumeButton extends HookWidget {
                       isMuted || level == 0
                           ? Icons.volume_off_rounded
                           : level < 50
-                              ? Icons.volume_down_rounded
-                              : Icons.volume_up_rounded,
+                          ? Icons.volume_down_rounded
+                          : Icons.volume_up_rounded,
                       color: Colors.white,
                       size: 20,
                     ),
                     padding: EdgeInsets.zero,
-                    constraints:
-                        const BoxConstraints.tightFor(width: 44, height: 44),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 44,
+                      height: 44,
+                    ),
                     onPressed: toggleMuteOrRestore,
                   ),
                 );
@@ -308,8 +316,8 @@ class ShortVideoVolumeIndicator extends StatelessWidget {
                 level == 0
                     ? Icons.volume_off_rounded
                     : level < 50
-                        ? Icons.volume_down_rounded
-                        : Icons.volume_up_rounded,
+                    ? Icons.volume_down_rounded
+                    : Icons.volume_up_rounded,
                 color: Colors.white,
                 size: 20,
               ),
@@ -332,9 +340,7 @@ class ShortVideoVolumeIndicator extends StatelessWidget {
             height: 3,
             child: Stack(
               children: [
-                const Positioned.fill(
-                  child: ColoredBox(color: Colors.white24),
-                ),
+                const Positioned.fill(child: ColoredBox(color: Colors.white24)),
                 Positioned(
                   left: 0,
                   top: 0,

@@ -309,7 +309,7 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: main
+      ref: "70379fc76840c09af91c04f29cf5bfde3c3390ac"
       resolved-ref: "70379fc76840c09af91c04f29cf5bfde3c3390ac"
       url: "https://github.com/nini22P/drives_windows"
     source: git

@@ -186,5 +186,7 @@
         "type": "int"
       }
     }
-  }
+  },
+  "webdav_http_warning": "HTTP sends your username and password without encryption. Only continue on a trusted network.",
+  "webdav_http_acknowledge": "I understand and allow an unencrypted HTTP connection"
 }

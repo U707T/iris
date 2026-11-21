@@ -43,6 +43,8 @@ class JsonPersistence<T> {
   final T Function(T value)? onLoaded;
 
   String? _pending;
+  int _pendingGeneration = 0;
+  int _latestSaveGeneration = 0;
   bool _writing = false;
   Completer<void>? _waiters;
 
@@ -77,6 +79,7 @@ class JsonPersistence<T> {
   }
 
   Future<void> save(T state) {
+    final generation = ++_latestSaveGeneration;
     String encoded;
     try {
       encoded = _encode(state);
@@ -87,6 +90,7 @@ class JsonPersistence<T> {
     }
 
     _pending = encoded;
+    _pendingGeneration = generation;
     final completer = _waiters ??= Completer<void>();
     if (!_writing) {
       unawaited(_drain());
@@ -100,11 +104,13 @@ class JsonPersistence<T> {
     try {
       while (_pending != null) {
         final value = _pending!;
+        final generation = _pendingGeneration;
         _pending = null;
         try {
           await store.write(key, value);
+          if (generation == _latestSaveGeneration) lastSaveError = null;
         } catch (e) {
-          lastSaveError = e;
+          if (generation == _latestSaveGeneration) lastSaveError = e;
           // 不中断：后面可能已经排了更新的快照。
           logger('Save $key failed: $e');
         }
@@ -119,6 +125,16 @@ class JsonPersistence<T> {
     if (_pending != null && !_writing) {
       unawaited(_drain());
     }
+  }
+
+  /// Saves retain errors for UI observation; explicit flush reports failure.
+  Future<void> flush() async {
+    while (_writing || _pending != null) {
+      final waiter = _waiters;
+      if (waiter != null) await waiter.future;
+    }
+    final error = lastSaveError;
+    if (error != null) Error.throwWithStackTrace(error, StackTrace.current);
   }
 
   T _decode(String raw) {
@@ -165,8 +181,6 @@ class JsonPersistence<T> {
     return onLoaded?.call(value) ?? value;
   }
 
-  String _encode(T value) => jsonEncode({
-        'schema': schemaVersion,
-        'data': toJson(value),
-      });
+  String _encode(T value) =>
+      jsonEncode({'schema': schemaVersion, 'data': toJson(value)});
 }

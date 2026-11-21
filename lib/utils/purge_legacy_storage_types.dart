@@ -27,12 +27,16 @@ Map<String, dynamic>? sanitizePlayQueueJson(dynamic data) {
   final int currentIndex = data['currentIndex'] is int
       ? data['currentIndex'] as int
       : 0;
-  final bool currentKept = kept.any((e) => e is Map && e['index'] == currentIndex);
+  final bool currentKept = kept.any(
+    (e) => e is Map && e['index'] == currentIndex,
+  );
 
+  final fallback = kept.whereType<Map>().where((e) => e['index'] is int);
   return {
     ...data,
     'playQueue': kept,
-    if (!currentKept) 'currentIndex': (kept.first as Map)['index'] ?? 0,
+    if (currentIndex != -1 && !currentKept)
+      'currentIndex': fallback.isEmpty ? 0 : fallback.first['index'],
   };
 }
 

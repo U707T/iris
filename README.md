@@ -131,14 +131,16 @@ IRIS 是一款基于 Flutter 的轻量级视频播放器。本仓库是 [nini22P
 
 ## 从源码构建
 
-需要 Flutter 稳定版（本仓库 CI 使用 3.47.5）：
+需要 Flutter **3.47.5 / Dart 3.13.4**。本地先运行轻量检查，大型 Windows / Android 编译交给 [CI](.github/workflows/ci.yml)：
 
-```bash
-flutter pub get
-dart run build_runner build          # 生成 freezed / 本地化等代码
-flutter build windows                # Windows
-flutter build apk --split-per-abi    # Android（发布版需自备签名配置）
+```powershell
+flutter pub get --enforce-lockfile
+dart run build_runner build
+flutter analyze --no-pub
+flutter test --no-pub
 ```
+
+工具配置、补充回归测试、签名要求和真机验证见 [开发验证与 CI](docs/TESTING.md)。
 
 ## 上游与致谢
 
@@ -152,28 +154,3 @@ flutter build apk --split-per-abi    # Android（发布版需自备签名配置�
 ## 许可证
 
 本项目采用 MPL-2.0 许可证，详细信息请查看 [LICENSE](./LICENSE) 文件。
-
----
-
-## 本地构建缓存（沙箱）
-
-> 本目录的 `build/` + `.dart_tool/` 合计约 **2.3 GB**，其中大部分是同一产物的重复拷贝。但沙箱出网走透明代理，**代理一掉，`dl.google.com` 等 Google 系域名会一起变成超时 / 000**，Flutter 引擎与 Android 依赖没有镜像可换 —— 所以**要重新下载的东西一个都不能删**。详见 `/workspace/AI通用说明.md` §2。
-
-| 路径 | 现状（2026-11-04） | 怎么办 |
-|---|---|---|
-| `.dart_tool/flutter_build/<hash>` | 1 份 / 111 MB | 保留最新 1 份；出现 2 份以上说明构建配置在漂移 |
-| `build/test_cache/build/*.dill` | 1 份 / 103 MB | 同上，只留最新（曾累积到 31 份 = 3.2 GB） |
-| `build/app/intermediates` | 约 1.1 GB | **别删**，删了下次全量重编（3–5 min） |
-| `build/app/outputs/apk/debug/` | 与 `outputs/flutter-apk/` 是**同一份 APK**（md5 相同） | 这份可删（曾白占 702 MB） |
-| `~/.pub-cache/hosted` | 全局 | **别删**，pub 依赖全在这 |
-
-清理（安全，约 1–2 分钟）：
-
-```bash
-ls -t .dart_tool/flutter_build | tail -n +2 | xargs -r -I{} rm -rf .dart_tool/flutter_build/{}
-ls -t build/test_cache/build/*.dill | tail -n +2 | xargs -r rm -f
-rm -rf build/app/outputs/apk/debug
-```
-
-- debug APK 正常体积 **139 MB**（arm64 单 ABI，含 mpv/ffmpeg）。若见到 600–700 MB，是 `llvm-strip` 又失效了（AI通用说明 §7.2）。
-- 构建一律带 `--target-platform=android-arm64`，别加 `--dart-define` 试参数（每变一次多一份 100 MB+ 缓存）。

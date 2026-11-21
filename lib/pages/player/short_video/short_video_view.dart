@@ -1,3 +1,4 @@
+import 'package:iris/pages/player/short_video/short_video_page_sync.dart';
 import 'package:flutter/gestures.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -42,10 +43,14 @@ class ShortVideoView extends HookWidget {
     // 池内画面就绪时刷新预载页面
     useListenable(pool);
 
-    final playQueue =
-        usePlayQueueStore().select(context, (state) => state.playQueue);
-    final currentIndex =
-        usePlayQueueStore().select(context, (state) => state.currentIndex);
+    final playQueue = usePlayQueueStore().select(
+      context,
+      (state) => state.playQueue,
+    );
+    final currentIndex = usePlayQueueStore().select(
+      context,
+      (state) => state.currentIndex,
+    );
 
     // 短视频流 = 播放队列中的视频条目 (跳过音频)
     final items = useMemoized(() => getVideoItems(playQueue), [playQueue]);
@@ -55,8 +60,10 @@ class ShortVideoView extends HookWidget {
     );
 
     final int safeIndex = currentFeedIndex < 0 ? 0 : currentFeedIndex;
-    final pageController =
-        useMemoized(() => PageController(initialPage: safeIndex), []);
+    final pageController = useMemoized(
+      () => PageController(initialPage: safeIndex),
+      [],
+    );
     useEffect(() {
       return () => pageController.dispose();
     }, [pageController]);
@@ -67,62 +74,30 @@ class ShortVideoView extends HookWidget {
       if (items.isEmpty || currentFeedIndex < 0) {
         if (!exitRequested.value) {
           exitRequested.value = true;
-          WidgetsBinding.instance
-              .addPostFrameCallback((_) => exitShortVideoMode());
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => exitShortVideoMode(),
+          );
         }
       }
       return;
     }, [items, currentFeedIndex]);
 
-    final isInitializing =
-        context.select<MediaPlayer, bool>((player) => player.isInitializing);
-    final playbackError =
-        context.select<MediaPlayer, String?>((player) => player.error);
+    final isInitializing = context.select<MediaPlayer, bool>(
+      (player) => player.isInitializing,
+    );
+    final playbackError = context.select<MediaPlayer, String?>(
+      (player) => player.error,
+    );
 
-    // 程序化翻页期间忽略 onPageChanged: 跨多页时会依次回调每个中间页,
-    // 每次 commitPage 都会把 currentIndex 改到中间页, 形成来回打架。
-    // 用递增 generation 而不是 bool: 连续快捷键会叠加多个动画, 前一个动画的
-    // 完成回调不能把后一个动画的"同步中"状态提前清掉。
-    final isSyncingPage = useRef(false);
-    final pageSyncGeneration = useRef(0);
-
-    // 队列索引被外部改变时 (快捷键切换等) 同步 PageView
+    final pageSync = useMemoized(() => ShortVideoPageSync(pageController), []);
+    useEffect(() => pageSync.dispose, [pageSync]);
     useEffect(() {
-      if (!pageController.hasClients || currentFeedIndex < 0) return;
-      final page = pageController.page?.round() ?? pageController.initialPage;
-      if (page == currentFeedIndex) return;
-
-      final generation = ++pageSyncGeneration.value;
-      isSyncingPage.value = true;
-
-      if (page < 0 || page >= items.length) {
-        pageController.jumpToPage(currentFeedIndex);
-        if (generation == pageSyncGeneration.value) {
-          isSyncingPage.value = false;
-        }
-      } else {
-        pageController
-            .animateToPage(
-              currentFeedIndex,
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-            )
-            .then(
-          (_) {
-            if (generation == pageSyncGeneration.value) {
-              isSyncingPage.value = false;
-            }
-          },
-          onError: (Object error, StackTrace stack) {
-            logger('Short video page sync failed: $error');
-            if (generation == pageSyncGeneration.value) {
-              isSyncingPage.value = false;
-            }
-          },
-        );
-      }
-      return;
+      pageSync.syncTo(currentFeedIndex).catchError((Object error) {
+        logger('Short video page sync failed: $error');
+      });
+      return null;
     }, [currentFeedIndex]);
+    final userScrolling = useRef(false);
 
     final isDragging = useRef(false);
 
@@ -189,7 +164,9 @@ class ShortVideoView extends HookWidget {
     // 鼠标滚轮切换上 / 下一条 (接管 PageView 默认的滚轮行为;
     // 注册逻辑与增量规则见 ShortVideoWheelSwitcher)
     final wheel = useMemoized(
-        () => ShortVideoWheelSwitcher(onSwitch: moveShortVideoBy), []);
+      () => ShortVideoWheelSwitcher(onSwitch: moveShortVideoBy),
+      [],
+    );
 
     Widget buildPage(BuildContext context, int index) {
       // 预载池里有该下标的画面就直接使用 (滑动时可见下一帧)
@@ -251,10 +228,17 @@ class ShortVideoView extends HookWidget {
             children: [
               NotificationListener<ScrollNotification>(
                 onNotification: (notification) {
-                  // 吸附 / 回弹结束后提交页面切换
+                  if (notification.depth != 0) return false;
+                  if (notification is ScrollStartNotification &&
+                      notification.dragDetails != null) {
+                    userScrolling.value = true;
+                  }
                   if (notification is ScrollEndNotification) {
+                    final shouldCommit =
+                        userScrolling.value && !pageSync.isSyncing;
+                    userScrolling.value = false;
                     final page = pageController.page?.round();
-                    if (page != null) commitPage(page);
+                    if (shouldCommit && page != null) commitPage(page);
                   }
                   return false;
                 },
@@ -274,7 +258,7 @@ class ShortVideoView extends HookWidget {
                     scrollDirection: Axis.vertical,
                     onPageChanged: (page) {
                       // 仅在非拖动 / 非程序化翻页阶段提交, 避免中途切换播放
-                      if (!isDragging.value && !isSyncingPage.value) {
+                      if (!isDragging.value && !pageSync.isSyncing) {
                         commitPage(page);
                       }
                     },
@@ -363,7 +347,8 @@ class ShortVideoView extends HookWidget {
                       duration: const Duration(milliseconds: 150),
                       child: preview == null
                           ? const SizedBox.shrink(
-                              key: ValueKey('no-volume-hint'))
+                              key: ValueKey('no-volume-hint'),
+                            )
                           : Center(
                               key: const ValueKey('volume-hint'),
                               child: ShortVideoVolumeIndicator(volume: preview),

@@ -108,4 +108,4 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 
 # Install iris-updater.bat
-install(FILES "${CMAKE_SOURCE_DIR}/iris-updater.bat" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+install(FILES "${CMAKE_SOURCE_DIR}/iris-updater.bat" "${CMAKE_SOURCE_DIR}/iris-updater.ps1" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)

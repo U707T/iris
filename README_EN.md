@@ -131,14 +131,16 @@ Enter from **More → Short video mode**; press `Esc` / back to exit.
 
 ## Build from Source
 
-A Flutter stable release is required (CI uses 3.47.5):
+Use Flutter **3.47.5 / Dart 3.13.4**. Run local analysis and unit/widget tests; [CI](.github/workflows/ci.yml) performs the Windows and Android builds:
 
-```bash
-flutter pub get
-dart run build_runner build          # generate code (freezed, localizations, ...)
-flutter build windows                # Windows
-flutter build apk --split-per-abi    # Android (release builds need your own signing config)
+```powershell
+flutter pub get --enforce-lockfile
+dart run build_runner build
+flutter analyze --no-pub
+flutter test --no-pub
 ```
+
+See [testing and CI notes](docs/TESTING.md) for tool configuration, supplementary regression tests, signing requirements and device checks.
 
 ## Upstream & Credits
 

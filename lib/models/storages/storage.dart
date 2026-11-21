@@ -14,19 +14,9 @@ part 'storage.g.dart';
 
 const String localStorageId = 'local';
 
-enum StorageType {
-  none,
-  internal,
-  network,
-  usb,
-  sdcard,
-  webdav,
-}
+enum StorageType { none, internal, network, usb, sdcard, webdav }
 
-enum StorageOptions {
-  edit,
-  remove,
-}
+enum StorageOptions { edit, remove }
 
 abstract class _Storage {
   String get id;
@@ -39,6 +29,8 @@ abstract class _Storage {
   Future<List<FileItem>> getFiles(List<String> path);
 
   String? getAuth();
+
+  String? getAuthForUri(String mediaUri);
 }
 
 @freezed
@@ -69,6 +61,7 @@ sealed class Storage with _$Storage implements _Storage {
 
   @override
   Future<List<FileItem>> getFiles(List<String> path) async {
+    if (path.isEmpty) return [];
     switch (type) {
       case StorageType.internal:
       case StorageType.network:
@@ -87,6 +80,11 @@ sealed class Storage with _$Storage implements _Storage {
   }
 
   @override
+  String? getAuthForUri(String mediaUri) => this is WebDAVStorage
+      ? getWebDAVAuthForUri(this as WebDAVStorage, mediaUri)
+      : null;
+
+  @override
   String? getAuth() {
     switch (type) {
       case StorageType.webdav:
@@ -97,32 +95,50 @@ sealed class Storage with _$Storage implements _Storage {
   }
 }
 
+/// Resolve folder browsing without manufacturing a local WebDAV object.
+Storage? storageForFileFolder(
+  FileItem file,
+  List<Storage> configured,
+  List<LocalStorage> discovered,
+) {
+  if (file.path.isEmpty) return null;
+  final known = configured.firstWhereOrNull((s) => s.id == file.storageId);
+  if (known != null) return known;
+  if (file.storageType == StorageType.webdav ||
+      Uri.tryParse(file.uri)?.hasAuthority == true &&
+          !file.uri.startsWith('content://') &&
+          !file.uri.startsWith('file://')) {
+    return null;
+  }
+  return discovered.firstWhereOrNull(
+        (s) => s.basePath.isNotEmpty && s.basePath.first == file.path.first,
+      ) ??
+      LocalStorage(
+        type: file.storageType == StorageType.none
+            ? StorageType.internal
+            : file.storageType,
+        name: file.path.first,
+        basePath: [file.path.first],
+      );
+}
+
 Future<void> openInFolder(BuildContext context, FileItem file) async {
   if (file.path.isEmpty) return;
-  useStorageStore()
-      .updateCurrentPath(file.path.sublist(0, file.path.length - 1));
-
-  Storage? storage = useStorageStore().findById(file.storageId);
-
-  if (storage != null) {
-    useStorageStore().updateCurrentStorage(storage);
-  } else {
-    final localStorages = await getLocalStorages(context);
-    Storage? storage = localStorages
-        .firstWhereOrNull((element) => element.basePath[0] == file.path[0]);
-    if (storage != null) {
-      useStorageStore().updateCurrentStorage(storage);
-    } else {
-      useStorageStore().updateCurrentStorage(
-        LocalStorage(
-          type: file.storageType,
-          name: file.path[0],
-          basePath: [file.path[0]],
-        ),
-      );
-    }
+  final store = useStorageStore();
+  await store.ready;
+  var storage = storageForFileFolder(file, store.state.storages, const []);
+  if (storage is LocalStorage) {
+    if (!context.mounted) return;
+    storage = storageForFileFolder(
+      file,
+      store.state.storages,
+      await getLocalStorages(context),
+    );
   }
-
+  // Deleted network connections must be configured again before browsing.
+  if (storage == null) return;
+  await store.updateCurrentStorage(storage);
+  await store.updateCurrentPath(file.path.sublist(0, file.path.length - 1));
   if (context.mounted) {
     replacePopup(
       context: context,

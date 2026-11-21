@@ -36,9 +36,9 @@ import 'package:flutter/gestures.dart';
 class PlayerTapGestureRecognizer extends OneSequenceGestureRecognizer {
   PlayerTapGestureRecognizer({
     super.debugOwner,
-    bool Function()? deferSingleTap,
+    this._deferSingleTap,
     this.doubleTapWindow = kDoubleTapWindow,
-  }) : _deferSingleTap = deferSingleTap;
+  });
 
   /// 这次单击是否要推迟到双击窗口结束后再触发（见类说明）。
   /// null = 永不推迟（单击第一时间响应）。
@@ -112,7 +112,8 @@ class PlayerTapGestureRecognizer extends OneSequenceGestureRecognizer {
 
   void _handleTapUp(Offset position) {
     final lastPosition = _lastTapPosition;
-    final bool isSecondTap = lastPosition != null &&
+    final bool isSecondTap =
+        lastPosition != null &&
         (_doubleTapTimer?.isActive ?? false) &&
         (position - lastPosition).distance <= kDoubleTapSlopDp;
 

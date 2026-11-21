@@ -1,3 +1,19 @@
+## Unreleased
+
+### 更新日志
+
+* **WebDAV 安全。** 凭据绑定协议、主机和端口，编辑连接后旧媒体地址不会收到新密码；新连接默认 HTTPS，明文 HTTP 需要显式确认，密码保留合法空白。原生网络播放显式开启并读回 TLS 验证设置。
+* **状态和队列完整性。** 持久化操作等初始加载完成，文件替换保留恢复备份并通过 flush 暴露错误；Windows 旧目录迁移可重试且不覆盖新档。目录刷新只更新所属连接/目录，修复 Windows 路径变体、旧 FTP 坏条目、停止态、孤立存储引用和非 Windows 磁盘发现。
+* **播放与手势。** 订阅后端错误，取消装载使旧任务失效；重复队列项各自重新装载；关闭前等待真实历史保存。修复慢 seek 的过期续播、共享预览残留、多指中断、短视频队列替换暂停、反向翻页及音量异步退出。
+* **更新与 CI。** 便携更新绑定已确认版本与 SHA-256，校验 ZIP 路径、备份覆盖文件并尝试失败回滚；未能启动脚本时保持应用运行。CI 固定 Action 提交和发布 SHA，PR 不使用签名密钥，签名配置安全转义；本地轻量验证与真机边界见 [开发验证与 CI](docs/TESTING.md)。
+
+### Changes
+
+* Bind WebDAV credentials to the configured origin, default to HTTPS with explicit HTTP consent, preserve password whitespace, and verify native TLS settings.
+* Protect asynchronous state loading and recoverable persistence; scope playlist refresh to its source directory and connection, normalize Windows local paths, and repair legacy decoding and storage references.
+* Cancel stale playback/seek tasks, surface backend errors, await history writes, and fix repeated entries, multi-touch cancellation and short-video pool/navigation/volume lifetimes.
+* Bind portable updates to a release URL and SHA-256 with backups and rollback; harden CI signing and immutable action/commit references. Native device checks remain required as documented in [testing notes](docs/TESTING.md).
+
 ## v2.8.1
 
 ### Changelog

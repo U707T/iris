@@ -2,6 +2,10 @@
 *.class
 *.log
 *.pyc
+__pycache__/
+*.jks
+*.keystore
+android/key.properties
 *.swp
 .DS_Store
 .atom/

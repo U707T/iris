@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+
 import 'package:flutter_zustand/flutter_zustand.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/storages/local.dart';
@@ -18,18 +19,19 @@ import 'package:iris/utils/queue_persistence.dart';
 import 'package:saf_util/saf_util.dart';
 
 class PlayQueueStore extends PersistentStore<PlayQueueState> {
-  PlayQueueStore()
-      : super(
-          PlayQueueState(),
-          JsonPersistence<PlayQueueState>(
-            store: FileKeyValueStore(),
-            legacyStore: SecureKeyValueStore.instance,
-            legacyKey: 'playQueue_state',
-            key: 'playQueue_state',
-            fromJson: decodePlayQueueState,
-            toJson: (state) => state.toJson(),
-          ),
-        );
+  PlayQueueStore({JsonPersistence<PlayQueueState>? persistence})
+    : super(
+        PlayQueueState(),
+        persistence ??
+            JsonPersistence<PlayQueueState>(
+              store: FileKeyValueStore(),
+              legacyStore: SecureKeyValueStore.instance,
+              legacyKey: 'playQueue_state',
+              key: 'playQueue_state',
+              fromJson: decodePlayQueueState,
+              toJson: (state) => state.toJson(),
+            ),
+      );
 
   /// 统一落盘入口: update / updateCurrentIndex / add / remove 必须走同一判定,
   /// 否则会出现"索引被存了、队列却没存"的错位 (重启后索引指向不存在的条目)。
@@ -37,6 +39,7 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
   /// 具体策略见 [persistedQueueState]: 混合队列只剔除 content:// 条目,
   /// 而不是整份丢弃; 删除路径额外要求"全 SAF 时写空", 免得刚删掉的条目复活。
   Future<void> _saveQueue({bool keepPreviousWhenEmpty = true}) async {
+    if (!isLoaded) await ready;
     final snapshot = persistedQueueState(
       state,
       keepPreviousWhenEmpty: keepPreviousWhenEmpty,
@@ -49,19 +52,24 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
     required List<PlayQueueItem> playQueue,
     int? index,
   }) async {
-    set(state.copyWith(
-      playQueue: playQueue,
-      currentIndex: index ?? state.currentIndex,
-    ));
+    if (!isLoaded) await ready;
+    set(
+      state.copyWith(
+        playQueue: playQueue,
+        currentIndex: index ?? state.currentIndex,
+      ),
+    );
     await _saveQueue();
   }
 
   Future<void> updateCurrentIndex(int index) async {
+    if (!isLoaded) await ready;
     set(state.copyWith(currentIndex: index));
     await _saveQueue();
   }
 
   Future<void> add(List<FileItem> files) async {
+    if (!isLoaded) await ready;
     final int maxIndex = state.playQueue.isEmpty
         ? -1
         : state.playQueue.map((e) => e.index).reduce(max);
@@ -70,8 +78,10 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
     final List<PlayQueueItem> playQueue = files
         .asMap()
         .entries
-        .map((entry) =>
-            PlayQueueItem(file: entry.value, index: startIndex + entry.key))
+        .map(
+          (entry) =>
+              PlayQueueItem(file: entry.value, index: startIndex + entry.key),
+        )
         .toList();
 
     set(state.copyWith(playQueue: [...state.playQueue, ...playQueue]));
@@ -79,27 +89,30 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
   }
 
   Future<void> remove(PlayQueueItem item) async {
+    if (!isLoaded) await ready;
+    final index = state.playQueue.indexOf(item);
+    if (index < 0) return;
     if (state.playQueue.length <= 1) {
       set(state.copyWith(playQueue: [], currentIndex: 0));
     } else {
-      final index = state.playQueue.indexOf(item);
-      if (index < 0) return;
       if (state.playQueue[index].index == state.currentIndex) {
         if (index + 1 < state.playQueue.length) {
-          set(state.copyWith(
-            playQueue: [...state.playQueue]..remove(item),
-            currentIndex: state.playQueue[index + 1].index,
-          ));
+          set(
+            state.copyWith(
+              playQueue: [...state.playQueue]..remove(item),
+              currentIndex: state.playQueue[index + 1].index,
+            ),
+          );
         } else {
-          set(state.copyWith(
-            playQueue: [...state.playQueue]..remove(item),
-            currentIndex: state.playQueue[index - 1].index,
-          ));
+          set(
+            state.copyWith(
+              playQueue: [...state.playQueue]..remove(item),
+              currentIndex: state.playQueue[index - 1].index,
+            ),
+          );
         }
       } else {
-        set(state.copyWith(
-          playQueue: [...state.playQueue]..remove(item),
-        ));
+        set(state.copyWith(playQueue: [...state.playQueue]..remove(item)));
       }
     }
     // 删除路径不能"全 SAF 就保留旧快照": 否则刚删掉的本地条目会在重启后复活
@@ -107,13 +120,15 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
   }
 
   Future<void> previous() async {
+    if (!isLoaded) await ready;
     // 空队列时 `.last` 会抛 StateError, 而这里是从按键回调 / 媒体键进来的,
     // 异常会直接冒到 UI 层 (删光队列后按 Ctrl + ← 就崩)。
     final playQueue = state.playQueue;
     if (playQueue.isEmpty) return;
 
-    final int currentPlayIndex =
-        playQueue.indexWhere((element) => element.index == state.currentIndex);
+    final int currentPlayIndex = playQueue.indexWhere(
+      (element) => element.index == state.currentIndex,
+    );
     if (currentPlayIndex <= 0) {
       await updateCurrentIndex(playQueue.last.index);
     } else {
@@ -122,11 +137,13 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
   }
 
   Future<void> next() async {
+    if (!isLoaded) await ready;
     final playQueue = state.playQueue;
     if (playQueue.isEmpty) return;
 
-    final int currentPlayIndex =
-        playQueue.indexWhere((element) => element.index == state.currentIndex);
+    final int currentPlayIndex = playQueue.indexWhere(
+      (element) => element.index == state.currentIndex,
+    );
     if (currentPlayIndex >= playQueue.length - 1) {
       await updateCurrentIndex(playQueue.first.index);
     } else {
@@ -134,16 +151,22 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
     }
   }
 
-  Future<void> shuffle() async => update(
-        playQueue: getShufflePlayQueue(state.playQueue, state.currentIndex),
-        index: state.currentIndex,
-      );
+  Future<void> shuffle() async {
+    if (!isLoaded) await ready;
+    await update(
+      playQueue: getShufflePlayQueue(state.playQueue, state.currentIndex),
+      index: state.currentIndex,
+    );
+  }
 
-  Future<void> sort() async => update(
-        playQueue: [...state.playQueue]
-          ..sort((a, b) => a.index.compareTo(b.index)),
-        index: state.currentIndex,
-      );
+  Future<void> sort() async {
+    if (!isLoaded) await ready;
+    await update(
+      playQueue: [...state.playQueue]
+        ..sort((a, b) => a.index.compareTo(b.index)),
+      index: state.currentIndex,
+    );
+  }
 
   @override
   Future<PlayQueueState?> load() async {
@@ -156,12 +179,9 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
           final state = PlayQueueState(
             playQueue: [
               PlayQueueItem(
-                file: FileItem(
-                  name: uri,
-                  uri: uri,
-                ),
+                file: FileItem(name: uri, uri: uri),
                 index: 0,
-              )
+              ),
             ],
             currentIndex: 0,
           );
@@ -169,7 +189,7 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
           // 两个 store 的加载顺序把 autoPlay 冲掉。见 globals.autoPlayOnLaunch。
           globals.autoPlayOnLaunch = true;
           await useAppStore().updateAutoPlay(true);
-          await save(state);
+          await persistence.save(state);
           return state;
         }
 
@@ -182,7 +202,7 @@ class PlayQueueStore extends PersistentStore<PlayQueueState> {
             // 两个 store 的加载顺序把 autoPlay 冲掉。见 globals.autoPlayOnLaunch。
             globals.autoPlayOnLaunch = true;
             await useAppStore().updateAutoPlay(true);
-            await save(state);
+            await persistence.save(state);
             return state;
           }
         }

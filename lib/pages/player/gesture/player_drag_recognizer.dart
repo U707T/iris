@@ -67,6 +67,7 @@ class PlayerDragGestureRecognizer extends OneSequenceGestureRecognizer {
     if (_pointer != null) {
       startTrackingPointer(event.pointer, event.transform);
       resolvePointer(event.pointer, GestureDisposition.rejected);
+      stopTrackingPointer(event.pointer);
       return;
     }
     if (!delegate.enabled) return;
@@ -169,6 +170,10 @@ class PlayerDragGestureRecognizer extends OneSequenceGestureRecognizer {
 
   @override
   void rejectGesture(int pointer) {
+    if (pointer != _pointer) return;
+    if (_accepted && !_windowDragStarted && _axis != null) {
+      delegate.onCancel?.call(_axis!);
+    }
     _finish();
   }
 

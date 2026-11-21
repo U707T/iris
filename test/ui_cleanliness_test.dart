@@ -42,6 +42,7 @@ void main() {
             'buildNumber': '46',
           },
         );
+    await useAppStore().ready;
   });
 
   tearDownAll(() async {

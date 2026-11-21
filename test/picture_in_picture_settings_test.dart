@@ -17,39 +17,39 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 MediaPlayer _dummyPlayer() => MediaPlayer(
-      isInitializing: false,
-      isPlaying: false,
-      position: Duration.zero,
-      duration: Duration.zero,
-      buffer: Duration.zero,
-      width: 1920,
-      height: 1080,
-      saveProgress: () async {},
-      play: () async {},
-      pause: () async {},
-      backward: (_) async {},
-      forward: (_) async {},
-      stepBackward: () async {},
-      stepForward: () async {},
-      seek: (_) async {},
-      screenshot: () async => null,
-      getStats: () => const {},
-    );
+  isInitializing: false,
+  isPlaying: false,
+  position: Duration.zero,
+  duration: Duration.zero,
+  buffer: Duration.zero,
+  width: 1920,
+  height: 1080,
+  saveProgress: () async {},
+  play: () async {},
+  pause: () async {},
+  backward: (_) async {},
+  forward: (_) async {},
+  stepBackward: () async {},
+  stepForward: () async {},
+  seek: (_) async {},
+  screenshot: () async => null,
+  getStats: () => const {},
+);
 
 Widget _app(Widget child) => StoreScope(
-      child: Provider<MediaPlayer>.value(
-        value: _dummyPlayer(),
-        child: MaterialApp(
-          locale: const Locale('zh'),
-          localizationsDelegates: [
-            AppLocalizations.delegate,
-            ...GlobalMaterialLocalizations.delegates,
-          ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Scaffold(body: child),
-        ),
-      ),
-    );
+  child: Provider<MediaPlayer>.value(
+    value: _dummyPlayer(),
+    child: MaterialApp(
+      locale: const Locale('zh'),
+      localizationsDelegates: [
+        AppLocalizations.delegate,
+        ...GlobalMaterialLocalizations.delegates,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(body: child),
+    ),
+  ),
+);
 
 /// 「设置 → 播放 → 画中画」这个开关, 以及它控制的「更多 → 进入画中画」入口。
 ///
@@ -65,17 +65,18 @@ void main() {
     supportDir = await Directory.systemTemp.createTemp('iris_pip_settings');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      (call) async => supportDir.path,
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          (call) async => supportDir.path,
+        );
+    await Future.wait([useAppStore().ready, usePlayQueueStore().ready]);
   });
 
   tearDownAll(() async {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-      const MethodChannel('plugins.flutter.io/path_provider'),
-      null,
-    );
+          const MethodChannel('plugins.flutter.io/path_provider'),
+          null,
+        );
     if (supportDir.existsSync()) await supportDir.delete(recursive: true);
   });
 
@@ -104,8 +105,7 @@ void main() {
       of: find.widgetWithText(ListTile, '画中画'),
       matching: find.byType(Switch),
     );
-    expect(tester.widget<Switch>(toggle).value, isFalse,
-        reason: '默认不开启画中画');
+    expect(tester.widget<Switch>(toggle).value, isFalse, reason: '默认不开启画中画');
 
     // 点整行, 而不是标题那几个字 —— 用户点的是一行。
     await tester.tap(find.widgetWithText(ListTile, '画中画'));
@@ -163,11 +163,7 @@ void _resetStores({bool pictureInPicture = false}) {
     PlayQueueState(
       playQueue: [
         PlayQueueItem(
-          file: FileItem(
-            name: 'a.mp4',
-            uri: 'a.mp4',
-            type: ContentType.video,
-          ),
+          file: FileItem(name: 'a.mp4', uri: 'a.mp4', type: ContentType.video),
           index: 0,
         ),
       ],

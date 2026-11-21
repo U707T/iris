@@ -53,6 +53,11 @@ abstract class PersistentStore<T> extends Store<T> {
   /// 默认保存入口：加载失败时宁可不写，也不要用默认值覆盖原文件。
   @mustCallSuper
   Future<void> save(T state) async {
+    if (!_isLoaded) {
+      await ready;
+      // The argument may have been captured from the pre-load default state.
+      state = this.state;
+    }
     if (_loadError != null) {
       logger('Refusing to overwrite $runtimeType after a failed load');
       return;
@@ -60,9 +65,20 @@ abstract class PersistentStore<T> extends Store<T> {
     await persistence.save(state);
   }
 
+  Object? get saveError => _loadError ?? persistence.lastSaveError;
+
+  /// Wait for pending writes and surface a failure to callers such as exit-save.
+  Future<void> flush() async {
+    await ready;
+    final error = _loadError;
+    if (error != null) Error.throwWithStackTrace(error, StackTrace.current);
+    await persistence.flush();
+  }
+
   @override
   @mustCallSuper
   Future<void> dispose() async {
+    await ready;
     await save(state);
     await super.dispose();
   }

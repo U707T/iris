@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:http/http.dart' as http;
 import 'package:iris/utils/logger.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -11,6 +12,7 @@ class Release {
   final String downloadUrl;
   final int size;
   final String changeLog;
+  final String? sha256;
 
   Release({
     required this.version,
@@ -18,7 +20,37 @@ class Release {
     required this.downloadUrl,
     required this.size,
     required this.changeLog,
+    this.sha256,
   });
+}
+
+Map? selectReleaseAsset(List<dynamic> assets, String platform) {
+  final name = switch (platform) {
+    'windows' => 'IRIS-windows.zip',
+    'android' => 'IRIS-android-arm64-v8a.apk',
+    _ => null,
+  };
+  if (name == null) return null;
+  final matches = assets.whereType<Map>().where(
+    (asset) => asset['name'] == name,
+  );
+  return matches.length == 1 ? matches.single : null;
+}
+
+bool isTrustedPortableUpdate(Release release) {
+  final uri = Uri.tryParse(release.downloadUrl);
+  return RegExp(r'^v\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$')
+          .hasMatch(release.version) &&
+      uri != null &&
+      uri.scheme == 'https' &&
+      uri.host == 'github.com' &&
+      uri.port == 443 &&
+      uri.userInfo.isEmpty &&
+      !uri.hasQuery &&
+      !uri.hasFragment &&
+      uri.path ==
+          '/U707T/iris/releases/download/${release.version}/IRIS-windows.zip' &&
+      RegExp(r'^[a-fA-F0-9]{64}$').hasMatch(release.sha256 ?? '');
 }
 
 /// 检查 GitHub 上的最新版本。
@@ -44,8 +76,9 @@ Future<Release?> getLatestRelease() async {
     const api = 'https://api.github.com/repos/U707T/iris/releases/latest';
 
     // 没有超时的请求在网络异常时会一直挂着 (界面永远停在"检查更新")
-    final response =
-        await http.get(Uri.parse(api)).timeout(const Duration(seconds: 10));
+    final response = await http
+        .get(Uri.parse(api))
+        .timeout(const Duration(seconds: 10));
 
     if (response.statusCode != 200) {
       logger('Failed to load latest release: ${response.statusCode}');
@@ -64,22 +97,14 @@ Future<Release?> getLatestRelease() async {
       return null;
     }
 
-    // 以前直接 `filtteredAssets.first`: 发布里没有对应平台附件时抛
-    // StateError (被 catch 吞掉, 表现和"检查失败"一样, 但日志里是异常)
-    final matchedAssets = assets
-        .whereType<Map>()
-        .where((asset) =>
-            (asset['name'] ?? '').toString().toLowerCase().contains(platform))
-        .toList();
-
-    if (matchedAssets.isEmpty) {
-      logger('No $platform asset in latest release');
+    final asset = selectReleaseAsset(assets, platform);
+    if (asset == null) {
+      logger('No unambiguous $platform asset in latest release');
       return null;
     }
-
-    final asset = matchedAssets.first;
     final String version = data['tag_name']?.toString() ?? 'Unknown version';
-    final String url = data['html_url']?.toString() ??
+    final String url =
+        data['html_url']?.toString() ??
         'https://github.com/U707T/iris/releases/';
     final String? downloadUrl = asset['browser_download_url']?.toString();
     final int size = int.tryParse('${asset['size']}') ?? 0;
@@ -98,6 +123,12 @@ Future<Release?> getLatestRelease() async {
       downloadUrl: downloadUrl,
       size: size,
       changeLog: changeLog,
+      sha256:
+          (asset['digest'] is String &&
+              RegExp(r'^sha256:[a-fA-F0-9]{64}$')
+                  .hasMatch(asset['digest'] as String))
+          ? (asset['digest'] as String).substring(7)
+          : null,
     );
   } on TimeoutException {
     logger('Timeout fetching latest release');
@@ -130,7 +161,9 @@ _ParsedVersion _parseVersion(String version) {
   return _ParsedVersion(
     rest
         .split('.')
-        .map((part) => int.tryParse(RegExp(r'^\d+').stringMatch(part) ?? '') ?? 0)
+        .map(
+          (part) => int.tryParse(RegExp(r'^\d+').stringMatch(part) ?? '') ?? 0,
+        )
         .toList(),
     isPrerelease: isPrerelease,
   );

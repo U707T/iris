@@ -9,13 +9,31 @@ import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/store/use_storage_store.dart';
 import 'package:iris/utils/files_sort.dart';
 import 'package:iris/utils/logger.dart';
+import 'package:path/path.dart' as p;
+
+bool _isLocalQueuePath(FileItem file) =>
+    file.storageType != StorageType.webdav &&
+    (p.windows.isAbsolute(file.uri) ||
+        !RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*://').hasMatch(file.uri));
+
+String _queueFileKey(FileItem file) {
+  if (!_isLocalQueuePath(file)) return file.uri;
+  return p.windows.isAbsolute(file.uri)
+      ? p.windows.normalize(file.uri).toLowerCase()
+      : p.normalize(file.uri);
+}
+
+String _localFolderKey(FileItem file) => p.windows.isAbsolute(file.uri)
+    ? p.windows.dirname(_queueFileKey(file))
+    : p.dirname(_queueFileKey(file));
 
 /// 播放项所在目录 (`path` 的最后一段是文件名)。
 ///
 /// 单文件 / 在线链接 / picker 打开的文件没有目录段, 返回空列表 —— 调用方据此
 /// 放弃回扫, 而不是拿 `path[0]` 当目录去扫整个根分区。
-List<String> folderOfPlayQueueItem(FileItem file) =>
-    file.path.length > 1 ? file.path.sublist(0, file.path.length - 1) : const [];
+List<String> folderOfPlayQueueItem(FileItem file) => file.path.length > 1
+    ? file.path.sublist(0, file.path.length - 1)
+    : const [];
 
 /// 用最新目录列表更新队列成员 (**纯函数**, 便于单测)。
 ///
@@ -31,24 +49,61 @@ List<String> folderOfPlayQueueItem(FileItem file) =>
 PlayQueueState? mergeQueueWithListed({
   required PlayQueueState state,
   required List<FileItem> listed,
+  FileItem? scannedFrom,
 }) {
   final items = state.playQueue;
   if (items.isEmpty) return null;
 
-  final listedUris = {for (final file in listed) file.uri};
-
-  final kept = <PlayQueueItem>[];
-  for (final item in items) {
-    if (listedUris.contains(item.file.uri)) kept.add(item);
+  final source = scannedFrom ?? items.first.file;
+  final folder = folderOfPlayQueueItem(source);
+  if (folder.isEmpty) return null;
+  bool sameStorage(FileItem file) {
+    if (source.storageType == StorageType.webdav ||
+        file.storageType == StorageType.webdav) {
+      return source.storageType == StorageType.webdav &&
+          file.storageType == StorageType.webdav &&
+          source.storageId.isNotEmpty &&
+          file.storageId == source.storageId;
+    }
+    return file.storageId == source.storageId ||
+        (const {'', localStorageId}.contains(file.storageId) &&
+            const {'', localStorageId}.contains(source.storageId));
   }
-  if (kept.isEmpty) return null;
 
-  final keptUris = {for (final item in kept) item.file.uri};
+  bool inScannedFolder(FileItem file) =>
+      sameStorage(file) &&
+      (_isLocalQueuePath(file) == _isLocalQueuePath(source)) &&
+      (_isLocalQueuePath(source)
+          ? _localFolderKey(file) == _localFolderKey(source)
+          : const ListEquality<String>().equals(
+              folderOfPlayQueueItem(file),
+              folder,
+            ));
+  final listedKeys = {for (final file in listed) _queueFileKey(file)};
+  // Preserve the old no-match protection, scoped to this directory.
+  if (!items.any(
+    (item) =>
+        inScannedFolder(item.file) &&
+        listedKeys.contains(_queueFileKey(item.file)),
+  )) {
+    return null;
+  }
+  final kept = <PlayQueueItem>[
+    for (final item in items)
+      if (!inScannedFolder(item.file) ||
+          listedKeys.contains(_queueFileKey(item.file)))
+        item,
+  ];
+
+  final keptKeys = {
+    for (final item in kept)
+      if (inScannedFolder(item.file)) _queueFileKey(item.file),
+  };
   var nextIndex = items.map((item) => item.index).reduce(max) + 1;
 
   final added = <PlayQueueItem>[];
   for (final file in listed) {
-    if (keptUris.contains(file.uri)) continue;
+    if (!keptKeys.add(_queueFileKey(file))) continue;
     added.add(PlayQueueItem(file: file, index: nextIndex++));
   }
 
@@ -87,9 +142,11 @@ int _currentIndexAfterMerge({
 /// 目录里一个媒体文件都不剩。调用方据此给出成功或失败的反馈。
 Future<int?> refreshPlayQueue() async {
   final store = usePlayQueueStore();
+  await store.ready;
   final state = store.state;
 
-  final current = state.playQueue
+  final current =
+      state.playQueue
           .firstWhereOrNull((item) => item.index == state.currentIndex)
           ?.file ??
       state.playQueue.firstOrNull?.file;
@@ -129,6 +186,7 @@ Future<int?> refreshPlayQueue() async {
     // 毫秒, 期间用户可能删条目 / 切集, 拿旧快照覆盖等于把这些操作抹掉。
     state: latest,
     listed: media,
+    scannedFrom: current,
   );
   if (merged == null) return null;
 
@@ -136,10 +194,7 @@ Future<int?> refreshPlayQueue() async {
   // 用户只是手贱点了一下刷新不该有这些动静。
   if (!_sameQueue(merged.playQueue, latest.playQueue) ||
       merged.currentIndex != latest.currentIndex) {
-    await store.update(
-      playQueue: merged.playQueue,
-      index: merged.currentIndex,
-    );
+    await store.update(playQueue: merged.playQueue, index: merged.currentIndex);
   }
   return merged.playQueue.length;
 }
@@ -165,7 +220,7 @@ bool _sameQueue(List<PlayQueueItem> a, List<PlayQueueItem> b) {
 Storage? _storageFor(FileItem file) {
   final known = useStorageStore().findById(file.storageId);
   if (known != null) return known;
-  if (file.path.isEmpty) return null;
+  if (file.path.isEmpty || file.storageType == StorageType.webdav) return null;
 
   return LocalStorage(
     type: StorageType.internal,

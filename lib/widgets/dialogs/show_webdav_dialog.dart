@@ -26,8 +26,9 @@ Future<void> showWebDAVDialog(
 );
 
 class WebDAVDialog extends HookWidget {
-  const WebDAVDialog({super.key, this.storage});
+  const WebDAVDialog({super.key, this.storage, this.connectionTester});
   final WebDAVStorage? storage;
+  final Future<bool> Function(WebDAVStorage)? connectionTester;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +45,7 @@ class WebDAVDialog extends HookWidget {
     final basePath = useState(storage?.basePath ?? const [_defaultPath]);
     final username = useState(storage?.username ?? _defaultUsername);
     final password = useState(storage?.password ?? _defaultPassword);
-    final https = useState(storage?.https ?? false);
+    final https = useState(storage?.https ?? true);
 
     final nameController = useTextEditingController(text: name.value);
     final hostController = useTextEditingController(text: host.value);
@@ -61,6 +62,8 @@ class WebDAVDialog extends HookWidget {
     final gatewayError = useState(false);
 
     final isTested = useState(false);
+    final allowHttp = useState(false);
+    final testGeneration = useRef(0);
 
     void add() {
       useStorageStore().addStorage(
@@ -94,7 +97,17 @@ class WebDAVDialog extends HookWidget {
     }
 
     void testConnection() async {
-      final bool isConnected = await testWebDAV(
+      if (!https.value && !allowHttp.value) return;
+      final generation = ++testGeneration.value;
+      final snapshot = [
+        host.value,
+        portController.text,
+        basePath.value.join('/'),
+        username.value,
+        password.value,
+        https.value,
+      ].join('\u0000');
+      final bool isConnected = await (connectionTester ?? testWebDAV)(
         WebDAVStorage(
           id: id,
           name: name.value,
@@ -106,7 +119,16 @@ class WebDAVDialog extends HookWidget {
           https: https.value,
         ),
       );
-      isTested.value = isConnected;
+      if (!context.mounted || generation != testGeneration.value) return;
+      final current = [
+        host.value,
+        portController.text,
+        basePath.value.join('/'),
+        username.value,
+        password.value,
+        https.value,
+      ].join('\u0000');
+      if (snapshot == current) isTested.value = isConnected;
     }
 
     /// 切换 HTTPS：只在标准端口 80 / 443 之间跟随，自定义端口不动。
@@ -117,6 +139,7 @@ class WebDAVDialog extends HookWidget {
       } else if (!value && portController.text == '443') {
         portController.text = '80';
       }
+      allowHttp.value = false;
       https.value = value;
     }
 
@@ -258,6 +281,25 @@ class WebDAVDialog extends HookWidget {
                   ],
                 ),
                 const SizedBox(height: 16.0),
+                if (!https.value) ...[
+                  Text(
+                    t.webdav_http_warning,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(t.webdav_http_acknowledge),
+                    value: allowHttp.value,
+                    onChanged: (value) {
+                      allowHttp.value = value ?? false;
+                      isTested.value = false;
+                      testGeneration.value++;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 TextFormField(
                   controller: usernameController,
                   decoration: InputDecoration(
@@ -278,7 +320,7 @@ class WebDAVDialog extends HookWidget {
                   ),
                   obscureText: true,
                   onChanged: (value) {
-                    password.value = value.trim();
+                    password.value = value;
                     isTested.value = false;
                   },
                 ),
@@ -293,9 +335,12 @@ class WebDAVDialog extends HookWidget {
           onPressed: () => Navigator.pop(context, 'Cancel'),
           child: Text(t.cancel),
         ),
-        TextButton(onPressed: testConnection, child: Text(t.test_connection)),
         TextButton(
-          onPressed: isTested.value
+          onPressed: https.value || allowHttp.value ? testConnection : null,
+          child: Text(t.test_connection),
+        ),
+        TextButton(
+          onPressed: isTested.value && (https.value || allowHttp.value)
               ? () {
                   Navigator.pop(context, 'OK');
                   isEdit ? update() : add();

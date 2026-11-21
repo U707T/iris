@@ -39,16 +39,22 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   final rate = useAppStore().select(context, (state) => state.rate);
   final volume = useAppStore().select(context, (state) => state.volume);
   final isMuted = useAppStore().select(context, (state) => state.isMuted);
-  final bool autoPlay =
-      useAppStore().select(context, (state) => state.autoPlay);
+  final bool autoPlay = useAppStore().select(
+    context,
+    (state) => state.autoPlay,
+  );
   final Repeat repeat = useAppStore().select(context, (state) => state.repeat);
-  final bool alwaysPlayFromBeginning =
-      useAppStore().select(context, (state) => state.alwaysPlayFromBeginning);
+  final bool alwaysPlayFromBeginning = useAppStore().select(
+    context,
+    (state) => state.alwaysPlayFromBeginning,
+  );
 
   final history = useHistoryStore().select(context, (state) => state.history);
 
-  final isShowStats =
-      usePlayerUiStore().select(context, (state) => state.isShowStats);
+  final isShowStats = usePlayerUiStore().select(
+    context,
+    (state) => state.isShowStats,
+  );
   // 统计轮询独立成 hook (帧率 / 丢帧 / 解码器 / 缓存), 返回同步读取函数
   final getStats = usePlayerStats(player, isShowStats: isShowStats);
 
@@ -85,7 +91,9 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   // 用户中途暂停不会被抢回播放。
   useEffect(() {
     if (!autoPlay) return null;
-    if (file == null || engine.isInitializing) return null;
+    if (file == null || engine.isInitializing || engine.error != null) {
+      return null;
+    }
     if (player.state.playing) return null;
     if (player.state.duration == Duration.zero) return null;
     if (player.state.position > const Duration(seconds: 1)) return null;
@@ -122,10 +130,12 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
   }, [file?.type, streams.videoParams?.w, streams.videoParams?.h]);
 
   Future<void> play() async {
-    if (streams.duration == Duration.zero &&
+    if ((streams.duration == Duration.zero || engine.error != null) &&
         file != null &&
         !engine.isInitializing) {
+      await useAppStore().updateAutoPlay(true);
       await engine.init(file);
+      return;
     }
     await player.play();
   }
@@ -136,10 +146,10 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
 
   Future<void> seek(Duration newPosition) async =>
       newPosition.inMilliseconds < 0
-          ? await player.seek(Duration.zero)
-          : newPosition.inMilliseconds > streams.duration.inMilliseconds
-              ? await player.seek(streams.duration)
-              : await player.seek(newPosition);
+      ? await player.seek(Duration.zero)
+      : newPosition.inMilliseconds > streams.duration.inMilliseconds
+      ? await player.seek(streams.duration)
+      : await player.seek(newPosition);
 
   Future<void> backward(int seconds) async {
     await seek(Duration(seconds: streams.position.inSeconds - seconds));
@@ -177,8 +187,9 @@ MediaKitPlayer useMediaKitPlayer(BuildContext context) {
           ? Duration.zero
           : streams.position,
       duration: streams.duration,
-      buffer:
-          streams.duration == Duration.zero ? Duration.zero : streams.buffer,
+      buffer: streams.duration == Duration.zero
+          ? Duration.zero
+          : streams.buffer,
       width: streams.videoParams?.w?.toDouble() ?? 0,
       height: streams.videoParams?.h?.toDouble() ?? 0,
       error: engine.error,

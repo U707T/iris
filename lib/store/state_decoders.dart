@@ -25,13 +25,13 @@ PlayQueueState decodePlayQueueState(Map<String, dynamic> json) {
     }
   }
 
-  final requested =
-      cleaned['currentIndex'] is int ? cleaned['currentIndex'] as int : 0;
+  final requested = cleaned['currentIndex'] is int
+      ? cleaned['currentIndex'] as int
+      : 0;
   final int currentIndex;
   if (items.isEmpty) {
     currentIndex = 0;
-  } else if (requested == -1 ||
-      items.any((item) => item.index == requested)) {
+  } else if (requested == -1 || items.any((item) => item.index == requested)) {
     // -1 是"停止"态，不要凭空指到第一条
     currentIndex = requested;
   } else {
@@ -70,7 +70,8 @@ StorageState decodeStorageState(Map<String, dynamic> json) {
     for (final entry in rawStorages) {
       if (entry is! Map) continue;
       try {
-        storages.add(Storage.fromJson(Map<String, dynamic>.from(entry)));
+        final storage = Storage.fromJson(Map<String, dynamic>.from(entry));
+        if (_validStorage(storage)) storages.add(storage);
       } catch (e) {
         logger('Skipping invalid storage entry: $e');
       }
@@ -84,8 +85,7 @@ StorageState decodeStorageState(Map<String, dynamic> json) {
     for (final entry in rawFavorites) {
       if (entry is! Map) continue;
       try {
-        final favorite =
-            Favorite.fromJson(Map<String, dynamic>.from(entry));
+        final favorite = Favorite.fromJson(Map<String, dynamic>.from(entry));
         // localStorageId 是运行时发现的本地磁盘，不在持久化 storages 里。
         if (favorite.storageId == localStorageId ||
             storageIds.contains(favorite.storageId)) {
@@ -101,8 +101,16 @@ StorageState decodeStorageState(Map<String, dynamic> json) {
   final rawCurrent = json['currentStorage'];
   if (rawCurrent is Map) {
     try {
-      currentStorage =
-          Storage.fromJson(Map<String, dynamic>.from(rawCurrent));
+      final decoded = Storage.fromJson(Map<String, dynamic>.from(rawCurrent));
+      if (_validStorage(decoded)) {
+        if (decoded.id == localStorageId && decoded is LocalStorage) {
+          currentStorage = decoded;
+        } else {
+          for (final storage in storages) {
+            if (storage.id == decoded.id) currentStorage = storage;
+          }
+        }
+      }
     } catch (e) {
       logger('Skipping invalid current storage: $e');
     }
@@ -120,3 +128,13 @@ StorageState decodeStorageState(Map<String, dynamic> json) {
     currentPath: currentPath,
   );
 }
+
+bool _validStorage(Storage storage) => storage is WebDAVStorage
+    ? storage.type == StorageType.webdav
+    : storage is LocalStorage &&
+          const {
+            StorageType.internal,
+            StorageType.network,
+            StorageType.usb,
+            StorageType.sdcard,
+          }.contains(storage.type);

@@ -1,6 +1,6 @@
 # IRIS Privacy Policy
 
-**Last Updated:** June 7, 2025
+**Last Updated:** November 21, 2026
 
 Thank you for using IRIS ("the Application"). We are committed to protecting your privacy. This Privacy Policy explains how we handle information in connection with your use of the Application.
 
@@ -32,12 +32,13 @@ We strictly adhere to the principles of lawfulness, legitimacy, and necessity in
 
 We place great importance on the security of your information.
 
-* **Storage Location**: All your personal data, including WebDAV credentials, playback history, and application settings, is **stored only locally on your device**. We do not upload this information to any external servers.
-* **Security Measures**: We use industry-standard security technologies to protect sensitive information stored on your device from unauthorized access, use, or disclosure.
+* **Storage Location**: WebDAV connection settings, playback history and preferences are stored locally. WebDAV credentials use the platform secure-storage facility. History, queues and preferences use files in the application support directory; online links may contain access tokens, so protect that directory and your device account.
+* **Network Requests**: When you browse WebDAV or play online media, IRIS sends the requested path and any required authentication to the service you selected. That service receives your IP address and request metadata. Checking updates contacts GitHub; downloading an update also contacts GitHub's asset delivery service. IRIS does not operate a telemetry or personal-data collection server.
+* **Transport Security**: New WebDAV connections default to HTTPS. If you explicitly allow HTTP, credentials and media requests can be observed on the network. Only use that option on a network you trust.
 
 ### Information Sharing and Disclosure
 
-We do not sell, trade, or otherwise transfer your personally identifiable information to outside parties. All data is stored locally on your device.
+We do not sell your personal data. Requests to WebDAV servers, online media services and GitHub are necessary to perform the operations you select. Those services process the requests under their own privacy policies.
 
 ### Children's Privacy
 

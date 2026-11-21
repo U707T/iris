@@ -1,10 +1,11 @@
+import 'dart:async';
+
+import 'package:iris/hooks/player/playback_history.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:iris/globals.dart' as globals;
 import 'package:iris/models/file.dart';
 import 'package:iris/models/progress.dart';
 import 'package:iris/store/use_history_store.dart';
 import 'package:iris/utils/logger.dart';
-import 'package:iris/utils/platform.dart';
 import 'package:media_kit/media_kit.dart';
 
 /// 播放进度：切换文件 / 退出时保存，打开时恢复。
@@ -28,30 +29,34 @@ Future<void> Function() usePlayerProgress({
   }
 
   Future<void> saveProgress() async {
-    // Android 的 "open with" content:// 是会话级授权, 不要写进历史
-    if (isAndroid &&
-        globals.initUri == file?.uri &&
-        globals.initUri != null &&
-        globals.initUri!.startsWith('content://')) {
-      return;
-    }
+    // No persistable grant is recorded on FileItem: content URIs are session-only.
+    if (file != null && !canPersistPlaybackUri(file.uri)) return;
 
     if (file != null && player.state.duration != Duration.zero) {
       logger(
-          'Save progress: ${file.name}, position: ${player.state.position}, duration: ${player.state.duration}');
-      useHistoryStore().add(Progress(
-        dateTime: DateTime.now().toUtc(),
-        position: player.state.position,
-        duration: player.state.duration,
-        file: file,
-      ));
+        'Save progress: ${file.name}, position: ${player.state.position}, duration: ${player.state.duration}',
+      );
+      await savePlaybackHistory(
+        Progress(
+          dateTime: DateTime.now().toUtc(),
+          position: player.state.position,
+          duration: player.state.duration,
+          file: file,
+        ),
+      );
     }
   }
 
   // 切换文件 / 卸载时保存上一条的进度
   // (cleanup 捕获的是注册时的旧 file, 正好是要保存的那一条)
   useEffect(() {
-    return saveProgress;
+    return () {
+      unawaited(
+        saveProgress().catchError((Object error) {
+          logger('Save progress on cleanup failed: $error');
+        }),
+      );
+    };
   }, [file]);
 
   useEffect(() {
@@ -72,12 +77,13 @@ Future<void> Function() usePlayerProgress({
       final progress = history[file.getID()];
       if (progress == null || alwaysPlayFromBeginning) return;
 
-      final remaining = progress.duration.inMilliseconds -
-          progress.position.inMilliseconds;
+      final remaining =
+          progress.duration.inMilliseconds - progress.position.inMilliseconds;
       if (remaining <= 5000) return;
 
       logger(
-          'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}');
+        'Resume progress: ${file.name} position: ${progress.position} duration: ${progress.duration}',
+      );
       await player.seek(progress.position);
     }();
     return;
