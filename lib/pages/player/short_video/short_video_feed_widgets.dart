@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:iris/models/file.dart';
 import 'package:iris/models/player.dart';
+import 'package:iris/pages/player/short_video/short_video_pool.dart';
 import 'package:iris/pages/player/short_video/short_video_volume.dart';
 import 'package:iris/utils/format_duration_to_minutes.dart';
 import 'package:iris/utils/get_localizations.dart';
@@ -29,10 +30,56 @@ class ShortVideoFeedVideo extends StatelessWidget {
     final player = context.read<MediaPlayer>();
     return SizedBox.expand(
       child: switch (player) {
-        MediaKitPlayer player =>
-          ShortVideoMediaKitSurface(controller: player.controller),
+        MediaKitPlayer player => ShortVideoMediaKitSurface(
+          controller: player.controller,
+        ),
         _ => const SizedBox.shrink(),
       },
+    );
+  }
+}
+
+/// Keep a slot's renderer mounted while covering frames from its previous media.
+/// A pool assignment changes before the asynchronous native open has completed.
+class ShortVideoPoolPage extends StatelessWidget {
+  const ShortVideoPoolPage({
+    super.key,
+    required this.slot,
+    required this.item,
+    required this.feedIndex,
+  });
+
+  final ShortVideoSlot? slot;
+  final PlayQueueItem item;
+  final int feedIndex;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = slot;
+    if (current == null) return const ColoredBox(color: Colors.black);
+    final ready =
+        current.feedIndex == feedIndex &&
+        current.loadedFile == item.file &&
+        !current.initializing &&
+        !current.pendingOpen &&
+        current.error == null;
+    return ColoredBox(
+      color: Colors.black,
+      child: ClipRect(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ShortVideoMediaKitSurface(
+              key: ValueKey(current.controller),
+              controller: current.controller,
+            ),
+            // Keep Texture attached: hiding/recreating it can interrupt native
+            // frame delivery, while a cover prevents stale pixels showing.
+            if (!ready)
+              const Positioned.fill(child: ColoredBox(color: Colors.black)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -68,8 +115,9 @@ class ShortVideoFeedActions extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final t = getLocalizations(context);
-    final isPlaying =
-        context.select<MediaPlayer, bool>((player) => player.isPlaying);
+    final isPlaying = context.select<MediaPlayer, bool>(
+      (player) => player.isPlaying,
+    );
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -111,10 +159,12 @@ class ShortVideoFeedFooter extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final position =
-        context.select<MediaPlayer, Duration>((player) => player.position);
-    final duration =
-        context.select<MediaPlayer, Duration>((player) => player.duration);
+    final position = context.select<MediaPlayer, Duration>(
+      (player) => player.position,
+    );
+    final duration = context.select<MediaPlayer, Duration>(
+      (player) => player.duration,
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -158,8 +208,9 @@ class ShortVideoFeedFooter extends HookWidget {
                     builder: (context, preview, _) {
                       final display = preview ?? position;
                       final TextStyle metaStyle = TextStyle(
-                        color: Colors.white
-                            .withValues(alpha: preview != null ? 1.0 : 0.7),
+                        color: Colors.white.withValues(
+                          alpha: preview != null ? 1.0 : 0.7,
+                        ),
                         fontSize: 12,
                         fontFeatures: const [FontFeature.tabularFigures()],
                         decoration: TextDecoration.none,
@@ -209,10 +260,12 @@ class ShortVideoFeedProgressBar extends HookWidget {
 
   @override
   Widget build(BuildContext context) {
-    final position =
-        context.select<MediaPlayer, Duration>((player) => player.position);
-    final duration =
-        context.select<MediaPlayer, Duration>((player) => player.duration);
+    final position = context.select<MediaPlayer, Duration>(
+      (player) => player.position,
+    );
+    final duration = context.select<MediaPlayer, Duration>(
+      (player) => player.duration,
+    );
 
     return SizedBox(
       height: 32,
@@ -233,8 +286,8 @@ class ShortVideoFeedProgressBar extends HookWidget {
               final isSeeking = preview != null;
               final double progress = duration > Duration.zero
                   ? (display.inMilliseconds / duration.inMilliseconds)
-                      .clamp(0.0, 1.0)
-                      .toDouble()
+                        .clamp(0.0, 1.0)
+                        .toDouble()
                   : 0.0;
               const double barHeight = 3.0;
 
@@ -311,7 +364,9 @@ class ShortVideoFeedProgressBar extends HookWidget {
                         child: Center(
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black.withValues(alpha: 0.72),
                               borderRadius: BorderRadius.circular(8),

@@ -3,6 +3,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iris/pages/player/short_video/short_video_page_sync.dart';
 
 void main() {
+  testWidgets('sync to a settled exact page emits no scroll activity', (
+    tester,
+  ) async {
+    final controller = PageController(initialPage: 1);
+    final sync = ShortVideoPageSync(controller);
+    final events = <Type>[];
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (event) {
+            events.add(event.runtimeType);
+            return false;
+          },
+          child: PageView(
+            controller: controller,
+            children: const [SizedBox.expand(), SizedBox.expand()],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    events.clear();
+    await sync.syncTo(1);
+    await tester.pumpAndSettle();
+    expect(controller.page, 1);
+    expect(events, isEmpty);
+    expect(sync.isSyncing, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    sync.dispose();
+    controller.dispose();
+  });
+
   testWidgets('latest reverse navigation cancels previous page animation', (
     tester,
   ) async {

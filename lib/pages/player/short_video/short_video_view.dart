@@ -1,5 +1,4 @@
-import 'package:iris/pages/player/short_video/short_video_page_sync.dart';
-import 'package:flutter/gestures.dart';
+import 'package:iris/pages/player/short_video/short_video_pager.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_zustand/flutter_zustand.dart';
@@ -15,7 +14,6 @@ import 'package:iris/pages/player/overlays/playback_error_overlay.dart';
 import 'package:iris/store/use_app_store.dart';
 import 'package:iris/store/use_play_queue_store.dart';
 import 'package:iris/utils/get_localizations.dart';
-import 'package:iris/utils/logger.dart';
 import 'package:iris/utils/short_video.dart';
 import 'package:iris/widgets/speed_boost_effect.dart';
 import 'package:provider/provider.dart';
@@ -59,15 +57,6 @@ class ShortVideoView extends HookWidget {
       [items, currentIndex],
     );
 
-    final int safeIndex = currentFeedIndex < 0 ? 0 : currentFeedIndex;
-    final pageController = useMemoized(
-      () => PageController(initialPage: safeIndex),
-      [],
-    );
-    useEffect(() {
-      return () => pageController.dispose();
-    }, [pageController]);
-
     // 队列为空 / 当前项不是视频时 (如打开了音频), 自动退出短视频模式
     final exitRequested = useRef(false);
     useEffect(() {
@@ -88,18 +77,6 @@ class ShortVideoView extends HookWidget {
     final playbackError = context.select<MediaPlayer, String?>(
       (player) => player.error,
     );
-
-    final pageSync = useMemoized(() => ShortVideoPageSync(pageController), []);
-    useEffect(() => pageSync.dispose, [pageSync]);
-    useEffect(() {
-      pageSync.syncTo(currentFeedIndex).catchError((Object error) {
-        logger('Short video page sync failed: $error');
-      });
-      return null;
-    }, [currentFeedIndex]);
-    final userScrolling = useRef(false);
-
-    final isDragging = useRef(false);
 
     void commitPage(int page) {
       if (page < 0 || page >= items.length) return;
@@ -169,21 +146,17 @@ class ShortVideoView extends HookWidget {
     );
 
     Widget buildPage(BuildContext context, int index) {
-      // 预载池里有该下标的画面就直接使用 (滑动时可见下一帧)
-      final slot = pool?.slotFor(index);
-      final Widget content;
-      if (slot != null) {
-        // key 绑定到播放器实例: 槽位换播放器时强制重建画面 widget,
-        // 避免复用旧的订阅 / 可见性状态
-        content = ShortVideoMediaKitSurface(
-          key: ValueKey(slot.controller),
-          controller: slot.controller,
-        );
-      } else if (index == currentFeedIndex) {
-        content = const ShortVideoFeedVideo();
-      } else {
-        content = const ColoredBox(color: Colors.black);
-      }
+      // Only this page's assigned media may appear; a recycled slot can still
+      // contain the previous video's native texture while its new open runs.
+      final Widget content = pool != null
+          ? ShortVideoPoolPage(
+              slot: pool.slotFor(index),
+              item: items[index],
+              feedIndex: index,
+            )
+          : index == currentFeedIndex
+          ? const ShortVideoFeedVideo()
+          : const ColoredBox(color: Colors.black);
       // 页面级滚轮注册: 先于 PageView 的 Scrollable 拿到事件
       return Listener(
         behavior: HitTestBehavior.opaque,
@@ -203,11 +176,6 @@ class ShortVideoView extends HookWidget {
       builder: (context, opacity, child) =>
           Opacity(opacity: opacity, child: child),
       child: Listener(
-        onPointerDown: (event) {
-          isDragging.value = true;
-        },
-        onPointerUp: (_) => isDragging.value = false,
-        onPointerCancel: (_) => isDragging.value = false,
         // 覆盖层 (底部信息 / 按钮) 挡住页面级滚轮时, 由此处兜底
         onPointerSignal: wheel.register,
         child: PlayerGestureLayer(
@@ -226,46 +194,11 @@ class ShortVideoView extends HookWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              NotificationListener<ScrollNotification>(
-                onNotification: (notification) {
-                  if (notification.depth != 0) return false;
-                  if (notification is ScrollStartNotification &&
-                      notification.dragDetails != null) {
-                    userScrolling.value = true;
-                  }
-                  if (notification is ScrollEndNotification) {
-                    final shouldCommit =
-                        userScrolling.value && !pageSync.isSyncing;
-                    userScrolling.value = false;
-                    final page = pageController.page?.round();
-                    if (shouldCommit && page != null) commitPage(page);
-                  }
-                  return false;
-                },
-                child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(context).copyWith(
-                    scrollbars: false,
-                    overscroll: false,
-                    dragDevices: const {
-                      PointerDeviceKind.touch,
-                      PointerDeviceKind.mouse,
-                      PointerDeviceKind.stylus,
-                      PointerDeviceKind.trackpad,
-                    },
-                  ),
-                  child: PageView.builder(
-                    controller: pageController,
-                    scrollDirection: Axis.vertical,
-                    onPageChanged: (page) {
-                      // 仅在非拖动 / 非程序化翻页阶段提交, 避免中途切换播放
-                      if (!isDragging.value && !pageSync.isSyncing) {
-                        commitPage(page);
-                      }
-                    },
-                    itemCount: items.length,
-                    itemBuilder: buildPage,
-                  ),
-                ),
+              ShortVideoPager(
+                currentIndex: currentFeedIndex,
+                itemCount: items.length,
+                itemBuilder: buildPage,
+                onPageSettled: commitPage,
               ),
               // 加载指示
               Positioned.fill(

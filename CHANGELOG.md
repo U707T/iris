@@ -1,3 +1,17 @@
+## v2.8.5
+
+### 更新日志
+
+* **短视频翻页衔接更平稳。** 手势翻页在惯性动画停稳后统一切换播放，不再滑过半页就被队列同步强制吸附；取消和反向拖动不会提交放弃的中间页，已停稳的同页同步不再启动额外滚动。键盘和滚轮翻页保持可用。
+* **减少旧画面闪现。** 槽位加载中、等待打开、出错或与页面不匹配时，用不透明黑底遮住残留画面，保持渲染器挂载；缺失槽位时不再借用其他视频画面。尚未就绪的媒体可能短暂显示黑底，不承诺所有设备完全无闪帧。
+* **相邻页面提前准备。** 提前挂载相邻页面，减少滑动途中创建画面的工作；沿用三播放器池，不新增依赖。补充惯性、取消/反向拖动、外部导航、同页同步和画面遮罩回归，真实纹理呈现与帧时仍需设备验证。
+
+### Changes
+
+* Commit swipe navigation only after PageView settles, preserving its ballistic animation instead of snapping at the halfway crossing. Ignore abandoned pages and settled same-page echoes, while retaining keyboard and wheel navigation.
+* Cover recycled, loading, failed or mismatched media with an opaque background while keeping its renderer mounted. Never borrow another slot's picture for a missing page; unready media can briefly show black.
+* Mount adjacent pages before they enter view using the existing three-player pool. Add paging and renderer-lifetime regressions without changing dependencies. Native frame presentation and performance still require device validation.
+
 ## v2.8.4
 
 ### 更新日志

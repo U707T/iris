@@ -12,10 +12,17 @@ class ShortVideoPageSync {
 
   Future<void> syncTo(int target) async {
     if (!_alive || !controller.hasClients || target < 0) return;
+    final page = controller.page ?? controller.initialPage.toDouble();
+    // A settled user swipe already reached this exact offset. A jump here would
+    // emit a second scroll activity and can interrupt PageView's own motion.
+    if (!isSyncing &&
+        !controller.position.isScrollingNotifier.value &&
+        (page - target).abs() < 0.000001) {
+      return;
+    }
     final generation = ++_generation;
     isSyncing = true;
     try {
-      final page = controller.page ?? controller.initialPage.toDouble();
       if (page.round() == target) {
         // jumpTo cancels the old ScrollActivity even at the same offset.
         controller.jumpToPage(target);
